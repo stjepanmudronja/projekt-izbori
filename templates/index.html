@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="hr" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projekt Izbori</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        .hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            padding: 3rem 0;
+        }
+        .search-card {
+            margin-top: -2.5rem;
+            border: none;
+            border-radius: 1rem;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        }
+        .dropdown-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+        .dropdown-results.show { display: block; }
+        .dropdown-item-custom {
+            padding: 0.65rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.15s;
+        }
+        .dropdown-item-custom:hover {
+            background: #e9ecef;
+        }
+        .dropdown-item-custom:last-child { border-bottom: none; }
+        .result-card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            transition: transform 0.2s;
+        }
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .badge-election {
+            font-size: 0.75rem;
+            padding: 0.35em 0.65em;
+        }
+        .vote-number {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #0f3460;
+        }
+        .spinner-wrapper {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+        .spinner-wrapper.show { display: block; }
+        .btn-toggle .active {
+            background-color: #0f3460;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<div class="hero text-center">
+    <div class="container">
+        <h1 class="fw-bold mb-1"><i class="bi bi-bar-chart-fill me-2"></i>Projekt Izbori</h1>
+        <p class="text-white-50 mb-0">Pretraživanje hrvatskih izbornih podataka</p>
+    </div>
+</div>
+
+<div class="container" style="max-width: 720px;">
+    <div class="card search-card p-4">
+        <!-- Toggle: Person / Party -->
+        <div class="btn-group w-100 mb-3" role="group">
+            <input type="radio" class="btn-check" name="searchType" id="btnPerson" value="person" checked>
+            <label class="btn btn-outline-dark" for="btnPerson">
+                <i class="bi bi-person me-1"></i> Političar
+            </label>
+            <input type="radio" class="btn-check" name="searchType" id="btnParty" value="party">
+            <label class="btn btn-outline-dark" for="btnParty">
+                <i class="bi bi-people me-1"></i> Stranka
+            </label>
+        </div>
+
+        <!-- Search input -->
+        <div class="position-relative">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="text" id="searchInput" class="form-control"
+                       placeholder="Upiši ime političara..." autocomplete="off">
+            </div>
+            <div id="dropdownResults" class="dropdown-results"></div>
+        </div>
+    </div>
+
+    <!-- Results area -->
+    <div id="spinner" class="spinner-wrapper mt-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Učitavanje...</span>
+        </div>
+    </div>
+
+    <div id="detailSection" class="mt-4 mb-5" style="display:none;">
+        <h3 id="detailName" class="fw-bold mb-3"></h3>
+        <div id="detailResults"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const searchInput = document.getElementById('searchInput');
+const dropdown = document.getElementById('dropdownResults');
+const detailSection = document.getElementById('detailSection');
+const detailName = document.getElementById('detailName');
+const detailResults = document.getElementById('detailResults');
+const spinner = document.getElementById('spinner');
+
+let debounceTimer;
+
+function getSearchType() {
+    return document.querySelector('input[name="searchType"]:checked').value;
+}
+
+// Update placeholder on toggle
+document.querySelectorAll('input[name="searchType"]').forEach(r => {
+    r.addEventListener('change', () => {
+        const type = getSearchType();
+        searchInput.placeholder = type === 'person'
+            ? 'Upiši ime političara...'
+            : 'Upiši ime stranke...';
+        searchInput.value = '';
+        dropdown.classList.remove('show');
+        detailSection.style.display = 'none';
+        searchInput.focus();
+    });
+});
+
+searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = searchInput.value.trim();
+    if (q.length < 2) {
+        dropdown.classList.remove('show');
+        return;
+    }
+    debounceTimer = setTimeout(() => fetchResults(q), 250);
+});
+
+async function fetchResults(q) {
+    const type = getSearchType();
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=${type}`);
+    const data = await res.json();
+
+    dropdown.innerHTML = '';
+    if (data.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-item-custom text-muted">Nema rezultata</div>';
+        dropdown.classList.add('show');
+        return;
+    }
+
+    data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'dropdown-item-custom';
+        div.textContent = item.name;
+        div.addEventListener('click', () => {
+            searchInput.value = item.name;
+            dropdown.classList.remove('show');
+            loadDetail(type, item.id);
+        });
+        dropdown.appendChild(div);
+    });
+    dropdown.classList.add('show');
+}
+
+async function loadDetail(type, id) {
+    detailSection.style.display = 'none';
+    spinner.classList.add('show');
+
+    const url = type === 'person' ? `/api/person/${id}` : `/api/party/${id}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    spinner.classList.remove('show');
+    detailSection.style.display = 'block';
+
+    if (type === 'person') {
+        detailName.innerHTML = `<i class="bi bi-person-circle me-2"></i>${data.first_name} ${data.last_name}`;
+        renderPersonResults(data.results);
+    } else {
+        detailName.innerHTML = `<i class="bi bi-people-fill me-2"></i>${data.short_name || ''} ${data.name}`;
+        renderPartyResults(data.results);
+    }
+}
+
+function electionBadgeColor(type) {
+    const colors = {
+        'Predsjednički izbori': 'bg-danger',
+        'Parlamentarni izbori': 'bg-primary',
+        'Izbori za EU parlament': 'bg-info',
+        'Lokalni izbori': 'bg-success',
+    };
+    for (const [key, cls] of Object.entries(colors)) {
+        if (type.toLowerCase().includes(key.toLowerCase().split(' ')[0])) return cls;
+    }
+    return 'bg-secondary';
+}
+
+function formatNumber(n) {
+    return n.toLocaleString('hr-HR');
+}
+
+function renderPersonResults(results) {
+    if (results.length === 0) {
+        detailResults.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
+        return;
+    }
+
+    detailResults.innerHTML = results.map(r => `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
+                    <span class="badge bg-dark badge-election">${r.year}</span>
+                    ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                </div>
+                <div class="text-end">
+                    ${r.candidate_votes ? `<div class="vote-number">${formatNumber(r.candidate_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                </div>
+            </div>
+            <div class="mt-2">
+                <div class="fw-semibold">${r.list_name}</div>
+                ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
+                ${r.position ? `<small class="text-muted ms-2"><i class="bi bi-list-ol me-1"></i>Pozicija: ${r.position}</small>` : ''}
+            </div>
+            ${r.list_votes ? `<div class="mt-1"><small class="text-muted">Glasovi za listu: ${formatNumber(r.list_votes)}</small></div>` : ''}
+        </div>
+    `).join('');
+}
+
+function renderPartyResults(results) {
+    if (results.length === 0) {
+        detailResults.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
+        return;
+    }
+
+    detailResults.innerHTML = results.map(r => `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
+                    <span class="badge bg-dark badge-election">${r.year}</span>
+                    ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                </div>
+                <div class="text-end">
+                    ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                </div>
+            </div>
+            <div class="mt-2">
+                <div class="fw-semibold">${r.list_name}</div>
+                ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+    if (!e.target.closest('.position-relative')) {
+        dropdown.classList.remove('show');
+    }
+});
+</script>
+
+</body>
+</html>
