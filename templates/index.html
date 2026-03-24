@@ -6,18 +6,106 @@
     <title>Projekt Izbori</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
         body {
             background: #f0f2f5;
             min-height: 100vh;
+            margin: 0;
         }
-        .hero {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             color: white;
-            padding: 3rem 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
         }
+        .sidebar-brand {
+            padding: 1.5rem 1.25rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-brand h5 {
+            margin: 0;
+            font-weight: 700;
+        }
+        .sidebar-brand small {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.75rem;
+        }
+        .sidebar-section {
+            padding: 1rem 0.75rem 0.5rem;
+        }
+        .sidebar-section-title {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255,255,255,0.4);
+            padding: 0 0.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        .sidebar-nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sidebar-nav li a {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.6rem 0.75rem;
+            border-radius: 0.5rem;
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.15s;
+            cursor: pointer;
+        }
+        .sidebar-nav li a:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        .sidebar-nav li a.active {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            font-weight: 600;
+        }
+        .sidebar-nav li a i {
+            font-size: 1.1rem;
+            width: 1.5rem;
+            text-align: center;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: 260px;
+            min-height: 100vh;
+        }
+        .top-bar {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 1rem 2rem;
+        }
+        .top-bar h4 {
+            margin: 0;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        .content-area {
+            padding: 1.5rem 2rem;
+            max-width: 900px;
+        }
+
+        /* Search */
         .search-card {
-            margin-top: -2.5rem;
             border: none;
             border-radius: 1rem;
             box-shadow: 0 4px 24px rgba(0,0,0,0.10);
@@ -44,10 +132,10 @@
             border-bottom: 1px solid #f0f0f0;
             transition: background 0.15s;
         }
-        .dropdown-item-custom:hover {
-            background: #e9ecef;
-        }
+        .dropdown-item-custom:hover { background: #e9ecef; }
         .dropdown-item-custom:last-child { border-bottom: none; }
+
+        /* Result cards */
         .result-card {
             border: none;
             border-radius: 0.75rem;
@@ -73,100 +161,218 @@
             padding: 2rem;
         }
         .spinner-wrapper.show { display: block; }
-        .btn-toggle .active {
-            background-color: #0f3460;
-            color: white;
+        .chart-card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: white;
+        }
+        .chart-card canvas { max-height: 320px; }
+
+        /* Module panels */
+        .module-panel { display: none; }
+        .module-panel.active { display: block; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { width: 220px; }
+            .main-content { margin-left: 220px; }
+            .content-area { padding: 1rem; }
         }
     </style>
 </head>
 <body>
 
-<div class="hero text-center">
-    <div class="container">
-        <h1 class="fw-bold mb-1"><i class="bi bi-bar-chart-fill me-2"></i>Projekt Izbori</h1>
-        <p class="text-white-50 mb-0">Pretraživanje hrvatskih izbornih podataka</p>
+<!-- Sidebar -->
+<nav class="sidebar">
+    <div class="sidebar-brand">
+        <h5><i class="bi bi-bar-chart-fill me-2"></i>Projekt Izbori</h5>
+        <small>Hrvatski izborni podaci</small>
     </div>
-</div>
 
-<div class="container" style="max-width: 720px;">
-    <div class="card search-card p-4">
-        <!-- Toggle: Person / Party -->
-        <div class="btn-group w-100 mb-3" role="group">
-            <input type="radio" class="btn-check" name="searchType" id="btnPerson" value="person" checked>
-            <label class="btn btn-outline-dark" for="btnPerson">
-                <i class="bi bi-person me-1"></i> Političar
-            </label>
-            <input type="radio" class="btn-check" name="searchType" id="btnParty" value="party">
-            <label class="btn btn-outline-dark" for="btnParty">
-                <i class="bi bi-people me-1"></i> Stranka
-            </label>
-        </div>
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Pretraživanje</div>
+        <ul class="sidebar-nav">
+            <li><a href="#" data-module="person" class="active">
+                <i class="bi bi-person"></i> Političar
+            </a></li>
+            <li><a href="#" data-module="party">
+                <i class="bi bi-people"></i> Stranka
+            </a></li>
+            <li><a href="#" data-module="station">
+                <i class="bi bi-geo-alt"></i> Biračko mjesto
+            </a></li>
+        </ul>
+    </div>
 
-        <!-- Search input -->
-        <div class="position-relative">
-            <div class="input-group input-group-lg">
-                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                <input type="text" id="searchInput" class="form-control"
-                       placeholder="Upiši ime političara..." autocomplete="off">
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Analitika</div>
+        <ul class="sidebar-nav">
+            <li><a href="#" data-module="analytics-turnout" class="disabled" style="opacity:0.4; pointer-events:none;">
+                <i class="bi bi-graph-up"></i> Izlaznost
+            </a></li>
+            <li><a href="#" data-module="analytics-compare" class="disabled" style="opacity:0.4; pointer-events:none;">
+                <i class="bi bi-arrow-left-right"></i> Usporedba
+            </a></li>
+            <li><a href="#" data-module="analytics-map" class="disabled" style="opacity:0.4; pointer-events:none;">
+                <i class="bi bi-map"></i> Karta
+            </a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- Main content -->
+<div class="main-content">
+    <div class="top-bar">
+        <h4 id="moduleTitle"><i class="bi bi-person me-2"></i>Političar</h4>
+    </div>
+
+    <div class="content-area">
+        <!-- Person module -->
+        <div id="module-person" class="module-panel active">
+            <div class="card search-card p-4 mb-4">
+                <div class="position-relative">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control search-input" data-type="person"
+                               placeholder="Upiši ime političara..." autocomplete="off">
+                    </div>
+                    <div class="dropdown-results"></div>
+                </div>
             </div>
-            <div id="dropdownResults" class="dropdown-results"></div>
+            <div class="spinner-wrapper mt-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div class="detail-section mt-4 mb-5" style="display:none;">
+                <h3 class="detail-name fw-bold mb-3"></h3>
+                <div class="chart-card chart-container" style="display:none;">
+                    <canvas class="votes-chart"></canvas>
+                </div>
+                <div class="detail-results"></div>
+            </div>
         </div>
-    </div>
 
-    <!-- Results area -->
-    <div id="spinner" class="spinner-wrapper mt-4">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Učitavanje...</span>
+        <!-- Party module -->
+        <div id="module-party" class="module-panel">
+            <div class="card search-card p-4 mb-4">
+                <div class="position-relative">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control search-input" data-type="party"
+                               placeholder="Upiši ime stranke..." autocomplete="off">
+                    </div>
+                    <div class="dropdown-results"></div>
+                </div>
+            </div>
+            <div class="spinner-wrapper mt-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div class="detail-section mt-4 mb-5" style="display:none;">
+                <h3 class="detail-name fw-bold mb-3"></h3>
+                <div class="chart-card chart-container" style="display:none;">
+                    <canvas class="votes-chart"></canvas>
+                </div>
+                <div class="detail-results"></div>
+            </div>
         </div>
-    </div>
 
-    <div id="detailSection" class="mt-4 mb-5" style="display:none;">
-        <h3 id="detailName" class="fw-bold mb-3"></h3>
-        <div id="detailResults"></div>
+        <!-- Station module -->
+        <div id="module-station" class="module-panel">
+            <div class="card search-card p-4 mb-4">
+                <div class="position-relative">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control search-input" data-type="station"
+                               placeholder="Upiši adresu ili naziv biračkog mjesta..." autocomplete="off">
+                    </div>
+                    <div class="dropdown-results"></div>
+                </div>
+            </div>
+            <div class="spinner-wrapper mt-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div class="detail-section mt-4 mb-5" style="display:none;">
+                <h3 class="detail-name fw-bold mb-3"></h3>
+                <div class="chart-card chart-container" style="display:none;">
+                    <canvas class="votes-chart"></canvas>
+                </div>
+                <div class="detail-results"></div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const searchInput = document.getElementById('searchInput');
-const dropdown = document.getElementById('dropdownResults');
-const detailSection = document.getElementById('detailSection');
-const detailName = document.getElementById('detailName');
-const detailResults = document.getElementById('detailResults');
-const spinner = document.getElementById('spinner');
+// Module switching
+const sidebarLinks = document.querySelectorAll('.sidebar-nav a[data-module]');
+const modulePanels = document.querySelectorAll('.module-panel');
+const moduleTitle = document.getElementById('moduleTitle');
 
-let debounceTimer;
+const moduleTitles = {
+    person: '<i class="bi bi-person me-2"></i>Političar',
+    party: '<i class="bi bi-people me-2"></i>Stranka',
+    station: '<i class="bi bi-geo-alt me-2"></i>Biračko mjesto',
+};
 
-function getSearchType() {
-    return document.querySelector('input[name="searchType"]:checked').value;
-}
+sidebarLinks.forEach(link => {
+    link.addEventListener('click', e => {
+        e.preventDefault();
+        const mod = link.dataset.module;
+        if (link.classList.contains('disabled')) return;
 
-// Update placeholder on toggle
-document.querySelectorAll('input[name="searchType"]').forEach(r => {
-    r.addEventListener('change', () => {
-        const type = getSearchType();
-        searchInput.placeholder = type === 'person'
-            ? 'Upiši ime političara...'
-            : 'Upiši ime stranke...';
-        searchInput.value = '';
-        dropdown.classList.remove('show');
-        detailSection.style.display = 'none';
-        searchInput.focus();
+        // Update sidebar active state
+        sidebarLinks.forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+
+        // Show correct module panel
+        modulePanels.forEach(p => p.classList.remove('active'));
+        const panel = document.getElementById(`module-${mod}`);
+        if (panel) {
+            panel.classList.add('active');
+            // Focus the search input
+            const input = panel.querySelector('.search-input');
+            if (input) input.focus();
+        }
+
+        // Update top bar title
+        if (moduleTitles[mod]) {
+            moduleTitle.innerHTML = moduleTitles[mod];
+        }
     });
 });
 
-searchInput.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    const q = searchInput.value.trim();
-    if (q.length < 2) {
-        dropdown.classList.remove('show');
-        return;
-    }
-    debounceTimer = setTimeout(() => fetchResults(q), 250);
+// Per-module chart instances
+const moduleCharts = {};
+let stationCharts = [];
+
+// Search logic — scoped per module
+let debounceTimer;
+
+document.querySelectorAll('.search-input').forEach(input => {
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const q = input.value.trim();
+        const dropdown = input.closest('.position-relative').querySelector('.dropdown-results');
+        if (q.length < 2) {
+            dropdown.classList.remove('show');
+            return;
+        }
+        debounceTimer = setTimeout(() => fetchResults(input, q), 250);
+    });
 });
 
-async function fetchResults(q) {
-    const type = getSearchType();
+async function fetchResults(input, q) {
+    const type = input.dataset.type;
+    const dropdown = input.closest('.position-relative').querySelector('.dropdown-results');
     const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=${type}`);
     const data = await res.json();
 
@@ -180,9 +386,13 @@ async function fetchResults(q) {
     data.forEach(item => {
         const div = document.createElement('div');
         div.className = 'dropdown-item-custom';
-        div.textContent = item.name;
+        if (item.municipality) {
+            div.innerHTML = `${item.name} <small class="text-muted">— ${item.municipality}</small>`;
+        } else {
+            div.textContent = item.name;
+        }
         div.addEventListener('click', () => {
-            searchInput.value = item.name;
+            input.value = item.name;
             dropdown.classList.remove('show');
             loadDetail(type, item.id);
         });
@@ -191,12 +401,23 @@ async function fetchResults(q) {
     dropdown.classList.add('show');
 }
 
+function getModulePanel(type) {
+    return document.getElementById(`module-${type}`);
+}
+
 async function loadDetail(type, id) {
+    const panel = getModulePanel(type);
+    const detailSection = panel.querySelector('.detail-section');
+    const detailName = panel.querySelector('.detail-name');
+    const detailResults = panel.querySelector('.detail-results');
+    const chartContainer = panel.querySelector('.chart-container');
+    const spinner = panel.querySelector('.spinner-wrapper');
+
     detailSection.style.display = 'none';
     spinner.classList.add('show');
 
-    const url = type === 'person' ? `/api/person/${id}` : `/api/party/${id}`;
-    const res = await fetch(url);
+    const urls = { person: `/api/person/${id}`, party: `/api/party/${id}`, station: `/api/station/${id}` };
+    const res = await fetch(urls[type]);
     const data = await res.json();
 
     spinner.classList.remove('show');
@@ -204,11 +425,139 @@ async function loadDetail(type, id) {
 
     if (type === 'person') {
         detailName.innerHTML = `<i class="bi bi-person-circle me-2"></i>${data.first_name} ${data.last_name}`;
-        renderPersonResults(data.results);
-    } else {
+        const fullName = `${data.first_name} ${data.last_name}`.toUpperCase();
+        data.results.forEach(r => r._personFullName = fullName);
+        renderVotesChart(panel, data.results, 'person');
+        renderPersonResults(detailResults, data.results);
+    } else if (type === 'party') {
         detailName.innerHTML = `<i class="bi bi-people-fill me-2"></i>${data.short_name || ''} ${data.name}`;
-        renderPartyResults(data.results);
+        renderVotesChart(panel, data.results, 'party');
+        renderPartyResults(detailResults, data.results);
+    } else {
+        detailName.innerHTML = `<i class="bi bi-geo-alt-fill me-2"></i>${data.name}`;
+        if (data.municipality || data.address) {
+            detailName.innerHTML += `<div class="fs-6 fw-normal text-muted mt-1">${data.location} — ${data.address}, ${data.municipality}</div>`;
+        }
+        // Hide chart for stations
+        if (moduleCharts['station']) { moduleCharts['station'].destroy(); moduleCharts['station'] = null; }
+        chartContainer.style.display = 'none';
+        renderStationResults(detailResults, data.elections);
     }
+}
+
+function getElectionColor(type) {
+    if (type.toLowerCase().includes('predsjednič')) return { bg: 'rgba(220, 53, 69, 0.15)', border: 'rgb(220, 53, 69)' };
+    if (type.toLowerCase().includes('parlamentar') || type.toLowerCase().includes('sabor')) return { bg: 'rgba(13, 110, 253, 0.15)', border: 'rgb(13, 110, 253)' };
+    if (type.toLowerCase().includes('eu')) return { bg: 'rgba(13, 202, 240, 0.15)', border: 'rgb(13, 202, 240)' };
+    if (type.toLowerCase().includes('lokaln')) return { bg: 'rgba(25, 135, 84, 0.15)', border: 'rgb(25, 135, 84)' };
+    return { bg: 'rgba(108, 117, 125, 0.15)', border: 'rgb(108, 117, 125)' };
+}
+
+function renderVotesChart(panel, results, type) {
+    const chartContainer = panel.querySelector('.chart-container');
+    const canvas = panel.querySelector('.votes-chart');
+    const modKey = panel.id;
+
+    if (moduleCharts[modKey]) {
+        moduleCharts[modKey].destroy();
+        moduleCharts[modKey] = null;
+    }
+
+    const votesKey = type === 'person' ? 'candidate_votes' : 'total_votes';
+    const filtered = results.filter(r => r[votesKey] > 0).reverse();
+
+    if (filtered.length === 0) {
+        chartContainer.style.display = 'none';
+        return;
+    }
+
+    chartContainer.style.display = 'block';
+
+    const labels = filtered.map(r => {
+        let label = r.election_type.replace('izbori', '').trim();
+        if (r.date) {
+            const d = new Date(r.date);
+            label += `\n${d.toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        } else {
+            label += ` ${r.year}`;
+        }
+        if (r.round > 1) label += ` (${r.round}. krug)`;
+        if (r.district) label += `\n${r.district}`;
+        return label;
+    });
+
+    const shareValues = filtered.map(r => r.vote_share || 0);
+    const rawVotes = filtered.map(r => r[votesKey]);
+    const totalBallots = filtered.map(r => r.total_valid_ballots || 0);
+    const colors = filtered.map(r => getElectionColor(r.election_type));
+
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+    gradient.addColorStop(0, 'rgba(15, 52, 96, 0.25)');
+    gradient.addColorStop(1, 'rgba(15, 52, 96, 0.02)');
+
+    moduleCharts[modKey] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Udio glasova (%)',
+                data: shareValues,
+                borderColor: 'rgb(15, 52, 96)',
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.3,
+                borderWidth: 3,
+                pointBackgroundColor: colors.map(c => c.border),
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2.5,
+                pointRadius: 7,
+                pointHoverRadius: 10,
+                pointHoverBorderWidth: 3,
+                pointStyle: 'circle',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 13 },
+                    padding: 14,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            const i = ctx.dataIndex;
+                            return [
+                                `Udio: ${shareValues[i]}%`,
+                                `Glasovi: ${rawVotes[i].toLocaleString('hr-HR')}`,
+                                `Ukupno glasača: ${totalBallots[i].toLocaleString('hr-HR')}`
+                            ];
+                        }
+                    }
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: Math.min(Math.max(...shareValues) * 1.4, 100),
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    title: { display: true, text: 'Udio glasova (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' }
+                },
+                x: {
+                    grid: { color: 'rgba(0,0,0,0.03)' },
+                    ticks: { font: { size: 11 }, maxRotation: 45 }
+                }
+            },
+            animation: { duration: 1000, easing: 'easeOutQuart' }
+        }
+    });
 }
 
 function electionBadgeColor(type) {
@@ -228,41 +577,50 @@ function formatNumber(n) {
     return n.toLocaleString('hr-HR');
 }
 
-function renderPersonResults(results) {
+function renderPersonResults(container, results) {
     if (results.length === 0) {
-        detailResults.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
+        container.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
         return;
     }
 
-    detailResults.innerHTML = results.map(r => `
+    container.innerHTML = results.map(r => {
+        const showListName = r.list_name && r.list_name.toUpperCase() !== (r._personFullName || '').toUpperCase();
+        return `
         <div class="card result-card mb-3 p-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div>
                     <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
-                    <span class="badge bg-dark badge-election">${r.year}</span>
+                    <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
                 </div>
                 <div class="text-end">
-                    ${r.candidate_votes ? `<div class="vote-number">${formatNumber(r.candidate_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                    ${r.vote_share ? `<div class="vote-number">${r.vote_share}%</div><small class="text-muted">udio glasova</small>` : ''}
                 </div>
             </div>
             <div class="mt-2">
-                <div class="fw-semibold">${r.list_name}</div>
-                ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
-                ${r.position ? `<small class="text-muted ms-2"><i class="bi bi-list-ol me-1"></i>Pozicija: ${r.position}</small>` : ''}
+                ${showListName ? `<div class="fw-semibold">${r.list_name}</div>` : ''}
+                <div class="d-flex gap-3 flex-wrap">
+                    ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
+                    ${r.position ? `<small class="text-muted"><i class="bi bi-list-ol me-1"></i>Pozicija: ${r.position}</small>` : ''}
+                </div>
             </div>
-            ${r.list_votes ? `<div class="mt-1"><small class="text-muted">Glasovi za listu: ${formatNumber(r.list_votes)}</small></div>` : ''}
-        </div>
-    `).join('');
+            <hr class="my-2" style="opacity: 0.1;">
+            <div class="d-flex gap-3 flex-wrap">
+                ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
+                ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
+                ${r.list_votes && r.list_votes !== r.candidate_votes ? `<small class="text-muted"><i class="bi bi-list-ul me-1"></i>Glasovi za listu: <strong>${formatNumber(r.list_votes)}</strong></small>` : ''}
+            </div>
+        </div>`;
+    }).join('');
 }
 
-function renderPartyResults(results) {
+function renderPartyResults(container, results) {
     if (results.length === 0) {
-        detailResults.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
+        container.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
         return;
     }
 
-    detailResults.innerHTML = results.map(r => `
+    container.innerHTML = results.map(r => `
         <div class="card result-card mb-3 p-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div>
@@ -282,10 +640,130 @@ function renderPartyResults(results) {
     `).join('');
 }
 
-// Close dropdown on outside click
+function renderStationResults(container, elections) {
+    stationCharts.forEach(c => c.destroy());
+    stationCharts = [];
+
+    if (elections.length === 0) {
+        container.innerHTML = '<p class="text-muted">Nema izbornih podataka za ovo biračko mjesto.</p>';
+        return;
+    }
+
+    const topColors = [
+        'rgba(13, 110, 253, 0.75)',
+        'rgba(220, 53, 69, 0.75)',
+        'rgba(25, 135, 84, 0.75)',
+        'rgba(255, 193, 7, 0.85)',
+        'rgba(13, 202, 240, 0.75)',
+    ];
+    const topBorders = [
+        'rgb(13, 110, 253)',
+        'rgb(220, 53, 69)',
+        'rgb(25, 135, 84)',
+        'rgb(255, 193, 7)',
+        'rgb(13, 202, 240)',
+    ];
+
+    container.innerHTML = elections.map((el, idx) => {
+        const turnoutPct = el.registered_voters > 0
+            ? ((el.ballots_cast / el.registered_voters) * 100).toFixed(1)
+            : 0;
+
+        return `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    <span class="badge ${electionBadgeColor(el.election_type)} badge-election me-1">${el.election_type}</span>
+                    <span class="badge bg-dark badge-election">${el.date ? new Date(el.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : el.year}</span>
+                    ${el.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${el.round}. krug</span>` : ''}
+                </div>
+                <div class="text-end">
+                    <span class="vote-number">${turnoutPct}%</span>
+                    <br><small class="text-muted">izlaznost</small>
+                </div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap mb-3">
+                <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${formatNumber(el.registered_voters)}</strong></small>
+                <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
+                <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
+            </div>
+            <div style="height: 200px;">
+                <canvas id="stationChart${idx}"></canvas>
+            </div>
+        </div>`;
+    }).join('');
+
+    setTimeout(() => {
+        elections.forEach((el, idx) => {
+            const hasCandiates = el.top_candidates && el.top_candidates.length > 0;
+            const items = hasCandiates ? el.top_candidates : el.top_lists;
+            if (items.length === 0) return;
+
+            const canvas = document.getElementById(`stationChart${idx}`);
+            if (!canvas) return;
+
+            const labels = items.map(it => {
+                const name = it.name;
+                return name.length > 35 ? name.substring(0, 32) + '...' : name;
+            });
+            const votes = items.map(it => it.votes);
+
+            const chart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: votes,
+                        backgroundColor: topColors.slice(0, items.length),
+                        borderColor: topBorders.slice(0, items.length),
+                        borderWidth: 2,
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: ctx => {
+                                    const v = ctx.parsed.x;
+                                    const pct = el.valid_ballots > 0
+                                        ? ((v / el.valid_ballots) * 100).toFixed(1)
+                                        : 0;
+                                    return `${v.toLocaleString('hr-HR')} glasova (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            ticks: { font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { font: { size: 11 } }
+                        }
+                    },
+                    animation: { duration: 600, easing: 'easeOutQuart' }
+                }
+            });
+            stationCharts.push(chart);
+        });
+    }, 50);
+}
+
+// Close dropdowns on outside click
 document.addEventListener('click', e => {
     if (!e.target.closest('.position-relative')) {
-        dropdown.classList.remove('show');
+        document.querySelectorAll('.dropdown-results').forEach(d => d.classList.remove('show'));
     }
 });
 </script>
