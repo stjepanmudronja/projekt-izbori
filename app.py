@@ -260,7 +260,7 @@ def person_detail(person_id):
             TurnoutData.polling_station_id.in_(db.session.query(station_ids))
         ).scalar() or 0
 
-        vote_share = round((total_votes / total_valid_ballots) * 100, 1) if total_valid_ballots > 0 else 0
+        vote_share = round((total_votes / total_valid_ballots) * 100) if total_valid_ballots > 0 else 0
 
         results.append({
             'election': election.name or f'{etype.name} {election.year}',
@@ -368,7 +368,7 @@ def station_detail(station_id):
         .join(Election, ElectionRound.election_id == Election.id)
         .filter(TurnoutData.polling_station_id.in_(sibling_ids))
         .group_by(ElectionRound.id)
-        .order_by(db.func.min(Election.date), db.func.min(ElectionRound.round_number))
+        .order_by(db.func.min(Election.date).desc(), db.func.min(ElectionRound.round_number).desc())
         .all()
     )
 
@@ -378,7 +378,7 @@ def station_detail(station_id):
         election = er.election
         etype = election.election_type
 
-        # Get top 5 lists by votes across all sibling stations
+        # All lists by votes across all sibling stations
         top_lists = (
             db.session.query(
                 ElectoralList.name,
@@ -395,7 +395,7 @@ def station_detail(station_id):
             .all()
         )
 
-        # Also get top 5 candidates if available
+        # All candidates
         top_candidates = (
             db.session.query(
                 Person.first_name,
@@ -447,6 +447,383 @@ def station_detail(station_id):
         'address': station.address,
         'municipality': municipality.name if municipality else None,
         'county': county.name if county else None,
+        'elections': elections,
+    })
+
+
+# --- Location filter APIs ---
+
+@app.route('/api/counties')
+def list_counties():
+    counties = County.query.order_by(County.name).all()
+    return jsonify([{'id': c.id, 'name': c.name} for c in counties])
+
+
+@app.route('/api/municipalities/<int:county_id>')
+def list_municipalities(county_id):
+    munis = (
+        Municipality.query
+        .filter_by(county_id=county_id)
+        .order_by(Municipality.name)
+        .all()
+    )
+    return jsonify([{'id': m.id, 'name': m.name} for m in munis])
+
+
+@app.route('/api/polling-stations/<int:municipality_id>')
+def list_polling_stations(municipality_id):
+    stations = (
+        db.session.query(
+            db.func.min(PollingStation.id).label('id'),
+            PollingStation.location,
+            PollingStation.address,
+        )
+        .filter(PollingStation.municipality_id == municipality_id)
+        .group_by(PollingStation.location, PollingStation.address)
+        .order_by(PollingStation.location)
+        .all()
+    )
+    return jsonify([
+        {'id': s.id, 'name': f'{s.location}, {s.address}'}
+        for s in stations
+    ])
+
+
+@app.route('/api/streets/<int:municipality_id>')
+def list_streets(municipality_id):
+    streets = (
+        db.session.query(PollingStation.address)
+        .filter(PollingStation.municipality_id == municipality_id)
+        .distinct()
+        .order_by(PollingStation.address)
+        .all()
+    )
+    return jsonify([{'name': s.address} for s in streets if s.address])
+
+
+@app.route('/api/stations-by-street/<int:municipality_id>')
+def stations_by_street(municipality_id):
+    """Return polling stations that match a given street (address) in a municipality."""
+    street = request.args.get('street', '').strip()
+    if not street:
+        return jsonify([])
+    stations = (
+        db.session.query(
+            db.func.min(PollingStation.id).label('id'),
+            PollingStation.location,
+            PollingStation.address,
+        )
+        .filter(PollingStation.municipality_id == municipality_id, PollingStation.address == street)
+        .group_by(PollingStation.location, PollingStation.address)
+        .order_by(PollingStation.location)
+        .all()
+    )
+    return jsonify([
+        {'id': s.id, 'name': f'{s.location}, {s.address}'}
+        for s in stations
+    ])
+
+
+@app.route('/api/location-results')
+def location_results():
+    """Aggregated results for a location filter.
+    Params: county_id, municipality_id, station_id (optional), street (optional)
+    """
+    county_id = request.args.get('county_id', type=int)
+    municipality_id = request.args.get('municipality_id', type=int)
+    station_id = request.args.get('station_id', type=int)
+    street = request.args.get('street', '').strip()
+
+    # Build list of station IDs matching the filter
+    query = PollingStation.query
+
+    if station_id:
+        # Specific station — find siblings at same location/address
+        station = PollingStation.query.get_or_404(station_id)
+        query = query.filter_by(location=station.location, address=station.address)
+    elif street:
+        query = query.filter_by(address=street)
+        if municipality_id:
+            query = query.filter_by(municipality_id=municipality_id)
+    elif municipality_id:
+        query = query.filter_by(municipality_id=municipality_id)
+    elif county_id:
+        muni_ids = [m.id for m in Municipality.query.filter_by(county_id=county_id).all()]
+        query = query.filter(PollingStation.municipality_id.in_(muni_ids))
+    else:
+        return jsonify({'error': 'No filter provided'}), 400
+
+    station_ids = [s.id for s in query.all()]
+
+    if not station_ids:
+        return jsonify({'elections': [], 'label': ''})
+
+    # Build label
+    if station_id:
+        station = PollingStation.query.get(station_id)
+        label = f'{station.location}, {station.address}'
+    elif street and municipality_id:
+        # Show biračko mjesto name(s) for the street, not the street itself
+        locations = (
+            db.session.query(PollingStation.location, PollingStation.address)
+            .filter(PollingStation.municipality_id == municipality_id, PollingStation.address == street)
+            .distinct()
+            .all()
+        )
+        if locations:
+            label = ', '.join(f'{loc.location}, {loc.address}' for loc in locations)
+        else:
+            muni = Municipality.query.get(municipality_id)
+            label = f'{street}, {muni.name if muni else ""}'
+    elif municipality_id:
+        muni = Municipality.query.get(municipality_id)
+        label = muni.name if muni else ''
+    else:
+        county = County.query.get(county_id)
+        label = county.name if county else ''
+
+    # Aggregate turnout
+    turnout_rows = (
+        db.session.query(
+            ElectionRound.id.label('er_id'),
+            db.func.sum(TurnoutData.registered_voters).label('registered_voters'),
+            db.func.sum(TurnoutData.ballots_cast).label('ballots_cast'),
+            db.func.sum(TurnoutData.valid_ballots).label('valid_ballots'),
+            db.func.sum(TurnoutData.invalid_ballots).label('invalid_ballots'),
+        )
+        .join(ElectionRound, TurnoutData.election_round_id == ElectionRound.id)
+        .join(Election, ElectionRound.election_id == Election.id)
+        .filter(TurnoutData.polling_station_id.in_(station_ids))
+        .group_by(ElectionRound.id)
+        .order_by(db.func.min(Election.date).desc(), db.func.min(ElectionRound.round_number).desc())
+        .all()
+    )
+
+    elections = []
+    for td in turnout_rows:
+        er = ElectionRound.query.get(td.er_id)
+        election = er.election
+        etype = election.election_type
+
+        # All lists (no limit)
+        all_lists = (
+            db.session.query(
+                ElectoralList.name,
+                db.func.sum(ListResult.votes).label('total_votes'),
+            )
+            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
+            .filter(
+                ListResult.polling_station_id.in_(station_ids),
+                ElectoralList.election_round_id == er.id,
+            )
+            .group_by(ElectoralList.name)
+            .order_by(db.func.sum(ListResult.votes).desc())
+            .limit(5)
+            .all()
+        )
+
+        # All candidates (no limit)
+        all_candidates = (
+            db.session.query(
+                Person.first_name,
+                Person.last_name,
+                db.func.sum(CandidateResult.votes).label('total_votes'),
+                ElectoralList.name.label('list_name'),
+            )
+            .join(Candidacy, CandidateResult.candidacy_id == Candidacy.id)
+            .join(Person, Candidacy.person_id == Person.id)
+            .join(ElectoralList, Candidacy.electoral_list_id == ElectoralList.id)
+            .filter(
+                CandidateResult.polling_station_id.in_(station_ids),
+                ElectoralList.election_round_id == er.id,
+            )
+            .group_by(Person.first_name, Person.last_name, ElectoralList.name)
+            .order_by(db.func.sum(CandidateResult.votes).desc())
+            .limit(5)
+            .all()
+        )
+
+        elections.append({
+            'election': election.name or f'{etype.name} {election.year}',
+            'election_type': etype.name,
+            'year': election.year,
+            'date': election.date.isoformat() if election.date else None,
+            'round': er.round_number,
+            'registered_voters': td.registered_voters,
+            'ballots_cast': td.ballots_cast,
+            'valid_ballots': td.valid_ballots,
+            'invalid_ballots': td.invalid_ballots,
+            'top_lists': [
+                {'name': name, 'votes': votes}
+                for name, votes in all_lists
+            ],
+            'top_candidates': [
+                {
+                    'name': f'{first} {last}',
+                    'votes': votes,
+                    'list_name': list_name,
+                }
+                for first, last, votes, list_name in all_candidates
+            ],
+        })
+
+    return jsonify({
+        'label': label,
+        'elections': elections,
+    })
+
+
+@app.route('/api/national/election-types')
+def national_election_types():
+    """Return available election categories with years."""
+    # Group election types into 4 categories
+    categories = {
+        'predsjednicki': {
+            'label': 'Predsjednički izbori',
+            'types': ['Predsjednički izbori'],
+        },
+        'eu': {
+            'label': 'EU parlamentarni izbori',
+            'types': ['Izbori za Europski parlament'],
+        },
+        'sabor': {
+            'label': 'Parlamentarni izbori (Sabor)',
+            'types': ['Parlamentarni izbori'],
+        },
+        'lokalni': {
+            'label': 'Lokalni izbori',
+            'types': [
+                'Župan', 'Županijska skupština', 'Gradonačelnik',
+                'Gradsko vijeće', 'Načelnik', 'Općinsko vijeće',
+                'Zamjenik župana', 'Zamjenik načelnika', 'Zamjenik gradonačelnika',
+                'Local',
+            ],
+        },
+    }
+
+    result = []
+    for key, cat in categories.items():
+        years = (
+            db.session.query(Election.year)
+            .join(ElectionType, Election.election_type_id == ElectionType.id)
+            .filter(ElectionType.name.in_(cat['types']))
+            .distinct()
+            .order_by(Election.year.desc())
+            .all()
+        )
+        if years:
+            result.append({
+                'key': key,
+                'label': cat['label'],
+                'years': [y[0] for y in years],
+            })
+    return jsonify(result)
+
+
+@app.route('/api/national/results/<category>/<int:year>')
+def national_results(category, year):
+    """Return national-level aggregated results for a category and year."""
+    type_map = {
+        'predsjednicki': ['Predsjednički izbori'],
+        'eu': ['Izbori za Europski parlament'],
+        'sabor': ['Parlamentarni izbori'],
+        'lokalni': [
+            'Župan', 'Županijska skupština', 'Gradonačelnik',
+            'Gradsko vijeće', 'Načelnik', 'Općinsko vijeće',
+            'Zamjenik župana', 'Zamjenik načelnika', 'Zamjenik gradonačelnika',
+            'Local',
+        ],
+    }
+
+    type_names = type_map.get(category, [])
+    if not type_names:
+        return jsonify({'error': 'Unknown category'}), 400
+
+    # Find election rounds
+    rounds = (
+        db.session.query(ElectionRound)
+        .join(Election, ElectionRound.election_id == Election.id)
+        .join(ElectionType, Election.election_type_id == ElectionType.id)
+        .filter(Election.year == year, ElectionType.name.in_(type_names))
+        .order_by(ElectionType.name, ElectionRound.round_number)
+        .all()
+    )
+
+    elections = []
+    for er in rounds:
+        election = er.election
+        etype = election.election_type
+
+        # Aggregate turnout nationally
+        turnout = db.session.query(
+            db.func.sum(TurnoutData.registered_voters),
+            db.func.sum(TurnoutData.ballots_cast),
+            db.func.sum(TurnoutData.valid_ballots),
+            db.func.sum(TurnoutData.invalid_ballots),
+        ).filter(TurnoutData.election_round_id == er.id).first()
+
+        registered = turnout[0] or 0
+        ballots = turnout[1] or 0
+        valid = turnout[2] or 0
+        invalid = turnout[3] or 0
+
+        # Top lists (all, no limit for national view)
+        top_lists = (
+            db.session.query(
+                ElectoralList.name,
+                db.func.sum(ListResult.votes).label('total_votes'),
+            )
+            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
+            .filter(ElectoralList.election_round_id == er.id)
+            .group_by(ElectoralList.name)
+            .order_by(db.func.sum(ListResult.votes).desc())
+            .all()
+        )
+
+        # Top candidates
+        top_candidates = (
+            db.session.query(
+                Person.first_name,
+                Person.last_name,
+                db.func.sum(CandidateResult.votes).label('total_votes'),
+                ElectoralList.name.label('list_name'),
+            )
+            .join(Candidacy, CandidateResult.candidacy_id == Candidacy.id)
+            .join(Person, Candidacy.person_id == Person.id)
+            .join(ElectoralList, Candidacy.electoral_list_id == ElectoralList.id)
+            .filter(ElectoralList.election_round_id == er.id)
+            .group_by(Person.first_name, Person.last_name, ElectoralList.name)
+            .order_by(db.func.sum(CandidateResult.votes).desc())
+            .all()
+        )
+
+        elections.append({
+            'election': election.name or f'{etype.name} {election.year}',
+            'election_type': etype.name,
+            'year': election.year,
+            'date': election.date.isoformat() if election.date else None,
+            'round': er.round_number,
+            'registered_voters': registered,
+            'ballots_cast': ballots,
+            'valid_ballots': valid,
+            'invalid_ballots': invalid,
+            'top_lists': [
+                {'name': name, 'votes': votes}
+                for name, votes in top_lists
+            ],
+            'top_candidates': [
+                {
+                    'name': f'{first} {last}',
+                    'votes': votes,
+                    'list_name': list_name,
+                }
+                for first, last, votes, list_name in top_candidates
+            ],
+        })
+
+    return jsonify({
+        'category': category,
+        'year': year,
         'elections': elections,
     })
 

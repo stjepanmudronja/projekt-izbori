@@ -101,7 +101,6 @@
         }
         .content-area {
             padding: 1.5rem 2rem;
-            max-width: 900px;
         }
 
         /* Search */
@@ -171,6 +170,293 @@
         }
         .chart-card canvas { max-height: 320px; }
 
+        /* Map */
+        /* Chart + map row */
+        .chart-map-row {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+        }
+        .chart-map-row .chart-map-chart {
+            flex: 1;
+            min-width: 0;
+            height: 280px !important;
+            margin-bottom: 0 !important;
+        }
+        .chart-map-row .chart-map-map {
+            width: 250px !important;
+            height: 280px !important;
+            flex-shrink: 0;
+        }
+
+        /* Croatia SVG map */
+        #croatiaMapWrap svg {
+            width: 100%;
+            height: auto;
+        }
+        #croatiaMapWrap svg path {
+            fill: #ececec;
+            stroke: #b0b0b0;
+            stroke-width: 0.8;
+            stroke-linejoin: round;
+            cursor: pointer;
+            transition: fill 0.2s;
+        }
+        #croatiaMapWrap svg path:hover {
+            fill: #d4d4d4;
+        }
+        #croatiaMapWrap svg path.selected {
+            fill: #e8942e;
+        }
+        #croatiaMapWrap svg path.selected:hover {
+            fill: #d6841e;
+        }
+
+        /* Station two-column layout */
+        .station-layout {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+        .station-main {
+            flex: 1;
+            min-width: 0;
+        }
+        .station-sidebar {
+            flex-shrink: 0;
+            width: 300px;
+            position: sticky;
+            top: 1.5rem;
+        }
+        .map-card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            overflow: hidden;
+            background: white;
+            width: 100%;
+            height: 250px;
+        }
+        .map-card .map-container {
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Draggable bar chart */
+        .bar-chart-area {
+            position: relative;
+            padding: 0.25rem 0;
+        }
+        .bar-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            cursor: grab;
+            border-radius: 0.5rem;
+            padding: 0.35rem 0.5rem;
+            transition: background 0.15s, box-shadow 0.15s, opacity 0.2s;
+            user-select: none;
+        }
+        .bar-row:hover {
+            background: rgba(0,0,0,0.03);
+        }
+        .bar-row.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        .bar-row.drag-over {
+            background: rgba(13, 110, 253, 0.08);
+            box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.3);
+        }
+        .bar-row.combined {
+            animation: barCombine 0.4s ease-out;
+        }
+        @keyframes barCombine {
+            0% { background: rgba(13, 110, 253, 0.15); }
+            100% { background: transparent; }
+        }
+        .bar-label {
+            width: 260px;
+            flex-shrink: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: right;
+            padding-right: 0.75rem;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .bar-track {
+            flex: 1;
+            height: 30px;
+            background: #f0f2f5;
+            border-radius: 6px;
+            overflow: visible;
+            position: relative;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.4s ease-out;
+            display: flex;
+            align-items: center;
+            padding-left: 0.5rem;
+            min-width: 2px;
+            position: relative;
+        }
+        .bar-value {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            white-space: nowrap;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            position: absolute;
+            left: 0.5rem;
+        }
+        .bar-reset-btn {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.35rem;
+            cursor: pointer;
+        }
+        .bar-drag-hint {
+            font-size: 0.7rem;
+            color: #999;
+            margin-top: 0.25rem;
+        }
+
+        /* Compare section */
+        .compare-card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .compare-card-header {
+            background: linear-gradient(135deg, #1a1a2e, #0f3460);
+            color: white;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .compare-card-header h6 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .compare-card-body {
+            padding: 1rem;
+            background: white;
+        }
+        .compare-election-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .compare-election-title:first-child {
+            margin-top: 0;
+        }
+        .compare-grid {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+        .compare-grid .compare-card {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Sidebar sub-items */
+        .sidebar-subnav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.25s ease-out;
+        }
+        .sidebar-subnav.open {
+            max-height: 100px;
+        }
+        .sidebar-subnav li a {
+            padding-left: 2.5rem !important;
+            font-size: 0.8rem !important;
+            color: rgba(255,255,255,0.5) !important;
+        }
+        .sidebar-subnav li a:hover {
+            color: white !important;
+            background: rgba(255,255,255,0.08) !important;
+        }
+        .sidebar-subnav li a.active {
+            color: white !important;
+            background: rgba(255,255,255,0.12) !important;
+        }
+
+        /* Compare tags */
+        .compare-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 2rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: white;
+            cursor: default;
+        }
+        .compare-tag .tag-remove {
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 0.7rem;
+        }
+        .compare-tag .tag-remove:hover { opacity: 1; }
+
+        /* National accordion */
+        .national-accordion .nat-category {
+            border-bottom: 1px solid #e9ecef;
+        }
+        .national-accordion .nat-category:last-child { border-bottom: none; }
+        .national-accordion .nat-cat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #1a1a2e;
+            transition: background 0.15s;
+        }
+        .national-accordion .nat-cat-header:hover { background: #f8f9fa; }
+        .national-accordion .nat-cat-header i.toggle-icon { transition: transform 0.2s; }
+        .national-accordion .nat-cat-header.open i.toggle-icon { transform: rotate(45deg); }
+        .national-accordion .nat-years {
+            display: none;
+            padding: 0 0.5rem 0.5rem 2.2rem;
+        }
+        .national-accordion .nat-years.open { display: block; }
+        .national-accordion .nat-year-btn {
+            display: block;
+            padding: 0.4rem 0.75rem;
+            margin-bottom: 0.15rem;
+            border: none;
+            background: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border-radius: 0.35rem;
+            color: #444;
+            width: 100%;
+            text-align: left;
+        }
+        .national-accordion .nat-year-btn:hover { background: #e9ecef; }
+        .national-accordion .nat-year-btn.active { font-weight: 700; color: #0f3460; background: rgba(15,52,96,0.08); }
+
         /* Module panels */
         .module-panel { display: none; }
         .module-panel.active { display: block; }
@@ -201,9 +487,21 @@
             <li><a href="#" data-module="party">
                 <i class="bi bi-people"></i> Stranka
             </a></li>
-            <li><a href="#" data-module="station">
-                <i class="bi bi-geo-alt"></i> Biračko mjesto
-            </a></li>
+            <li>
+                <a href="#" data-module="station">
+                    <i class="bi bi-geo-alt"></i> Prema lokaciji
+                </a>
+                <ul class="sidebar-subnav" id="stationSubnav">
+                    <li><a href="#" data-module="compare">
+                        <i class="bi bi-arrow-left-right"></i> Usporedi s
+                    </a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#" data-module="national">
+                    <i class="bi bi-clipboard-data"></i> Pregled ukupnih rezultata
+                </a>
+            </li>
         </ul>
     </div>
 
@@ -241,14 +539,29 @@
                     </div>
                     <div class="dropdown-results"></div>
                 </div>
+                <div class="d-flex flex-wrap gap-3 mt-3 election-filters" data-module="person">
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="eu" checked><label class="form-check-label">EU parlamentarni</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="local" checked><label class="form-check-label">Lokalni izbori</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="predsjednicki" checked><label class="form-check-label">Predsjednički</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="sabor" checked><label class="form-check-label">Sabor</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="round2" checked><label class="form-check-label">2. krug</label></div>
+                </div>
             </div>
             <div class="spinner-wrapper mt-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Učitavanje...</span>
                 </div>
             </div>
+            <div class="selected-tags mb-3" id="personTags" style="display:none;">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <small class="text-muted fw-semibold">Usporedba:</small>
+                    <div class="tags-list d-flex flex-wrap gap-1" id="personTagsList"></div>
+                    <button class="btn btn-sm btn-outline-danger ms-2" id="clearPersonTags" onclick="clearCompareList('person')">
+                        <i class="bi bi-x-lg me-1"></i>Očisti
+                    </button>
+                </div>
+            </div>
             <div class="detail-section mt-4 mb-5" style="display:none;">
-                <h3 class="detail-name fw-bold mb-3"></h3>
                 <div class="chart-card chart-container" style="display:none;">
                     <canvas class="votes-chart"></canvas>
                 </div>
@@ -267,14 +580,29 @@
                     </div>
                     <div class="dropdown-results"></div>
                 </div>
+                <div class="d-flex flex-wrap gap-3 mt-3 election-filters" data-module="party">
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="eu" checked><label class="form-check-label">EU parlamentarni</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="local" checked><label class="form-check-label">Lokalni izbori</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="predsjednicki" checked><label class="form-check-label">Predsjednički</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="sabor" checked><label class="form-check-label">Sabor</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="round2" checked><label class="form-check-label">2. krug</label></div>
+                </div>
             </div>
             <div class="spinner-wrapper mt-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Učitavanje...</span>
                 </div>
             </div>
+            <div class="selected-tags mb-3" id="partyTags" style="display:none;">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <small class="text-muted fw-semibold">Usporedba:</small>
+                    <div class="tags-list d-flex flex-wrap gap-1" id="partyTagsList"></div>
+                    <button class="btn btn-sm btn-outline-danger ms-2" id="clearPartyTags" onclick="clearCompareList('party')">
+                        <i class="bi bi-x-lg me-1"></i>Očisti
+                    </button>
+                </div>
+            </div>
             <div class="detail-section mt-4 mb-5" style="display:none;">
-                <h3 class="detail-name fw-bold mb-3"></h3>
                 <div class="chart-card chart-container" style="display:none;">
                     <canvas class="votes-chart"></canvas>
                 </div>
@@ -282,30 +610,122 @@
             </div>
         </div>
 
-        <!-- Station module -->
+        <!-- Station / Prema lokaciji module -->
         <div id="module-station" class="module-panel">
             <div class="card search-card p-4 mb-4">
-                <div class="position-relative">
-                    <div class="input-group input-group-lg">
-                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control search-input" data-type="station"
-                               placeholder="Upiši adresu ili naziv biračkog mjesta..." autocomplete="off">
+                <div class="d-flex gap-4 align-items-start">
+                    <!-- Croatia SVG map -->
+                    <div class="croatia-map-container" style="flex-shrink:0; width:280px;">
+                        <div id="croatiaMapWrap"></div>
+                        <div id="mapCountyLabel" class="text-center mt-1" style="font-size:0.8rem; color:#666; font-weight:500;"></div>
                     </div>
-                    <div class="dropdown-results"></div>
+                    <!-- Dropdowns -->
+                    <div class="flex-grow-1">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Županija</label>
+                                <select id="selCounty" class="form-select">
+                                    <option value="">Odaberite županiju...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Grad / Općina</label>
+                                <select id="selMunicipality" class="form-select" disabled>
+                                    <option value="">Odabir grada/općine...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Biračko mjesto</label>
+                                <select id="selStation" class="form-select" disabled>
+                                    <option value="">Odabir biračkog mjesta...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Prema nazivu ulice</label>
+                                <select id="selStreet" class="form-select" disabled>
+                                    <option value="">Odabir ulice...</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <button id="btnShowResults" class="btn btn-dark btn-lg" disabled>
+                                    <i class="bi bi-bar-chart me-2"></i>Prikaži podatke
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-3 mt-1 election-filters" data-module="station">
+                                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="eu" checked><label class="form-check-label">EU parlamentarni</label></div>
+                                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="local" checked><label class="form-check-label">Lokalni izbori</label></div>
+                                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="predsjednicki" checked><label class="form-check-label">Predsjednički</label></div>
+                                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="sabor" checked><label class="form-check-label">Sabor</label></div>
+                                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="round2" checked><label class="form-check-label">2. krug</label></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="spinner-wrapper mt-4">
+
+            <div class="spinner-wrapper mt-4" id="locationSpinner">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Učitavanje...</span>
                 </div>
             </div>
-            <div class="detail-section mt-4 mb-5" style="display:none;">
-                <h3 class="detail-name fw-bold mb-3"></h3>
-                <div class="chart-card chart-container" style="display:none;">
-                    <canvas class="votes-chart"></canvas>
+
+            <div id="locationDetailSection" class="mt-4 mb-5" style="display:none;">
+                <h3 id="locationDetailName" class="fw-bold mb-3"></h3>
+                <div class="chart-map-row">
+                    <div class="chart-card chart-map-chart" id="stationWinnerChartCard" style="display:none;">
+                        <canvas id="stationWinnerChart"></canvas>
+                    </div>
+                    <div class="map-card chart-map-map" id="stationMapCard" style="display:none;">
+                        <iframe id="stationMap" class="map-container" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    </div>
                 </div>
-                <div class="detail-results"></div>
+                <div id="locationDetailResults"></div>
             </div>
+        </div>
+
+        <!-- Compare module -->
+        <div id="module-compare" class="module-panel">
+            <div id="compareSearchWrap" class="card search-card p-4 mb-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <small class="text-muted">Dodaj do 3 biračka mjesta za usporedbu</small>
+                    <button class="btn btn-sm btn-outline-danger" id="clearCompareBtn" style="display:none;" onclick="clearAllComparisons()">
+                        <i class="bi bi-x-lg me-1"></i>Očisti sve
+                    </button>
+                </div>
+                <div class="position-relative">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-white"><i class="bi bi-plus-circle"></i></span>
+                        <input type="text" id="compareSearchInput" class="form-control"
+                               placeholder="Traži biračko mjesto..." autocomplete="off">
+                    </div>
+                    <div id="compareDropdown" class="dropdown-results"></div>
+                </div>
+                <div class="d-flex flex-wrap gap-3 mt-3 election-filters" data-module="compare">
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="eu" checked><label class="form-check-label">EU parlamentarni</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="local" checked><label class="form-check-label">Lokalni izbori</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="predsjednicki" checked><label class="form-check-label">Predsjednički</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="sabor" checked><label class="form-check-label">Sabor</label></div>
+                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="round2" checked><label class="form-check-label">2. krug</label></div>
+                </div>
+            </div>
+
+            <!-- Comparison cards -->
+            <div id="compareResults" class="compare-grid"></div>
+        </div>
+
+        <!-- National results module -->
+        <div id="module-national" class="module-panel">
+            <div class="card search-card p-4 mb-4">
+                <div id="nationalAccordion" class="national-accordion"></div>
+            </div>
+            <div class="spinner-wrapper mt-4" id="nationalSpinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div id="nationalResultsArea" style="display:none;"></div>
         </div>
     </div>
 </div>
@@ -320,8 +740,12 @@ const moduleTitle = document.getElementById('moduleTitle');
 const moduleTitles = {
     person: '<i class="bi bi-person me-2"></i>Političar',
     party: '<i class="bi bi-people me-2"></i>Stranka',
-    station: '<i class="bi bi-geo-alt me-2"></i>Biračko mjesto',
+    station: '<i class="bi bi-geo-alt me-2"></i>Prema lokaciji',
+    compare: '<i class="bi bi-arrow-left-right me-2"></i>Usporedi biračka mjesta',
+    national: '<i class="bi bi-clipboard-data me-2"></i>Pregled ukupnih rezultata',
 };
+
+const stationSubnav = document.getElementById('stationSubnav');
 
 sidebarLinks.forEach(link => {
     link.addEventListener('click', e => {
@@ -338,9 +762,15 @@ sidebarLinks.forEach(link => {
         const panel = document.getElementById(`module-${mod}`);
         if (panel) {
             panel.classList.add('active');
-            // Focus the search input
-            const input = panel.querySelector('.search-input');
+            const input = panel.querySelector('.search-input') || panel.querySelector('#compareSearchInput');
             if (input) input.focus();
+        }
+
+        // Keep station subnav open for both station and compare
+        if (mod === 'station' || mod === 'compare') {
+            stationSubnav.classList.add('open');
+        } else {
+            stationSubnav.classList.remove('open');
         }
 
         // Update top bar title
@@ -353,6 +783,7 @@ sidebarLinks.forEach(link => {
 // Per-module chart instances
 const moduleCharts = {};
 let stationCharts = [];
+window._electionBarData = {};
 
 // Search logic — scoped per module
 let debounceTimer;
@@ -392,7 +823,7 @@ async function fetchResults(input, q) {
             div.textContent = item.name;
         }
         div.addEventListener('click', () => {
-            input.value = item.name;
+            input.value = '';
             dropdown.classList.remove('show');
             loadDetail(type, item.id);
         });
@@ -405,43 +836,403 @@ function getModulePanel(type) {
     return document.getElementById(`module-${type}`);
 }
 
-async function loadDetail(type, id) {
+// Compare lists for person and party modules
+const _compareItems = { person: [], party: [] };
+const compareLineColors = [
+    'rgb(15, 52, 96)', 'rgb(220, 53, 69)', 'rgb(25, 135, 84)', 'rgb(255, 152, 0)',
+    'rgb(156, 39, 176)', 'rgb(0, 188, 212)', 'rgb(121, 85, 72)', 'rgb(233, 30, 99)',
+    'rgb(63, 81, 181)', 'rgb(76, 175, 80)',
+];
+const compareMaxItems = { person: 10, party: 10 };
+
+function getCompareName(type, data) {
+    if (type === 'person') return `${data.first_name} ${data.last_name}`;
+    return data.short_name || data.name;
+}
+
+function renderCompareTags(type) {
+    const items = _compareItems[type];
+    const tagsContainer = document.getElementById(`${type}Tags`);
+    const tagsList = document.getElementById(`${type}TagsList`);
+
+    if (items.length === 0) {
+        tagsContainer.style.display = 'none';
+        return;
+    }
+
+    tagsContainer.style.display = 'block';
+    tagsList.innerHTML = items.map((item, i) => {
+        const color = compareLineColors[i % compareLineColors.length];
+        return `<span class="compare-tag" style="background:${color};">
+            ${item.name}
+            <span class="tag-remove" onclick="removeCompareItem('${type}', ${item.id})"><i class="bi bi-x"></i></span>
+        </span>`;
+    }).join('');
+}
+
+function removeCompareItem(type, id) {
+    _compareItems[type] = _compareItems[type].filter(it => it.id !== id);
+    renderCompareTags(type);
+    rerenderCompareModule(type);
+}
+
+function clearCompareList(type) {
+    _compareItems[type] = [];
+    renderCompareTags(type);
+    const panel = getModulePanel(type);
+    panel.querySelector('.detail-section').style.display = 'none';
+}
+
+function rerenderCompareModule(type) {
     const panel = getModulePanel(type);
     const detailSection = panel.querySelector('.detail-section');
-    const detailName = panel.querySelector('.detail-name');
     const detailResults = panel.querySelector('.detail-results');
-    const chartContainer = panel.querySelector('.chart-container');
+    const items = _compareItems[type];
+
+    if (items.length === 0) {
+        detailSection.style.display = 'none';
+        return;
+    }
+
+    detailSection.style.display = 'block';
+    renderMultiLineChart(panel, type);
+
+    // Render result cards for each item
+    const votesKey = type === 'person' ? 'candidate_votes' : 'total_votes';
+    detailResults.innerHTML = items.map((item, i) => {
+        const color = compareLineColors[i % compareLineColors.length];
+        const filtered = filterResults(item.data.results, type);
+        const renderFn = type === 'person' ? renderPersonResultsHTML : renderPartyResultsHTML;
+        return `<div class="mb-4">
+            <h5 style="border-left:4px solid ${color}; padding-left:0.75rem;" class="fw-bold mb-3">
+                ${type === 'person' ? '<i class="bi bi-person-circle me-2"></i>' : '<i class="bi bi-people-fill me-2"></i>'}${item.name}
+            </h5>
+            ${renderFn(filtered)}
+        </div>`;
+    }).join('');
+}
+
+async function loadDetail(type, id) {
+    const panel = getModulePanel(type);
     const spinner = panel.querySelector('.spinner-wrapper');
+
+    // Check if already in list
+    if (_compareItems[type].find(it => it.id === id)) return;
+    if (_compareItems[type].length >= compareMaxItems[type]) return;
+
+    spinner.classList.add('show');
+
+    const urls = { person: `/api/person/${id}`, party: `/api/party/${id}` };
+    const res = await fetch(urls[type]);
+    const data = await res.json();
+
+    spinner.classList.remove('show');
+
+    const name = getCompareName(type, data);
+    if (type === 'person') {
+        const fullName = `${data.first_name} ${data.last_name}`.toUpperCase();
+        data.results.forEach(r => r._personFullName = fullName);
+    }
+
+    _compareItems[type].push({ id, name, data });
+    // Also store in _rawData for filter compatibility
+    _rawData[type] = { type, data };
+
+    renderCompareTags(type);
+    rerenderCompareModule(type);
+}
+
+// --- Cascading dropdown logic for Prema lokaciji ---
+const selCounty = document.getElementById('selCounty');
+const selMunicipality = document.getElementById('selMunicipality');
+const selStation = document.getElementById('selStation');
+const selStreet = document.getElementById('selStreet');
+const btnShowResults = document.getElementById('btnShowResults');
+
+// Load counties on page load
+(async function loadCounties() {
+    const res = await fetch('/api/counties');
+    const data = await res.json();
+    data.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        selCounty.appendChild(opt);
+    });
+})();
+
+// --- Croatia SVG map interactivity ---
+const mapWrap = document.getElementById('croatiaMapWrap');
+const mapCountyLabel = document.getElementById('mapCountyLabel');
+let mapPaths = [];
+
+// Load SVG from file and inject inline
+(async function loadCroatiaMap() {
+    const res = await fetch('/static/croatia_map.svg');
+    const svgText = await res.text();
+    mapWrap.innerHTML = svgText;
+    // Remove any embedded <style> from the SVG so our CSS takes over
+    const embeddedStyle = mapWrap.querySelector('svg style');
+    if (embeddedStyle) embeddedStyle.remove();
+    // Remove title
+    const svgTitle = mapWrap.querySelector('svg title');
+    if (svgTitle) svgTitle.remove();
+
+    mapPaths = mapWrap.querySelectorAll('path[data-county]');
+    initMapInteraction();
+})();
+
+function highlightMapCounty(countyName) {
+    mapPaths.forEach(p => p.classList.remove('selected'));
+    if (countyName) {
+        const target = mapWrap.querySelector(`path[data-county="${countyName}"]`);
+        if (target) target.classList.add('selected');
+        mapCountyLabel.textContent = countyName;
+    } else {
+        mapCountyLabel.textContent = '';
+    }
+}
+
+function initMapInteraction() {
+    mapPaths.forEach(path => {
+        path.addEventListener('click', () => {
+            const countyName = path.getAttribute('data-county');
+            const options = selCounty.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].textContent.toUpperCase() === countyName.toUpperCase()) {
+                    selCounty.value = options[i].value;
+                    selCounty.dispatchEvent(new Event('change'));
+                    highlightMapCounty(countyName);
+                    break;
+                }
+            }
+        });
+
+        path.addEventListener('mouseenter', () => {
+            if (!path.classList.contains('selected')) {
+                mapCountyLabel.textContent = path.getAttribute('data-county');
+            }
+        });
+        path.addEventListener('mouseleave', () => {
+            const selected = mapWrap.querySelector('path.selected');
+            mapCountyLabel.textContent = selected ? selected.getAttribute('data-county') : '';
+        });
+    });
+}
+
+// Dropdown change → highlight map
+selCounty.addEventListener('change', () => {
+    const selectedText = selCounty.options[selCounty.selectedIndex]?.textContent || '';
+    if (!selectedText || selCounty.selectedIndex === 0) {
+        highlightMapCounty(null);
+        return;
+    }
+    // Direct match by uppercase name
+    const match = [...mapPaths].find(p =>
+        p.getAttribute('data-county').toUpperCase() === selectedText.toUpperCase()
+    );
+    highlightMapCounty(match ? match.getAttribute('data-county') : null);
+});
+
+selCounty.addEventListener('change', async () => {
+    // Reset dependents
+    selMunicipality.innerHTML = '<option value="">Odabir grada/općine...</option>';
+    selStation.innerHTML = '<option value="">Odabir biračkog mjesta...</option>';
+    selStreet.innerHTML = '<option value="">Odabir ulice...</option>';
+    selMunicipality.disabled = true;
+    selStation.disabled = true;
+    selStreet.disabled = true;
+    updateShowButton();
+
+    const countyId = selCounty.value;
+    if (!countyId) return;
+
+    btnShowResults.disabled = false; // Can show county-level results
+
+    const res = await fetch(`/api/municipalities/${countyId}`);
+    const data = await res.json();
+    data.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        selMunicipality.appendChild(opt);
+    });
+    selMunicipality.disabled = false;
+});
+
+selMunicipality.addEventListener('change', async () => {
+    selStation.innerHTML = '<option value="">Odabir biračkog mjesta...</option>';
+    selStreet.innerHTML = '<option value="">Odabir ulice...</option>';
+    selStation.disabled = true;
+    selStreet.disabled = true;
+    updateShowButton();
+
+    const muniId = selMunicipality.value;
+    if (!muniId) return;
+
+    // Load stations and streets in parallel
+    const [stationsRes, streetsRes] = await Promise.all([
+        fetch(`/api/polling-stations/${muniId}`),
+        fetch(`/api/streets/${muniId}`),
+    ]);
+    const stations = await stationsRes.json();
+    const streets = await streetsRes.json();
+
+    stations.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        selStation.appendChild(opt);
+    });
+    selStation.disabled = false;
+
+    streets.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        opt.textContent = s.name;
+        selStreet.appendChild(opt);
+    });
+    selStreet.disabled = false;
+});
+
+selStation.addEventListener('change', () => {
+    updateShowButton();
+});
+selStreet.addEventListener('change', async () => {
+    if (selStreet.value && selMunicipality.value) {
+        // Fetch stations matching this street and auto-select in biračko mjesto dropdown
+        const res = await fetch(`/api/stations-by-street/${selMunicipality.value}?street=${encodeURIComponent(selStreet.value)}`);
+        const stations = await res.json();
+        if (stations.length === 1) {
+            // Exact match — auto-select in station dropdown
+            const matchOpt = [...selStation.options].find(o => o.value === String(stations[0].id));
+            if (matchOpt) selStation.value = matchOpt.value;
+        } else if (stations.length > 1) {
+            // Multiple stations — reset station dropdown and populate with only matching ones
+            selStation.innerHTML = '<option value="">Odabir biračkog mjesta...</option>';
+            stations.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                selStation.appendChild(opt);
+            });
+            if (stations.length === 1) selStation.value = stations[0].id;
+        }
+    }
+    updateShowButton();
+});
+
+function updateShowButton() {
+    btnShowResults.disabled = !selCounty.value;
+}
+
+btnShowResults.addEventListener('click', loadLocationResults);
+
+// --- Universal election filter system ---
+// Stores raw data per module so checkboxes can re-render without re-fetching
+const _rawData = {
+    person: null,   // { type: 'person', data: apiResponse }
+    party: null,    // { type: 'party', data: apiResponse }
+    station: null,  // { elections: [...] }
+    compare: null,  // handled via compareState
+};
+
+function classifyElection(el) {
+    const t = (el.election_type || '').toLowerCase();
+    if (t.includes('predsjednič')) return 'predsjednicki';
+    if (t.includes('parlamentar') && !t.includes('europ')) return 'sabor';
+    if (t.includes('europ')) return 'eu';
+    return 'local';
+}
+
+function getFilterState(moduleName) {
+    const container = document.querySelector(`.election-filters[data-module="${moduleName}"]`);
+    if (!container) return { eu: true, local: true, predsjednicki: true, sabor: true, round2: true };
+    const cbs = container.querySelectorAll('.filter-election');
+    const state = {};
+    cbs.forEach(cb => { state[cb.value] = cb.checked; });
+    return state;
+}
+
+function filterResults(results, moduleName) {
+    const f = getFilterState(moduleName);
+    return results.filter(el => {
+        const cat = classifyElection(el);
+        if (cat === 'eu' && !f.eu) return false;
+        if (cat === 'local' && !f.local) return false;
+        if (cat === 'predsjednicki' && !f.predsjednicki) return false;
+        if (cat === 'sabor' && !f.sabor) return false;
+        if ((el.round || 1) >= 2 && !f.round2) return false;
+        return true;
+    });
+}
+
+function applyFilters(moduleName) {
+    if (moduleName === 'station') {
+        if (!_rawData.station) return;
+        const filtered = filterResults(_rawData.station, 'station');
+        const detailResults = document.getElementById('locationDetailResults');
+        renderStationWinnerChart(filtered);
+        renderStationResults(detailResults, filtered);
+    } else if (moduleName === 'person' && _compareItems.person.length > 0) {
+        rerenderCompareModule('person');
+    } else if (moduleName === 'party' && _compareItems.party.length > 0) {
+        rerenderCompareModule('party');
+    } else if (moduleName === 'compare') {
+        renderComparisons();
+    }
+}
+
+// Attach checkbox listeners for all modules
+document.querySelectorAll('.election-filters').forEach(container => {
+    const mod = container.dataset.module;
+    container.querySelectorAll('.filter-election').forEach(cb => {
+        cb.addEventListener('change', () => applyFilters(mod));
+    });
+});
+
+async function loadLocationResults() {
+    const params = new URLSearchParams();
+    if (selStation.value) {
+        params.set('station_id', selStation.value);
+    } else if (selStreet.value && selMunicipality.value) {
+        params.set('municipality_id', selMunicipality.value);
+        params.set('street', selStreet.value);
+    } else if (selMunicipality.value) {
+        params.set('municipality_id', selMunicipality.value);
+    } else if (selCounty.value) {
+        params.set('county_id', selCounty.value);
+    }
+
+    const spinner = document.getElementById('locationSpinner');
+    const detailSection = document.getElementById('locationDetailSection');
+    const detailName = document.getElementById('locationDetailName');
+    const detailResults = document.getElementById('locationDetailResults');
 
     detailSection.style.display = 'none';
     spinner.classList.add('show');
 
-    const urls = { person: `/api/person/${id}`, party: `/api/party/${id}`, station: `/api/station/${id}` };
-    const res = await fetch(urls[type]);
+    const res = await fetch(`/api/location-results?${params}`);
     const data = await res.json();
 
     spinner.classList.remove('show');
     detailSection.style.display = 'block';
 
-    if (type === 'person') {
-        detailName.innerHTML = `<i class="bi bi-person-circle me-2"></i>${data.first_name} ${data.last_name}`;
-        const fullName = `${data.first_name} ${data.last_name}`.toUpperCase();
-        data.results.forEach(r => r._personFullName = fullName);
-        renderVotesChart(panel, data.results, 'person');
-        renderPersonResults(detailResults, data.results);
-    } else if (type === 'party') {
-        detailName.innerHTML = `<i class="bi bi-people-fill me-2"></i>${data.short_name || ''} ${data.name}`;
-        renderVotesChart(panel, data.results, 'party');
-        renderPartyResults(detailResults, data.results);
+    // Store raw data for filtering
+    _rawData.station = data.elections;
+
+    detailName.innerHTML = `<i class="bi bi-geo-alt-fill me-2"></i>${data.label}`;
+    const filtered = filterResults(data.elections, 'station');
+    renderStationWinnerChart(filtered);
+    renderStationResults(detailResults, filtered);
+
+    // Show map if specific station selected
+    if (selStation.value) {
+        const stationRes = await fetch(`/api/station/${selStation.value}`);
+        const stationData = await stationRes.json();
+        renderStationMap(stationData);
     } else {
-        detailName.innerHTML = `<i class="bi bi-geo-alt-fill me-2"></i>${data.name}`;
-        if (data.municipality || data.address) {
-            detailName.innerHTML += `<div class="fs-6 fw-normal text-muted mt-1">${data.location} — ${data.address}, ${data.municipality}</div>`;
-        }
-        // Hide chart for stations
-        if (moduleCharts['station']) { moduleCharts['station'].destroy(); moduleCharts['station'] = null; }
-        chartContainer.style.display = 'none';
-        renderStationResults(detailResults, data.elections);
+        document.getElementById('stationMapCard').style.display = 'none';
     }
 }
 
@@ -560,6 +1351,191 @@ function renderVotesChart(panel, results, type) {
     });
 }
 
+function renderMultiLineChart(panel, type) {
+    const chartContainer = panel.querySelector('.chart-container');
+    const canvas = panel.querySelector('.votes-chart');
+    const modKey = panel.id;
+
+    if (moduleCharts[modKey]) {
+        moduleCharts[modKey].destroy();
+        moduleCharts[modKey] = null;
+    }
+
+    const items = _compareItems[type];
+    if (items.length === 0) {
+        chartContainer.style.display = 'none';
+        return;
+    }
+
+    const votesKey = type === 'person' ? 'candidate_votes' : 'total_votes';
+
+    // Build unified X-axis labels from all items
+    const allLabelsSet = new Map(); // key -> display label
+    items.forEach(item => {
+        const filtered = filterResults(item.data.results, type).filter(r => r[votesKey] > 0);
+        filtered.forEach(r => {
+            const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
+            if (!allLabelsSet.has(key)) {
+                let label = r.election_type.replace('izbori', '').trim();
+                if (r.date) {
+                    const d = new Date(r.date);
+                    label += `\n${d.toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                } else {
+                    label += ` ${r.year}`;
+                }
+                if (r.round > 1) label += ` (${r.round}. krug)`;
+                if (r.district) label += `\n${r.district}`;
+                allLabelsSet.set(key, { label, date: r.date || `${r.year}`, round: r.round });
+            }
+        });
+    });
+
+    // Sort labels by date
+    const sortedKeys = [...allLabelsSet.entries()].sort((a, b) => {
+        const da = a[1].date, db = b[1].date;
+        if (da < db) return -1;
+        if (da > db) return 1;
+        return a[1].round - b[1].round;
+    });
+    const labels = sortedKeys.map(e => e[1].label);
+    const labelKeys = sortedKeys.map(e => e[0]);
+
+    if (labels.length === 0) {
+        chartContainer.style.display = 'none';
+        return;
+    }
+
+    chartContainer.style.display = 'block';
+
+    // Build one dataset per item
+    const datasets = items.map((item, i) => {
+        const color = compareLineColors[i % compareLineColors.length];
+        const filtered = filterResults(item.data.results, type).filter(r => r[votesKey] > 0);
+
+        // Map results to unified label positions
+        const resultMap = {};
+        filtered.forEach(r => {
+            const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
+            resultMap[key] = r.vote_share || 0;
+        });
+
+        const data = labelKeys.map(k => resultMap[k] ?? null);
+
+        return {
+            label: item.name,
+            data: data,
+            borderColor: color,
+            backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+            fill: false,
+            tension: 0.3,
+            borderWidth: 2.5,
+            pointBackgroundColor: color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 8,
+            spanGaps: true,
+        };
+    });
+
+    const allValues = datasets.flatMap(ds => ds.data.filter(v => v !== null));
+    const maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
+
+    const ctx = canvas.getContext('2d');
+    moduleCharts[modKey] = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: {
+                    display: items.length > 1,
+                    position: 'top',
+                    labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 12 } },
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 13 },
+                    padding: 14,
+                    cornerRadius: 8,
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: Math.min(maxVal * 1.4, 100),
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    title: { display: true, text: 'Udio glasova (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' }
+                },
+                x: {
+                    grid: { color: 'rgba(0,0,0,0.03)' },
+                    ticks: { font: { size: 11 }, maxRotation: 45 }
+                }
+            },
+            animation: { duration: 800, easing: 'easeOutQuart' }
+        }
+    });
+}
+
+// HTML-returning versions for compare result cards
+function renderPersonResultsHTML(results) {
+    if (results.length === 0) return '<p class="text-muted">Nema izbornih podataka.</p>';
+    return results.map(r => {
+        const showListName = r.list_name && r.list_name.toUpperCase() !== (r._personFullName || '').toUpperCase();
+        return `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
+                    <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
+                    ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                </div>
+                <div class="text-end">
+                    ${r.vote_share ? `<div class="vote-number">${r.vote_share}%</div><small class="text-muted">udio glasova</small>` : ''}
+                </div>
+            </div>
+            <div class="mt-2">
+                ${showListName ? `<div class="fw-semibold">${r.list_name}</div>` : ''}
+                <div class="d-flex gap-3 flex-wrap">
+                    ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
+                    ${r.position ? `<small class="text-muted"><i class="bi bi-list-ol me-1"></i>Pozicija: ${r.position}</small>` : ''}
+                </div>
+            </div>
+            <hr class="my-2" style="opacity: 0.1;">
+            <div class="d-flex gap-3 flex-wrap">
+                ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
+                ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderPartyResultsHTML(results) {
+    if (results.length === 0) return '<p class="text-muted">Nema izbornih podataka.</p>';
+    return results.map(r => `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
+                    <span class="badge bg-dark badge-election">${r.year}</span>
+                    ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                </div>
+                <div class="text-end">
+                    ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                </div>
+            </div>
+            <div class="mt-2">
+                <div class="fw-semibold">${r.list_name}</div>
+                ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
 function electionBadgeColor(type) {
     const colors = {
         'Predsjednički izbori': 'bg-danger',
@@ -640,6 +1616,179 @@ function renderPartyResults(container, results) {
     `).join('');
 }
 
+// Station winner chart
+let stationWinnerChartInstance = null;
+
+function renderStationWinnerChart(elections) {
+    const chartCard = document.getElementById('stationWinnerChartCard');
+    const canvas = document.getElementById('stationWinnerChart');
+
+    if (stationWinnerChartInstance) {
+        stationWinnerChartInstance.destroy();
+        stationWinnerChartInstance = null;
+    }
+
+    if (!elections || elections.length === 0) {
+        chartCard.style.display = 'none';
+        return;
+    }
+
+    // For each election, find the winner (top candidate or top list) — chronological order
+    const winners = elections.slice().reverse().map(el => {
+        const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
+        const items = hasCandidates ? el.top_candidates : el.top_lists;
+        if (items.length === 0) return null;
+
+        const winner = items[0]; // already sorted desc by votes from API
+        const votePct = el.valid_ballots > 0 ? Math.round((winner.votes / el.valid_ballots) * 100) : 0;
+
+        // Date first, then election type
+        let datePart = el.date
+            ? new Date(el.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' })
+            : `${el.year}`;
+        let typePart = el.election_type.replace('izbori', '').trim();
+        if (el.round > 1) typePart += ` (${el.round}. krug)`;
+
+        return {
+            label: `${datePart}\n${typePart}`,
+            name: winner.name,
+            votes: winner.votes,
+            votePct,
+            electionType: el.election_type,
+        };
+    }).filter(Boolean);
+
+    if (winners.length === 0) {
+        chartCard.style.display = 'none';
+        return;
+    }
+
+    chartCard.style.display = 'block';
+
+    // Multi-line labels: date, election type, winner name (truncated)
+    const labels = winners.map(w => {
+        const lines = w.label.split('\n');
+        const shortName = w.name.length > 18 ? w.name.substring(0, 16) + '...' : w.name;
+        lines.push(shortName);
+        return lines;
+    });
+    const pctValues = winners.map(w => w.votePct);
+    const colors = winners.map(w => getElectionColor(w.electionType));
+    const winnerNames = winners.map(w => w.name);
+    const winnerVotes = winners.map(w => w.votes);
+
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+    gradient.addColorStop(0, 'rgba(15, 52, 96, 0.25)');
+    gradient.addColorStop(1, 'rgba(15, 52, 96, 0.02)');
+
+    stationWinnerChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Pobjednik — udio glasova (%)',
+                data: pctValues,
+                borderColor: 'rgb(15, 52, 96)',
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.3,
+                borderWidth: 3,
+                pointBackgroundColor: colors.map(c => c.border),
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2.5,
+                pointRadius: 7,
+                pointHoverRadius: 10,
+                pointHoverBorderWidth: 3,
+                pointStyle: 'circle',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 13 },
+                    padding: 14,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            const i = ctx.dataIndex;
+                            return [
+                                `Pobjednik: ${winnerNames[i]}`,
+                                `Udio: ${pctValues[i]}%`,
+                                `Glasovi: ${winnerVotes[i].toLocaleString('hr-HR')}`,
+                            ];
+                        }
+                    }
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: Math.min(Math.max(...pctValues) * 1.4, 100),
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    title: { display: true, text: 'Udio glasova pobjednika (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' }
+                },
+                x: {
+                    grid: { color: 'rgba(0,0,0,0.03)' },
+                    ticks: {
+                        font: { size: 10 },
+                        maxRotation: 90,
+                        minRotation: 90,
+                    }
+                }
+            },
+            layout: {
+                padding: { bottom: 10 }
+            },
+            animation: { duration: 1000, easing: 'easeOutQuart' }
+        }
+    });
+}
+
+// Station map (Google Maps embed)
+function renderStationMap(data) {
+    const mapCard = document.getElementById('stationMapCard');
+    const iframe = document.getElementById('stationMap');
+
+    if (!data.address) {
+        mapCard.style.display = 'none';
+        return;
+    }
+
+    const parts = [data.address, data.municipality, 'Croatia'].filter(Boolean);
+    const query = parts.join(', ');
+
+    mapCard.style.display = 'block';
+    iframe.src = `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+}
+
+const barColors = [
+    'rgba(13, 110, 253, 0.8)',
+    'rgba(220, 53, 69, 0.75)',
+    'rgba(25, 135, 84, 0.75)',
+    'rgba(255, 193, 7, 0.85)',
+    'rgba(13, 202, 240, 0.75)',
+    'rgba(111, 66, 193, 0.75)',
+    'rgba(253, 126, 20, 0.75)',
+    'rgba(102, 16, 242, 0.75)',
+    'rgba(214, 51, 132, 0.75)',
+    'rgba(32, 201, 151, 0.75)',
+    'rgba(108, 117, 125, 0.75)',
+    'rgba(52, 58, 64, 0.75)',
+    'rgba(255, 140, 66, 0.75)',
+    'rgba(0, 123, 167, 0.75)',
+    'rgba(176, 65, 62, 0.75)',
+    'rgba(80, 150, 50, 0.75)',
+];
+
 function renderStationResults(container, elections) {
     stationCharts.forEach(c => c.destroy());
     stationCharts = [];
@@ -649,24 +1798,9 @@ function renderStationResults(container, elections) {
         return;
     }
 
-    const topColors = [
-        'rgba(13, 110, 253, 0.75)',
-        'rgba(220, 53, 69, 0.75)',
-        'rgba(25, 135, 84, 0.75)',
-        'rgba(255, 193, 7, 0.85)',
-        'rgba(13, 202, 240, 0.75)',
-    ];
-    const topBorders = [
-        'rgb(13, 110, 253)',
-        'rgb(220, 53, 69)',
-        'rgb(25, 135, 84)',
-        'rgb(255, 193, 7)',
-        'rgb(13, 202, 240)',
-    ];
-
     container.innerHTML = elections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
-            ? ((el.ballots_cast / el.registered_voters) * 100).toFixed(1)
+            ? Math.round((el.ballots_cast / el.registered_voters) * 100)
             : 0;
 
         return `
@@ -682,82 +1816,469 @@ function renderStationResults(container, elections) {
                     <br><small class="text-muted">izlaznost</small>
                 </div>
             </div>
-            <div class="d-flex gap-3 flex-wrap mb-3">
+            <div class="d-flex gap-3 flex-wrap mb-2">
                 <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${formatNumber(el.registered_voters)}</strong></small>
                 <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
                 <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
             </div>
-            <div style="height: 200px;">
-                <canvas id="stationChart${idx}"></canvas>
+            <div class="bar-chart-area" id="barChart_${idx}" data-election-idx="${idx}"></div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+                <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac na drugi za spajanje rezultata</div>
+                <button class="btn btn-outline-secondary bar-reset-btn" onclick="resetBarChart(${idx})" style="display:none;" id="resetBtn_${idx}">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
+                </button>
             </div>
         </div>`;
     }).join('');
 
-    setTimeout(() => {
+    // Clear only station-module keys (numeric), keep compare keys (string)
+    if (!window._electionBarData) window._electionBarData = {};
+    Object.keys(window._electionBarData).forEach(k => {
+        if (!isNaN(Number(k))) delete window._electionBarData[k];
+    });
+
+    elections.forEach((el, idx) => {
+        const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
+        const items = hasCandidates ? el.top_candidates : el.top_lists;
+        if (items.length === 0) return;
+
+        const originalItems = items.map((it, i) => ({
+            name: it.name,
+            votes: it.votes,
+            color: barColors[i % barColors.length],
+            origNames: [it.name],
+        }));
+
+        window._electionBarData[idx] = {
+            original: JSON.parse(JSON.stringify(originalItems)),
+            current: originalItems,
+            validBallots: el.valid_ballots,
+        };
+
+        buildBarChart(idx);
+    });
+}
+
+function buildBarChart(idx) {
+    const chartArea = document.getElementById(`barChart_${idx}`);
+    const data = window._electionBarData[idx];
+    if (!chartArea || !data) return;
+
+    const items = data.current;
+    const maxVotes = Math.max(...items.map(it => it.votes));
+
+    chartArea.innerHTML = items.map((it, i) => {
+        const pct = maxVotes > 0 ? (it.votes / maxVotes) * 100 : 0;
+        const votePct = data.validBallots > 0 ? Math.round((it.votes / data.validBallots) * 100) : 0;
+        const displayName = it.name.length > 40 ? it.name.substring(0, 37) + '...' : it.name;
+
+        return `
+        <div class="bar-row" draggable="true" data-chart="${idx}" data-bar="${i}"
+             title="${it.name}: ${formatNumber(it.votes)} glasova (${votePct}%)">
+            <div class="bar-label">${displayName}</div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width: ${Math.max(pct, 12)}%; background: ${it.color};">
+                    <span class="bar-value">${formatNumber(it.votes)} (${votePct}%)</span>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Set up drag-and-drop
+    const rows = chartArea.querySelectorAll('.bar-row');
+    rows.forEach(row => {
+        row.addEventListener('dragstart', onBarDragStart);
+        row.addEventListener('dragend', onBarDragEnd);
+        row.addEventListener('dragover', onBarDragOver);
+        row.addEventListener('dragenter', onBarDragEnter);
+        row.addEventListener('dragleave', onBarDragLeave);
+        row.addEventListener('drop', onBarDrop);
+    });
+}
+
+let dragSource = null;
+
+function onBarDragStart(e) {
+    dragSource = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `${this.dataset.chart}:${this.dataset.bar}`);
+}
+
+function onBarDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.bar-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+    dragSource = null;
+}
+
+function onBarDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function onBarDragEnter(e) {
+    e.preventDefault();
+    if (this !== dragSource && this.dataset.chart === dragSource?.dataset.chart) {
+        this.classList.add('drag-over');
+    }
+}
+
+function onBarDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+function onBarDrop(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+
+    const rawData = e.dataTransfer.getData('text/plain');
+    // Format: "chartKey:barIdx" — chartKey can be number or string like "cmp_123_0"
+    const lastColon = rawData.lastIndexOf(':');
+    const srcChartRaw = rawData.substring(0, lastColon);
+    const srcBar = parseInt(rawData.substring(lastColon + 1));
+    const srcChart = isNaN(Number(srcChartRaw)) ? srcChartRaw : Number(srcChartRaw);
+
+    const tgtChartRaw = this.dataset.chart;
+    const tgtChart = isNaN(Number(tgtChartRaw)) ? tgtChartRaw : Number(tgtChartRaw);
+    const tgtBar = parseInt(this.dataset.bar);
+
+    if (srcChart !== tgtChart || srcBar === tgtBar) return;
+
+    const data = window._electionBarData[srcChart];
+    if (!data) return;
+
+    const items = data.current;
+    const src = items[srcBar];
+    const tgt = items[tgtBar];
+
+    // Combine: merge src into tgt
+    tgt.votes += src.votes;
+    tgt.name = [...tgt.origNames, ...src.origNames].join(' + ');
+    tgt.origNames = [...tgt.origNames, ...src.origNames];
+
+    // Remove src
+    items.splice(srcBar, 1);
+
+    // Rebuild chart
+    buildBarChart(srcChart);
+
+    // Flash the combined row
+    const chartArea = document.getElementById(`barChart_${srcChart}`);
+    const newIdx = items.indexOf(tgt);
+    const rows = chartArea.querySelectorAll('.bar-row');
+    if (rows[newIdx]) rows[newIdx].classList.add('combined');
+
+    // Show reset button
+    document.getElementById(`resetBtn_${srcChart}`).style.display = 'inline-block';
+}
+
+function resetBarChart(idx) {
+    const data = window._electionBarData[idx];
+    if (!data) return;
+
+    data.current = JSON.parse(JSON.stringify(data.original));
+    buildBarChart(idx);
+    document.getElementById(`resetBtn_${idx}`).style.display = 'none';
+}
+
+// ---- National results feature ----
+const nationalIcons = {
+    predsjednicki: 'bi-person-badge',
+    eu: 'bi-globe-europe-africa',
+    sabor: 'bi-bank',
+    lokalni: 'bi-building',
+};
+
+let _nationalData = null; // store for re-rendering
+
+(async function loadNationalAccordion() {
+    const res = await fetch('/api/national/election-types');
+    const categories = await res.json();
+    const container = document.getElementById('nationalAccordion');
+
+    container.innerHTML = categories.map(cat => `
+        <div class="nat-category">
+            <div class="nat-cat-header" data-cat="${cat.key}">
+                <span><i class="bi ${nationalIcons[cat.key] || 'bi-list'} me-2"></i>${cat.label}</span>
+                <i class="bi bi-plus toggle-icon"></i>
+            </div>
+            <div class="nat-years" id="natYears_${cat.key}">
+                ${cat.years.map(y => `
+                    <button class="nat-year-btn" data-cat="${cat.key}" data-year="${y}">${y}.</button>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+
+    // Toggle accordion
+    container.querySelectorAll('.nat-cat-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const isOpen = header.classList.contains('open');
+            // Close all
+            container.querySelectorAll('.nat-cat-header').forEach(h => h.classList.remove('open'));
+            container.querySelectorAll('.nat-years').forEach(y => y.classList.remove('open'));
+            if (!isOpen) {
+                header.classList.add('open');
+                document.getElementById(`natYears_${header.dataset.cat}`).classList.add('open');
+            }
+        });
+    });
+
+    // Year click
+    container.querySelectorAll('.nat-year-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            container.querySelectorAll('.nat-year-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadNationalResults(btn.dataset.cat, parseInt(btn.dataset.year));
+        });
+    });
+})();
+
+async function loadNationalResults(category, year) {
+    const spinner = document.getElementById('nationalSpinner');
+    const resultsArea = document.getElementById('nationalResultsArea');
+
+    resultsArea.style.display = 'none';
+    spinner.classList.add('show');
+
+    const res = await fetch(`/api/national/results/${category}/${year}`);
+    const data = await res.json();
+
+    spinner.classList.remove('show');
+    resultsArea.style.display = 'block';
+
+    _nationalData = data;
+    renderNationalResults(data);
+}
+
+function renderNationalResults(data) {
+    const container = document.getElementById('nationalResultsArea');
+    const elections = data.elections || [];
+
+    if (elections.length === 0) {
+        container.innerHTML = '<p class="text-muted p-3">Nema podataka za odabrane izbore.</p>';
+        return;
+    }
+
+    container.innerHTML = elections.map((el, idx) => {
+        const turnoutPct = el.registered_voters > 0
+            ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
+        const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
+        const items = hasCandidates ? el.top_candidates : el.top_lists;
+        const chartId = `nat_${idx}`;
+
+        return `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    <span class="badge ${electionBadgeColor(el.election_type)} badge-election me-1">${el.election_type}</span>
+                    <span class="badge bg-dark badge-election">${el.date ? new Date(el.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : el.year}</span>
+                    ${el.round > 1 ? '<span class="badge bg-warning text-dark badge-election">' + el.round + '. krug</span>' : ''}
+                </div>
+                <div class="text-end">
+                    <span class="vote-number">${turnoutPct}%</span>
+                    <br><small class="text-muted">izlaznost</small>
+                </div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap mb-2">
+                <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${formatNumber(el.registered_voters)}</strong></small>
+                <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
+                <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
+            </div>
+            <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+                <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac na drugi za spajanje rezultata</div>
+                <button class="btn btn-outline-secondary bar-reset-btn" onclick="resetBarChart('${chartId}')" style="display:none;" id="resetBtn_${chartId}">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Build bar charts
+    elections.forEach((el, idx) => {
+        const chartId = `nat_${idx}`;
+        const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
+        const items = hasCandidates ? el.top_candidates : el.top_lists;
+        if (items.length === 0) return;
+
+        const originalItems = items.map((it, i) => ({
+            name: it.name,
+            votes: it.votes,
+            color: barColors[i % barColors.length],
+            origNames: [it.name],
+        }));
+
+        window._electionBarData[chartId] = {
+            original: JSON.parse(JSON.stringify(originalItems)),
+            current: originalItems,
+            validBallots: el.valid_ballots,
+        };
+
+        buildBarChart(chartId);
+    });
+}
+
+// ---- Compare feature ----
+const compareState = {
+    stations: [],  // [{id, name, data}]
+    maxCompare: 3,
+};
+
+const compareSearchInput = document.getElementById('compareSearchInput');
+const compareDropdown = document.getElementById('compareDropdown');
+let compareDebounce;
+
+compareSearchInput.addEventListener('input', () => {
+    clearTimeout(compareDebounce);
+    const q = compareSearchInput.value.trim();
+    if (q.length < 2) {
+        compareDropdown.classList.remove('show');
+        return;
+    }
+    compareDebounce = setTimeout(() => fetchCompareResults(q), 250);
+});
+
+async function fetchCompareResults(q) {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=station`);
+    const data = await res.json();
+
+    compareDropdown.innerHTML = '';
+    if (data.length === 0) {
+        compareDropdown.innerHTML = '<div class="dropdown-item-custom text-muted">Nema rezultata</div>';
+        compareDropdown.classList.add('show');
+        return;
+    }
+
+    data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'dropdown-item-custom';
+        div.innerHTML = `${item.name} <small class="text-muted">— ${item.municipality}</small>`;
+        div.addEventListener('click', () => {
+            compareSearchInput.value = '';
+            compareDropdown.classList.remove('show');
+            addCompareStation(item.id, item.name, item.municipality);
+        });
+        compareDropdown.appendChild(div);
+    });
+    compareDropdown.classList.add('show');
+}
+
+async function addCompareStation(id, name, municipality) {
+    // Check duplicates and max
+    if (compareState.stations.find(s => s.id === id)) return;
+    if (compareState.stations.length >= compareState.maxCompare) return;
+
+    // Fetch data
+    const res = await fetch(`/api/station/${id}`);
+    const data = await res.json();
+
+    compareState.stations.push({ id, name, municipality, data });
+    renderComparisons();
+    updateCompareUI();
+}
+
+function removeCompareStation(id) {
+    compareState.stations = compareState.stations.filter(s => s.id !== id);
+    renderComparisons();
+    updateCompareUI();
+}
+
+function clearAllComparisons() {
+    compareState.stations = [];
+    renderComparisons();
+    updateCompareUI();
+}
+
+function updateCompareUI() {
+    const searchInput = document.getElementById('compareSearchInput');
+    const clearBtn = document.getElementById('clearCompareBtn');
+
+    if (compareState.stations.length >= compareState.maxCompare) {
+        searchInput.disabled = true;
+        searchInput.placeholder = 'Maksimalan broj biračkih mjesta (3)';
+    } else {
+        searchInput.disabled = false;
+        searchInput.placeholder = 'Traži biračko mjesto...';
+    }
+
+    clearBtn.style.display = compareState.stations.length > 0 ? 'inline-block' : 'none';
+}
+
+function renderComparisons() {
+    const container = document.getElementById('compareResults');
+
+    if (compareState.stations.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    // Build HTML first, then wire up bar charts
+    container.innerHTML = compareState.stations.map(station => {
+        const d = station.data;
+        const elections = filterResults(d.elections || [], 'compare');
+
+        const electionCards = elections.map((el, idx) => {
+            const turnoutPct = el.registered_voters > 0
+                ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
+            const chartId = `cmp_${station.id}_${idx}`;
+
+            return `
+            <div class="compare-election-title">
+                <span class="badge ${electionBadgeColor(el.election_type)} badge-election me-1" style="font-size:0.65rem;">${el.election_type}</span>
+                <span class="badge bg-dark badge-election" style="font-size:0.65rem;">${el.date ? new Date(el.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : el.year}</span>
+                ${el.round > 1 ? `<span class="badge bg-warning text-dark badge-election" style="font-size:0.65rem;">${el.round}. krug</span>` : ''}
+                <span class="text-muted ms-2" style="font-size:0.7rem;">Izlaznost: <strong>${turnoutPct}%</strong></span>
+            </div>
+            <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
+            <div class="d-flex justify-content-between align-items-center mt-1 mb-2">
+                <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac za spajanje</div>
+                <button class="btn btn-outline-secondary bar-reset-btn" onclick="resetBarChart('${chartId}')" style="display:none;" id="resetBtn_${chartId}">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
+                </button>
+            </div>`;
+        }).join('');
+
+        return `
+        <div class="compare-card">
+            <div class="compare-card-header">
+                <h6><i class="bi bi-geo-alt me-1"></i>${station.name}</h6>
+                <button class="btn btn-sm btn-outline-light" style="padding:0.1rem 0.4rem; font-size:0.7rem;" onclick="removeCompareStation(${station.id})">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+            <div class="compare-card-body">
+                ${d.municipality ? `<small class="text-muted">${d.municipality}</small>` : ''}
+                ${electionCards || '<p class="text-muted" style="font-size:0.8rem;">Nema podataka</p>'}
+            </div>
+        </div>`;
+    }).join('');
+
+    // Now wire up draggable bar charts for each election in each compare card
+    compareState.stations.forEach(station => {
+        const elections = filterResults(station.data.elections || [], 'compare');
         elections.forEach((el, idx) => {
-            const hasCandiates = el.top_candidates && el.top_candidates.length > 0;
-            const items = hasCandiates ? el.top_candidates : el.top_lists;
+            const chartId = `cmp_${station.id}_${idx}`;
+            const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
+            const items = hasCandidates ? el.top_candidates : el.top_lists;
             if (items.length === 0) return;
 
-            const canvas = document.getElementById(`stationChart${idx}`);
-            if (!canvas) return;
+            const originalItems = items.map((it, i) => ({
+                name: it.name,
+                votes: it.votes,
+                color: barColors[i % barColors.length],
+                origNames: [it.name],
+            }));
 
-            const labels = items.map(it => {
-                const name = it.name;
-                return name.length > 35 ? name.substring(0, 32) + '...' : name;
-            });
-            const votes = items.map(it => it.votes);
+            window._electionBarData[chartId] = {
+                original: JSON.parse(JSON.stringify(originalItems)),
+                current: originalItems,
+                validBallots: el.valid_ballots,
+            };
 
-            const chart = new Chart(canvas.getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: votes,
-                        backgroundColor: topColors.slice(0, items.length),
-                        borderColor: topBorders.slice(0, items.length),
-                        borderWidth: 2,
-                        borderRadius: 6,
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(26, 26, 46, 0.95)',
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: ctx => {
-                                    const v = ctx.parsed.x;
-                                    const pct = el.valid_ballots > 0
-                                        ? ((v / el.valid_ballots) * 100).toFixed(1)
-                                        : 0;
-                                    return `${v.toLocaleString('hr-HR')} glasova (${pct}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { font: { size: 11 } }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: { font: { size: 11 } }
-                        }
-                    },
-                    animation: { duration: 600, easing: 'easeOutQuart' }
-                }
-            });
-            stationCharts.push(chart);
+            buildBarChart(chartId);
         });
-    }, 50);
+    });
 }
 
 // Close dropdowns on outside click
