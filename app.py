@@ -828,5 +828,272 @@ def national_results(category, year):
     })
 
 
+@app.route('/api/national/sabor-seats/<int:year>')
+def sabor_seats(year):
+    """Calculate Sabor seat distribution using D'Hondt method."""
+    etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
+    if not etype:
+        return jsonify({'error': 'No sabor election type'}), 404
+
+    election = Election.query.filter_by(election_type_id=etype.id, year=year).first()
+    if not election:
+        return jsonify({'error': 'No sabor election for this year'}), 404
+
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+    if not er:
+        return jsonify({'error': 'No round 1'}), 404
+
+    # Get all districts
+    districts = (
+        db.session.query(ElectoralDistrict)
+        .join(ElectoralList, ElectoralList.district_id == ElectoralDistrict.id)
+        .filter(ElectoralList.election_round_id == er.id)
+        .distinct()
+        .order_by(ElectoralDistrict.id)
+        .all()
+    )
+
+    total_seats = {}  # list_name -> seat count
+    all_candidates = []  # [{name, party_group, district}]
+    district_details = []
+
+    def primary_party(full_name):
+        """Extract the first party/candidate name as grouping key."""
+        return full_name.split(',')[0].strip()
+
+    # Minority sub-district seat counts (district numbers 121-126)
+    MINORITY_SEATS = {121: 3, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1}
+
+    for dist in districts:
+        # Determine seats for this district
+        if dist.number in MINORITY_SEATS:
+            n_seats = MINORITY_SEATS[dist.number]
+        elif dist.number == 11:
+            n_seats = 3  # diaspora
+        elif dist.number == 12:
+            n_seats = 8  # old monolithic district 12 (legacy)
+        else:
+            n_seats = 14  # standard districts I-X
+
+        # Get votes per list in this district (need list IDs for candidate lookup)
+        list_rows = (
+            db.session.query(
+                ElectoralList.id,
+                ElectoralList.name,
+                db.func.sum(ListResult.votes).label('total_votes'),
+            )
+            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
+            .filter(
+                ElectoralList.election_round_id == er.id,
+                ElectoralList.district_id == dist.id,
+            )
+            .group_by(ElectoralList.id, ElectoralList.name)
+            .order_by(db.func.sum(ListResult.votes).desc())
+            .all()
+        )
+
+        if not list_rows:
+            continue
+
+        list_votes = [(r.name, r.total_votes) for r in list_rows]
+        list_id_map = {}  # list_name -> list_id
+        for r in list_rows:
+            list_id_map[r.name] = r.id
+
+        total_district_votes = sum(v for _, v in list_votes)
+
+        # Apply 5% threshold for standard districts (I-X)
+        is_standard = n_seats == 14
+        if is_standard:
+            threshold = total_district_votes * 0.05
+            eligible = [(name, votes) for name, votes in list_votes if votes >= threshold]
+        else:
+            eligible = [(name, votes) for name, votes in list_votes]
+
+        # D'Hondt method
+        quotients = []
+        for list_name, votes in eligible:
+            for divisor in range(1, n_seats + 1):
+                quotients.append((votes / divisor, list_name))
+
+        quotients.sort(key=lambda x: -x[0])
+        winners = quotients[:n_seats]
+
+        is_minority = dist.number in MINORITY_SEATS
+        dist_seats = {}
+        for _, list_name in winners:
+            dist_seats[list_name] = dist_seats.get(list_name, 0) + 1
+            # Group all minority sub-district seats under one key
+            seat_key = 'NACIONALNE MANJINE' if is_minority else list_name
+            total_seats[seat_key] = total_seats.get(seat_key, 0) + 1
+
+        # Get candidates for lists that won seats
+        for list_name, seats_won in dist_seats.items():
+            list_id = list_id_map.get(list_name)
+            if not list_id or seats_won == 0:
+                continue
+
+            candidates = (
+                db.session.query(Person.first_name, Person.last_name, Candidacy.position_on_list)
+                .join(Candidacy, Person.id == Candidacy.person_id)
+                .filter(Candidacy.electoral_list_id == list_id)
+                .order_by(Candidacy.position_on_list)
+                .limit(seats_won)
+                .all()
+            )
+
+            is_minority = dist.number in MINORITY_SEATS
+            group = 'NACIONALNE MANJINE' if is_minority else primary_party(list_name)
+            for c in candidates:
+                all_candidates.append({
+                    'name': f"{c.first_name} {c.last_name}",
+                    'party': group,
+                    'district': dist.name,
+                })
+
+            for i in range(seats_won - len(candidates)):
+                all_candidates.append({
+                    'name': group,
+                    'party': group,
+                    'district': dist.name,
+                })
+
+        district_details.append({
+            'district': dist.name,
+            'seats': n_seats,
+            'results': [
+                {'name': name, 'votes': votes, 'seats': dist_seats.get(name, 0)}
+                for name, votes in list_votes
+            ],
+        })
+
+    # Group coalitions by primary party
+    grouped_seats = {}
+    for full_name, seats in total_seats.items():
+        key = primary_party(full_name)
+        if key not in grouped_seats:
+            grouped_seats[key] = {'name': key, 'seats': 0}
+        grouped_seats[key]['seats'] += seats
+
+    # Sort by seats descending
+    seat_list = sorted(grouped_seats.values(), key=lambda x: -x['seats'])
+
+    # Group candidates by party, matching seat_list order
+    party_candidates = {}
+    for c in all_candidates:
+        party_candidates.setdefault(c['party'], []).append(c)
+
+    # Build ordered candidate list matching party order
+    ordered_candidates = []
+    for p in seat_list:
+        cands = party_candidates.get(p['name'], [])
+        for c in cands:
+            ordered_candidates.append(c)
+
+    return jsonify({
+        'year': year,
+        'total_seats': 151,
+        'parties': seat_list,
+        'candidates': ordered_candidates,
+        'districts': district_details,
+    })
+
+
+@app.route('/api/national/sabor-raw/<int:year>')
+def sabor_raw(year):
+    """Return raw vote data per list per district for client-side D'Hondt."""
+    etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
+    if not etype:
+        return jsonify({'error': 'No sabor election type'}), 404
+
+    election = Election.query.filter_by(election_type_id=etype.id, year=year).first()
+    if not election:
+        return jsonify({'error': 'No sabor election for this year'}), 404
+
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+    if not er:
+        return jsonify({'error': 'No round 1'}), 404
+
+    districts = (
+        db.session.query(ElectoralDistrict)
+        .join(ElectoralList, ElectoralList.district_id == ElectoralDistrict.id)
+        .filter(ElectoralList.election_round_id == er.id)
+        .distinct()
+        .order_by(ElectoralDistrict.id)
+        .all()
+    )
+
+    MINORITY_SEATS = {121: 3, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1}
+
+    result_districts = []
+    minority_total_votes = 0
+    minority_winners = []  # collect winners across all minority sub-districts
+
+    for dist in districts:
+        if dist.number in MINORITY_SEATS:
+            n_seats = MINORITY_SEATS[dist.number]
+        elif dist.number == 11:
+            n_seats = 3
+        elif dist.number == 12:
+            n_seats = 8
+        else:
+            n_seats = 14
+
+        list_votes = (
+            db.session.query(
+                ElectoralList.name,
+                db.func.sum(ListResult.votes).label('total_votes'),
+            )
+            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
+            .filter(
+                ElectoralList.election_round_id == er.id,
+                ElectoralList.district_id == dist.id,
+            )
+            .group_by(ElectoralList.name)
+            .order_by(db.func.sum(ListResult.votes).desc())
+            .all()
+        )
+
+        total_votes = sum(v for _, v in list_votes)
+
+        # Minority sub-districts: collect winners, merge into single district later
+        if dist.number in MINORITY_SEATS:
+            minority_total_votes += total_votes
+            for name, votes in list_votes[:n_seats]:
+                minority_winners.append({'name': name, 'votes': votes, 'seats': 1})
+            continue
+
+        def primary_party(full_name):
+            return full_name.split(',')[0].strip()
+
+        lists = [{'name': name, 'votes': votes, 'group': primary_party(name)}
+                 for name, votes in list_votes]
+
+        result_districts.append({
+            'name': dist.name,
+            'seats': n_seats,
+            'total_votes': total_votes,
+            'lists': lists,
+        })
+
+    # Add minority district — each winner gets their own entry so they
+    # can be individually dragged into coalitions in the simulation.
+    if minority_winners:
+        result_districts.append({
+            'name': 'XII. IZBORNA JEDINICA - NACIONALNE MANJINE',
+            'seats': 8,
+            'total_votes': minority_total_votes,
+            'lists': [{'name': w['name'], 'votes': w['votes'],
+                        'group': w['name'], 'fixed_seats': w['seats']}
+                       for w in minority_winners],
+            'minority': True,
+        })
+
+    return jsonify({
+        'year': year,
+        'districts': result_districts,
+    })
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

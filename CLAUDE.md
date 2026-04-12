@@ -44,7 +44,7 @@ Models split into 4 modules under `elections/models/`:
 ### Import Pipeline: `elections/importers/`
 - **base.py** — BaseImporter with geography/person caches and bulk result insertion (batch size 5000)
 - **presidential.py** — UTF-8 BOM CSV, semicolon delimited, title row + header + data
-- **sabor.py** — windows-1250 CSV, 15 cols/list (1 list + 14 candidates), district 12 is individual candidates only
+- **sabor.py** — windows-1250 CSV. Districts 1-10: fixed 15 cols/list (1 list + 14 candidates). District 11 (diaspora): **variable-width** list groups (parties may nominate fewer than 14 candidates), parsed via `_is_list_name()` keyword heuristic in `_parse_list_groups_variable()`. District 12: individual minority candidates only. Supports `--district N` and `--wipe-district` flags for targeted re-import.
 - **eu_parliament.py** — windows-1250 CSV, 13 cols/list (1 list + 12 candidates), multiline coalition names
 - **local.py** — Excel .xlsx, 2-4 sheets per file, list-level results only (no per-candidate breakdown within lists)
 

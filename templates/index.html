@@ -502,6 +502,11 @@
                     <i class="bi bi-clipboard-data"></i> Pregled ukupnih rezultata
                 </a>
             </li>
+            <li>
+                <a href="#" data-module="sabor-analysis">
+                    <i class="bi bi-people-fill"></i> Rezultati i koalicije (Sabor)
+                </a>
+            </li>
         </ul>
     </div>
 
@@ -727,10 +732,73 @@
             </div>
             <div id="nationalResultsArea" style="display:none;"></div>
         </div>
+
+        <div id="module-sabor-analysis" class="module-panel">
+            <div class="card search-card p-4 mb-4">
+                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                <div id="saborAnalysisYears" class="d-flex gap-2 flex-wrap"></div>
+            </div>
+            <div class="spinner-wrapper mt-4" id="saborAnalysisSpinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div id="saborAnalysisArea" style="display:none;">
+                <!-- Actual results hemicycle with candidates (collapsible) -->
+                <div class="card result-card mb-3" id="saActualResultsCard" style="display:none;">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#saActualCollapse">
+                        <h5 class="fw-bold mb-0"><i class="bi bi-bank me-2"></i>Konačni rezultati — raspodjela mandata (D'Hondt)</h5>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="collapse" id="saActualCollapse">
+                        <div class="card-body p-4">
+                            <div id="saActualHemicycle"></div>
+                            <div id="saActualLegend" class="mt-3"></div>
+                            <div id="saActualCandidateList" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation section (collapsible) -->
+                <div class="card result-card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#saSimCollapse">
+                        <h5 class="fw-bold mb-0"><i class="bi bi-sliders me-2"></i>Složi svoju koaliciju — simulacija</h5>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="collapse" id="saSimCollapse">
+                        <div class="card-body p-4">
+                            <p class="text-muted mb-3" style="font-size:0.88rem;">Povlači stranke jedne na drugu za spajanje u koaliciju. Uključi stranke ispod praga i prati promjenu mandata u realnom vremenu.</p>
+                            <div id="saHemicycleContainer"></div>
+                            <div id="saLegend" class="mt-3"></div>
+                            <div class="d-flex justify-content-end mt-2 gap-2">
+                                <button class="btn btn-outline-warning btn-sm" id="saJumperBtn" onclick="toggleJumpers()">
+                                    <i class="bi bi-person-walking me-1"></i>Aktiviraj skakače
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm d-none" id="saResetBtn" onclick="resetSaborAnalysis()">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi sve promjene
+                                </button>
+                            </div>
+                            <div id="saDistrictsArea" class="mt-3"></div>
+                            <div class="text-end mt-3 mb-2 d-flex justify-content-end gap-2">
+                                <button class="btn btn-danger" onclick="exportSaborAnalysisPDF()">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>Izvezi u PDF
+                                </button>
+                                <button class="btn btn-success" onclick="exportSaborAnalysisXLSX()">
+                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Izvezi u XLSX
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // Module switching
 const sidebarLinks = document.querySelectorAll('.sidebar-nav a[data-module]');
@@ -743,6 +811,7 @@ const moduleTitles = {
     station: '<i class="bi bi-geo-alt me-2"></i>Prema lokaciji',
     compare: '<i class="bi bi-arrow-left-right me-2"></i>Usporedi biračka mjesta',
     national: '<i class="bi bi-clipboard-data me-2"></i>Pregled ukupnih rezultata',
+    'sabor-analysis': '<i class="bi bi-people-fill me-2"></i>Rezultati i koalicije (Sabor)',
 };
 
 const stationSubnav = document.getElementById('stationSubnav');
@@ -1996,7 +2065,10 @@ let _nationalData = null; // store for re-rendering
     const categories = await res.json();
     const container = document.getElementById('nationalAccordion');
 
-    container.innerHTML = categories.map(cat => `
+    // Filter out sabor — it has its own dedicated module
+    const filteredCategories = categories.filter(cat => cat.key !== 'sabor');
+
+    container.innerHTML = filteredCategories.map(cat => `
         <div class="nat-category">
             <div class="nat-cat-header" data-cat="${cat.key}">
                 <span><i class="bi ${nationalIcons[cat.key] || 'bi-list'} me-2"></i>${cat.label}</span>
@@ -2044,6 +2116,12 @@ async function loadNationalResults(category, year) {
     const res = await fetch(`/api/national/results/${category}/${year}`);
     const data = await res.json();
 
+    // For sabor, also fetch seat calculation
+    if (category === 'sabor') {
+        const seatsRes = await fetch(`/api/national/sabor-seats/${year}`);
+        data.saborSeats = await seatsRes.json();
+    }
+
     spinner.classList.remove('show');
     resultsArea.style.display = 'block';
 
@@ -2060,11 +2138,24 @@ function renderNationalResults(data) {
         return;
     }
 
-    container.innerHTML = elections.map((el, idx) => {
+    // Sabor hemicycle section
+    let hemicycleHTML = '';
+    if (data.saborSeats) {
+        hemicycleHTML = `
+        <div class="card result-card mb-4 p-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-bank me-2"></i>Raspodjela mandata u Saboru (D'Hondt metoda)</h5>
+            <div id="hemicycleContainer"></div>
+            <div id="seatLegend" class="mt-3"></div>
+            <div id="seatCandidateList" class="mt-3"></div>
+        </div>`;
+    }
+
+    // Skip bar chart cards when hemicycle already covers sabor
+    const displayElections = data.saborSeats ? [] : elections;
+
+    const electionCards = displayElections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
             ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
-        const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
-        const items = hasCandidates ? el.top_candidates : el.top_lists;
         const chartId = `nat_${idx}`;
 
         return `
@@ -2095,6 +2186,13 @@ function renderNationalResults(data) {
         </div>`;
     }).join('');
 
+    container.innerHTML = hemicycleHTML + electionCards;
+
+    // Render hemicycle if sabor
+    if (data.saborSeats) {
+        renderHemicycle(data.saborSeats);
+    }
+
     // Build bar charts
     elections.forEach((el, idx) => {
         const chartId = `nat_${idx}`;
@@ -2118,6 +2216,1242 @@ function renderNationalResults(data) {
         buildBarChart(chartId);
     });
 }
+
+const hemicycleColors = [
+    '#2563eb', '#dc2626', '#16a34a', '#ea580c', '#9333ea',
+    '#0891b2', '#ca8a04', '#db2777', '#4f46e5', '#059669',
+    '#d97706', '#7c3aed', '#0d9488', '#e11d48', '#6366f1',
+    '#65a30d', '#c026d3', '#0284c7', '#b91c1c', '#047857',
+];
+
+function renderHemicycle(saborData) {
+    const parties = saborData.parties || [];
+    const totalSeats = saborData.total_seats || 151;
+    const container = document.getElementById('hemicycleContainer');
+    const legendContainer = document.getElementById('seatLegend');
+
+    // Assign colors to parties
+    const partyColors = {};
+    parties.forEach((p, i) => {
+        partyColors[p.name] = hemicycleColors[i % hemicycleColors.length];
+    });
+
+    // SVG dimensions
+    const svgW = 700, svgH = 380;
+    const cx = svgW / 2, cy = svgH - 30;
+    const dotR = 8;
+    const dotSpacing = dotR * 2.5;
+    const innerR = 90;
+
+    // Calculate row capacities (inner to outer)
+    const rows = [];
+    let totalCapacity = 0;
+    let r = innerR;
+    while (totalCapacity < totalSeats) {
+        const arc = Math.PI * r;
+        const capacity = Math.floor(arc / dotSpacing);
+        rows.push({ radius: r, capacity });
+        totalCapacity += capacity;
+        r += dotSpacing;
+    }
+
+    // Distribute seats across rows proportionally
+    const nRows = rows.length;
+    let seatsToPlace = totalSeats;
+    const rowSeats = [];
+    const totalCap = rows.reduce((s, r) => s + r.capacity, 0);
+    for (let i = 0; i < nRows; i++) {
+        if (i === nRows - 1) {
+            rowSeats.push(seatsToPlace);
+        } else {
+            const n = Math.round((rows[i].capacity / totalCap) * totalSeats);
+            rowSeats.push(Math.min(n, seatsToPlace));
+            seatsToPlace -= rowSeats[i];
+        }
+    }
+
+    // Build seat positions — all positions first, then assign party colors
+    const positions = [];
+    for (let ri = 0; ri < nRows; ri++) {
+        const count = rowSeats[ri];
+        const radius = rows[ri].radius;
+        for (let i = 0; i < count; i++) {
+            // Spread from left (π) to right (0)
+            const angle = Math.PI - (Math.PI * (i + 0.5) / count);
+            positions.push({
+                x: cx + radius * Math.cos(angle),
+                y: cy - radius * Math.sin(angle),
+                row: ri,
+                col: i,
+                colFrac: count > 1 ? i / (count - 1) : 0.5, // 0=left, 1=right
+            });
+        }
+    }
+
+    // Sort positions by angle (left-to-right = π to 0) so parties sit in blocks
+    positions.sort((a, b) => {
+        const angleA = Math.atan2(cy - a.y, a.x - cx);
+        const angleB = Math.atan2(cy - b.y, b.x - cx);
+        return angleB - angleA; // π (left) first, 0 (right) last
+    });
+
+    // Build seat array with candidate names
+    const candidates = saborData.candidates || [];
+    const seatList = [];
+    let candIdx = 0;
+    parties.forEach(p => {
+        for (let i = 0; i < p.seats; i++) {
+            const cand = candidates[candIdx] || {};
+            seatList.push({
+                party: p.name,
+                color: partyColors[p.name],
+                candidate: cand.name || p.name,
+                district: cand.district || '',
+            });
+            candIdx++;
+        }
+    });
+
+    // Assign to positions — each party gets a contiguous block
+    let posIdx = 0;
+    const seatData = new Array(positions.length);
+    seatList.forEach((seat, i) => {
+        seatData[i] = seat;
+    });
+
+    // Render dots
+    let dots = '';
+    positions.forEach((pos, i) => {
+        const seat = seatData[i];
+        if (!seat) return;
+        const tooltip = `${seat.candidate}\n${seat.party}\n${seat.district}`;
+        dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="1.5" style="cursor:pointer;">
+            <title>${tooltip}</title>
+        </circle>`;
+    });
+
+    container.innerHTML = `
+        <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:700px; display:block; margin:0 auto;">
+            ${dots}
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a2e">${totalSeats}</text>
+            <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="12" fill="#6c757d">mandata</text>
+        </svg>`;
+
+    // Store hemicycle state for drag-and-drop merging
+    window._hemicycleState = {
+        parties: JSON.parse(JSON.stringify(parties)),
+        partyColors: { ...partyColors },
+        seatList: seatList.slice(),
+        // Track merged groups: partyName -> groupLeader
+        mergeMap: {},
+    };
+    parties.forEach(p => { window._hemicycleState.mergeMap[p.name] = p.name; });
+
+    renderHemicycleLegend();
+
+    // Candidate list with show-more
+    const candContainer = document.getElementById('seatCandidateList');
+    renderCandidateList(candContainer, seatList);
+}
+
+function renderCandidateList(container, seatList) {
+    const INITIAL_SHOW = 100;
+    const state = window._hemicycleState;
+    const candRows = seatList.map((s, i) => {
+        const group = state.mergeMap[s.party] || s.party;
+        const color = state.partyColors[group] || s.color;
+        const hidden = i >= INITIAL_SHOW ? ' style="display:none;" class="seat-cand-extra"' : '';
+        return `<tr${hidden}>
+            <td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td>
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${s.candidate}</td>
+            <td class="text-muted" style="font-size:0.85rem;">${s.party}</td>
+            <td class="text-muted" style="font-size:0.85rem;">${s.district}</td>
+        </tr>`;
+    }).join('');
+
+    const showMoreBtn = seatList.length > INITIAL_SHOW
+        ? `<div class="text-center mt-2">
+            <button class="btn btn-outline-primary btn-sm" id="showMoreCandBtn" onclick="document.querySelectorAll('.seat-cand-extra').forEach(r=>r.style.display='');this.style.display='none';">
+                <i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL_SHOW} preostalih)
+            </button>
+           </div>`
+        : '';
+
+    container.innerHTML = `
+        <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
+                <thead><tr>
+                    <th></th>
+                    <th>Ime i prezime</th>
+                    <th>Stranka / Koalicija</th>
+                    <th>Izborna jedinica</th>
+                </tr></thead>
+                <tbody>${candRows}</tbody>
+            </table>
+        </div>
+        ${showMoreBtn}`;
+}
+
+function renderHemicycleLegend() {
+    const legendContainer = document.getElementById('seatLegend');
+    const state = window._hemicycleState;
+    const { mergeMap, partyColors, parties } = state;
+
+    // Build merged groups: group leader -> { names[], totalSeats, color }
+    const groups = {};
+    parties.forEach(p => {
+        const leader = mergeMap[p.name];
+        if (!groups[leader]) {
+            groups[leader] = { names: [], seats: 0, color: partyColors[leader] };
+        }
+        groups[leader].names.push(p.name);
+        groups[leader].seats += p.seats;
+    });
+
+    // Order: preserve original party order for leaders
+    const orderedLeaders = parties.map(p => p.name).filter(n => mergeMap[n] === n);
+
+    const hasMerges = Object.keys(groups).length < parties.length;
+
+    const legendItems = orderedLeaders.map(leader => {
+        const g = groups[leader];
+        const label = g.names.length > 1
+            ? g.names.map(n => n.length > 25 ? n.substring(0, 22) + '...' : n).join(' + ')
+            : (leader.length > 35 ? leader.substring(0, 32) + '...' : leader);
+        const displayLabel = label.length > 60 ? label.substring(0, 57) + '...' : label;
+        return `<div class="hemi-legend-item d-flex align-items-center gap-1"
+                     draggable="true"
+                     data-party="${leader}"
+                     title="${g.names.join(' + ')}"
+                     style="font-size:0.82rem; cursor:grab; padding:4px 8px; border-radius:6px; border:2px solid transparent; transition:all 0.15s;">
+                    <span style="width:14px;height:14px;border-radius:50%;background:${g.color};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
+                    <span class="fw-semibold">${displayLabel}</span>
+                    <span class="text-muted">(${g.seats})</span>
+                </div>`;
+    }).join('');
+
+    legendContainer.innerHTML = `
+        <div class="d-flex flex-wrap gap-2 justify-content-center align-items-center mb-2">
+            ${legendItems}
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-1">
+            <div class="text-muted" style="font-size:0.78rem;"><i class="bi bi-arrows-move me-1"></i>Povuci stranku na drugu za spajanje rezultata</div>
+            <button class="btn btn-outline-secondary btn-sm ${hasMerges ? '' : 'd-none'}" id="resetHemicycleBtn" onclick="resetHemicycleMerges()">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
+            </button>
+        </div>`;
+
+    // Attach drag-and-drop handlers
+    const items = legendContainer.querySelectorAll('.hemi-legend-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', item.dataset.party);
+            item.style.opacity = '0.5';
+        });
+        item.addEventListener('dragend', e => {
+            item.style.opacity = '1';
+            items.forEach(it => {
+                it.style.borderColor = 'transparent';
+                it.style.background = '';
+            });
+        });
+        item.addEventListener('dragover', e => {
+            e.preventDefault();
+            item.style.borderColor = '#0d6efd';
+            item.style.background = 'rgba(13,110,253,0.08)';
+        });
+        item.addEventListener('dragleave', e => {
+            item.style.borderColor = 'transparent';
+            item.style.background = '';
+        });
+        item.addEventListener('drop', e => {
+            e.preventDefault();
+            item.style.borderColor = 'transparent';
+            item.style.background = '';
+            const draggedParty = e.dataTransfer.getData('text/plain');
+            const targetParty = item.dataset.party;
+            if (draggedParty && targetParty && draggedParty !== targetParty) {
+                mergeHemicycleParties(draggedParty, targetParty);
+            }
+        });
+    });
+}
+
+function mergeHemicycleParties(from, to) {
+    const state = window._hemicycleState;
+    const { mergeMap, partyColors } = state;
+
+    // Redirect everything that pointed to 'from' to now point to 'to'
+    for (const key in mergeMap) {
+        if (mergeMap[key] === from) {
+            mergeMap[key] = to;
+        }
+    }
+
+    // Update SVG circles
+    const svg = document.querySelector('#hemicycleContainer svg');
+    if (svg) {
+        const circles = svg.querySelectorAll('circle');
+        const targetColor = partyColors[to];
+        circles.forEach(circle => {
+            const title = circle.querySelector('title');
+            if (!title) return;
+            const text = title.textContent;
+            // Check if this circle belongs to the 'from' group
+            const partyLine = text.split('\n')[1]; // party name is second line
+            if (partyLine && mergeMap[partyLine.trim()] === to) {
+                circle.setAttribute('fill', targetColor);
+            }
+        });
+    }
+
+    // Re-render legend and candidate list
+    renderHemicycleLegend();
+    const candContainer = document.getElementById('seatCandidateList');
+    if (candContainer) {
+        renderCandidateList(candContainer, state.seatList);
+    }
+}
+
+function resetHemicycleMerges() {
+    const state = window._hemicycleState;
+    // Reset merge map
+    state.parties.forEach(p => { state.mergeMap[p.name] = p.name; });
+
+    // Reset SVG circle colors
+    const svg = document.querySelector('#hemicycleContainer svg');
+    if (svg) {
+        const circles = svg.querySelectorAll('circle');
+        circles.forEach(circle => {
+            const title = circle.querySelector('title');
+            if (!title) return;
+            const partyLine = title.textContent.split('\n')[1];
+            if (partyLine) {
+                const party = partyLine.trim();
+                const color = state.partyColors[party];
+                if (color) circle.setAttribute('fill', color);
+            }
+        });
+    }
+
+    renderHemicycleLegend();
+    const candContainer = document.getElementById('seatCandidateList');
+    if (candContainer) {
+        renderCandidateList(candContainer, state.seatList);
+    }
+}
+
+// ---- Sabor Analysis Module ----
+const _saState = {
+    rawData: null,
+    merges: {},     // listName -> groupLeader
+    excluded: new Set(),
+    forceInclude: new Set(),  // parties forced above threshold
+    computed: null,
+    year: null,
+    jumpersActive: false,
+    jumpers: {},   // partyName -> seat delta (+/-)
+    jumperSource: null,  // party currently giving seats
+};
+
+// Load available years when module shown
+async function initSaborAnalysis() {
+    const container = document.getElementById('saborAnalysisYears');
+    if (container.children.length > 0) return; // already loaded
+    const res = await fetch('/api/national/election-types');
+    const data = await res.json();
+    const sabor = (Array.isArray(data) ? data : data.categories || []).find(c => c.key === 'sabor');
+    if (!sabor) { container.innerHTML = '<span class="text-muted">Nema podataka</span>'; return; }
+    container.innerHTML = sabor.years.map(y =>
+        `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}" onclick="loadSaborAnalysis(${y})">${y}.</button>`
+    ).join('');
+}
+
+function renderActualSaborResults(seatsData) {
+    const card = document.getElementById('saActualResultsCard');
+    if (!seatsData || !seatsData.parties) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+
+    const parties = seatsData.parties;
+    const totalSeats = seatsData.total_seats || 151;
+    const candidates = seatsData.candidates || [];
+
+    const partyColors = {};
+    parties.forEach((p, i) => { partyColors[p.name] = hemicycleColors[i % hemicycleColors.length]; });
+
+    // Build seat list with candidate names
+    const seatList = [];
+    let candIdx = 0;
+    parties.forEach(p => {
+        for (let i = 0; i < p.seats; i++) {
+            const c = candidates[candIdx] || {};
+            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || p.name, district: c.district || '' });
+            candIdx++;
+        }
+    });
+
+    // Hemicycle SVG
+    const svgW = 700, svgH = 380, cx = svgW / 2, cy = svgH - 30, dotR = 8, dotSpacing = dotR * 2.5, innerR = 90;
+    const rows = []; let totalCap = 0; let r = innerR;
+    while (totalCap < seatList.length) { const arc = Math.PI * r; const cap = Math.floor(arc / dotSpacing); rows.push({ radius: r, capacity: cap }); totalCap += cap; r += dotSpacing; }
+    const nRows = rows.length; let seatsToPlace = seatList.length; const rowSeats = []; const capSum = rows.reduce((s, r) => s + r.capacity, 0);
+    for (let i = 0; i < nRows; i++) { if (i === nRows - 1) rowSeats.push(seatsToPlace); else { const n = Math.round((rows[i].capacity / capSum) * seatList.length); rowSeats.push(Math.min(n, seatsToPlace)); seatsToPlace -= rowSeats[i]; } }
+    const positions = [];
+    for (let ri = 0; ri < nRows; ri++) { const count = rowSeats[ri]; const radius = rows[ri].radius; for (let i = 0; i < count; i++) { const angle = Math.PI - (Math.PI * (i + 0.5) / count); positions.push({ x: cx + radius * Math.cos(angle), y: cy - radius * Math.sin(angle) }); } }
+    positions.sort((a, b) => { const aA = Math.atan2(cy - a.y, a.x - cx); const aB = Math.atan2(cy - b.y, b.x - cx); return aB - aA; });
+
+    let dots = '';
+    positions.forEach((pos, i) => {
+        const seat = seatList[i]; if (!seat) return;
+        dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="1.5" style="cursor:pointer;"><title>${seat.candidate}\n${seat.party}\n${seat.district}</title></circle>`;
+    });
+
+    document.getElementById('saActualHemicycle').innerHTML = `
+        <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:700px; display:block; margin:0 auto;">
+            ${dots}
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a2e">${totalSeats}</text>
+            <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="12" fill="#6c757d">mandata</text>
+        </svg>`;
+
+    // Legend
+    document.getElementById('saActualLegend').innerHTML = `
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+            ${parties.map(p => `<div class="d-flex align-items-center gap-1" style="font-size:0.82rem;" title="${p.name}">
+                <span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
+                <span class="fw-semibold">${p.name.length > 35 ? p.name.substring(0, 32) + '...' : p.name}</span>
+                <span class="text-muted">(${p.seats})</span>
+            </div>`).join('')}
+        </div>`;
+
+    // Candidate list with show-more
+    const INITIAL = 100;
+    const candRows = seatList.map((s, i) => {
+        const hidden = i >= INITIAL ? ' style="display:none;" class="sa-actual-cand-extra"' : '';
+        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${s.candidate}</td><td class="text-muted" style="font-size:0.85rem;">${s.party}</td><td class="text-muted" style="font-size:0.85rem;">${s.district}</td></tr>`;
+    }).join('');
+    const showBtn = seatList.length > INITIAL
+        ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.sa-actual-cand-extra').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL} preostalih)</button></div>` : '';
+
+    document.getElementById('saActualCandidateList').innerHTML = `
+        <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
+        <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
+            <thead><tr><th></th><th>Ime i prezime</th><th>Stranka / Koalicija</th><th>Izborna jedinica</th></tr></thead>
+            <tbody>${candRows}</tbody>
+        </table></div>${showBtn}`;
+}
+
+async function loadSaborAnalysis(year) {
+    document.querySelectorAll('.sa-year-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.year) === year));
+    const spinner = document.getElementById('saborAnalysisSpinner');
+    const area = document.getElementById('saborAnalysisArea');
+    area.style.display = 'none';
+    spinner.classList.add('show');
+
+    // Fetch raw data and actual seat results in parallel
+    const [rawRes, seatsRes] = await Promise.all([
+        fetch(`/api/national/sabor-raw/${year}`),
+        fetch(`/api/national/sabor-seats/${year}`),
+    ]);
+    const data = await rawRes.json();
+    const seatsData = await seatsRes.json();
+
+    // Render actual results hemicycle
+    renderActualSaborResults(seatsData);
+
+    _saState.rawData = data;
+    _saState.year = year;
+    _saState.merges = {};
+    _saState.excluded = new Set();
+    _saState.forceInclude = new Set();
+
+    // Init merge map: use group field to pre-merge coalition variants
+    data.districts.forEach(d => d.lists.forEach(l => {
+        _saState.merges[l.name] = l.group || l.name;
+    }));
+
+    spinner.classList.remove('show');
+    area.style.display = 'block';
+
+    computeAndRenderSA();
+}
+
+function computeDHondtClient(districts, merges, excluded, forceInclude) {
+    const totalSeats = {};
+    const districtResults = [];
+
+    for (const dist of districts) {
+        const nSeats = dist.seats;
+
+        // Merge votes
+        const mergedVotes = {};
+        for (const list of dist.lists) {
+            if (excluded.has(list.name)) continue;
+            const group = merges[list.name] || list.name;
+            mergedVotes[group] = (mergedVotes[group] || 0) + list.votes;
+        }
+
+        const totalDistVotes = Object.values(mergedVotes).reduce((s, v) => s + v, 0);
+
+        // Minority district: seats are fixed per candidate, skip D'Hondt
+        if (dist.minority) {
+            const distSeats = {};
+            for (const list of dist.lists) {
+                if (excluded.has(list.name)) continue;
+                const group = merges[list.name] || list.name;
+                const seats = list.fixed_seats || 1;
+                distSeats[group] = (distSeats[group] || 0) + seats;
+                totalSeats[group] = (totalSeats[group] || 0) + seats;
+            }
+            districtResults.push({
+                name: dist.name, seats: nSeats, mergedVotes, distSeats,
+                totalVotes: totalDistVotes, eligibleVotes: totalDistVotes,
+                originalLists: dist.lists, belowThreshold: new Set(),
+                thresholdPct: 0, thresholdVotes: 0,
+            });
+            continue;
+        }
+
+        // 5% threshold for standard districts
+        const isStandard = nSeats === 14;
+        const threshold = isStandard ? totalDistVotes * 0.05 : 0;
+
+        // Track which groups are below threshold
+        const belowThreshold = new Set();
+        const eligible = Object.entries(mergedVotes).filter(([name, v]) => {
+            if (v >= threshold) return true;
+            // Force-included parties bypass threshold
+            if (forceInclude && forceInclude.has(name)) return true;
+            belowThreshold.add(name);
+            return false;
+        });
+
+        // D'Hondt quotients
+        const quotients = [];
+        for (const [name, votes] of eligible) {
+            for (let d = 1; d <= nSeats; d++) {
+                quotients.push({ quotient: votes / d, name });
+            }
+        }
+        quotients.sort((a, b) => b.quotient - a.quotient);
+        const winners = quotients.slice(0, nSeats);
+
+        const distSeats = {};
+        for (const w of winners) {
+            distSeats[w.name] = (distSeats[w.name] || 0) + 1;
+            totalSeats[w.name] = (totalSeats[w.name] || 0) + 1;
+        }
+
+        // Sum of votes only from eligible parties (used for effective %)
+        const eligibleVotes = eligible.reduce((s, [_, v]) => s + v, 0);
+
+        districtResults.push({
+            name: dist.name,
+            seats: nSeats,
+            mergedVotes,
+            distSeats,
+            totalVotes: totalDistVotes,
+            eligibleVotes,
+            originalLists: dist.lists,
+            belowThreshold,
+            thresholdPct: isStandard ? 5 : 0,
+            thresholdVotes: threshold,
+        });
+    }
+
+    return { districts: districtResults, totalSeats };
+}
+
+function computeAndRenderSA() {
+    const { rawData, merges, excluded, forceInclude, jumpers } = _saState;
+    const computed = computeDHondtClient(rawData.districts, merges, excluded, forceInclude);
+    _saState.computed = computed;
+
+    // Apply jumper deltas on top of D'Hondt seats
+    const adjustedSeats = { ...computed.totalSeats };
+    for (const [name, delta] of Object.entries(jumpers)) {
+        adjustedSeats[name] = (adjustedSeats[name] || 0) + delta;
+        if (adjustedSeats[name] <= 0) delete adjustedSeats[name];
+    }
+
+    const totalAllocated = Object.values(adjustedSeats).reduce((s, v) => s + v, 0);
+
+    // Build parties array sorted by seats desc
+    const parties = Object.entries(adjustedSeats)
+        .map(([name, seats]) => ({ name, seats }))
+        .sort((a, b) => b.seats - a.seats);
+
+    renderSAHemicycle(parties, totalAllocated);
+    renderSADistricts(computed.districts);
+
+    // Show/hide reset button
+    const hasJumpers = Object.values(jumpers).some(v => v !== 0);
+    const hasChanges = hasJumpers || excluded.size > 0 || forceInclude.size > 0 || Object.entries(merges).some(([k, v]) => k !== v);
+    document.getElementById('saResetBtn').classList.toggle('d-none', !hasChanges);
+}
+
+function renderSAHemicycle(parties, totalAllocated) {
+    const container = document.getElementById('saHemicycleContainer');
+    const legendContainer = document.getElementById('saLegend');
+
+    // Assign colors
+    const partyColors = {};
+    parties.forEach((p, i) => { partyColors[p.name] = hemicycleColors[i % hemicycleColors.length]; });
+
+    // Build seat array
+    const seats = [];
+    parties.forEach(p => {
+        for (let i = 0; i < p.seats; i++) {
+            seats.push({ party: p.name, color: partyColors[p.name] });
+        }
+    });
+
+    // Hemicycle layout
+    const svgW = 700, svgH = 380;
+    const cx = svgW / 2, cy = svgH - 30;
+    const dotR = 8;
+    const dotSpacing = dotR * 2.5;
+    const innerR = 90;
+
+    const rows = [];
+    let totalCapacity = 0;
+    let r = innerR;
+    while (totalCapacity < seats.length) {
+        const arc = Math.PI * r;
+        const capacity = Math.floor(arc / dotSpacing);
+        rows.push({ radius: r, capacity });
+        totalCapacity += capacity;
+        r += dotSpacing;
+    }
+
+    const nRows = rows.length;
+    let seatsToPlace = seats.length;
+    const rowSeats = [];
+    const totalCap = rows.reduce((s, r) => s + r.capacity, 0);
+    for (let i = 0; i < nRows; i++) {
+        if (i === nRows - 1) { rowSeats.push(seatsToPlace); }
+        else {
+            const n = Math.round((rows[i].capacity / totalCap) * seats.length);
+            rowSeats.push(Math.min(n, seatsToPlace));
+            seatsToPlace -= rowSeats[i];
+        }
+    }
+
+    const positions = [];
+    for (let ri = 0; ri < nRows; ri++) {
+        const count = rowSeats[ri];
+        const radius = rows[ri].radius;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.PI - (Math.PI * (i + 0.5) / count);
+            positions.push({
+                x: cx + radius * Math.cos(angle),
+                y: cy - radius * Math.sin(angle),
+            });
+        }
+    }
+
+    positions.sort((a, b) => {
+        const angleA = Math.atan2(cy - a.y, a.x - cx);
+        const angleB = Math.atan2(cy - b.y, b.x - cx);
+        return angleB - angleA;
+    });
+
+    let dots = '';
+    positions.forEach((pos, i) => {
+        const seat = seats[i];
+        if (!seat) return;
+        const shortParty = seat.party.length > 50 ? seat.party.substring(0, 47) + '...' : seat.party;
+        dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="1.5" style="cursor:pointer;">
+            <title>${shortParty} (${parties.find(p => p.name === seat.party)?.seats || 0} mandata)</title>
+        </circle>`;
+    });
+
+    container.innerHTML = `
+        <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:700px; display:block; margin:0 auto;">
+            ${dots}
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a2e">${totalAllocated}</text>
+            <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="12" fill="#6c757d">mandata</text>
+        </svg>`;
+
+    // Legend with drag-and-drop + jumper controls
+    const { jumpersActive, jumperSource, jumpers, computed } = _saState;
+
+    const legendItems = parties.map(p => {
+        const shortName = p.name.length > 35 ? p.name.substring(0, 32) + '...' : p.name;
+        const delta = jumpers[p.name] || 0;
+        const deltaLabel = delta > 0 ? ` <span class="text-success fw-bold">+${delta}</span>` : delta < 0 ? ` <span class="text-danger fw-bold">${delta}</span>` : '';
+        const isSource = jumperSource === p.name;
+        const sourceBorder = isSource ? 'border-color:#dc3545 !important; background:rgba(220,53,69,0.08);' : '';
+
+        let jumperBtns = '';
+        if (jumpersActive) {
+            if (!jumperSource) {
+                // No source selected: show "oduzmi" button on each party that has seats
+                jumperBtns = `<button class="btn btn-outline-danger btn-sm py-0 px-1 ms-1" style="font-size:0.7rem; line-height:1.3;"
+                    onclick="event.stopPropagation(); selectJumperSource('${p.name.replace(/'/g, "\\'")}')">
+                    <i class="bi bi-dash-lg"></i></button>`;
+            } else if (isSource) {
+                // This is the source: show cancel button
+                jumperBtns = `<button class="btn btn-outline-secondary btn-sm py-0 px-1 ms-1" style="font-size:0.7rem; line-height:1.3;"
+                    onclick="event.stopPropagation(); _saState.jumperSource=null; computeAndRenderSA();">
+                    <i class="bi bi-x-lg"></i></button>`;
+            } else {
+                // Source is selected, this is a target: show "dodaj" button
+                jumperBtns = `<button class="btn btn-outline-success btn-sm py-0 px-1 ms-1" style="font-size:0.7rem; line-height:1.3;"
+                    onclick="event.stopPropagation(); transferSeat('${jumperSource.replace(/'/g, "\\'")}', '${p.name.replace(/'/g, "\\'")}')">
+                    <i class="bi bi-plus-lg"></i></button>`;
+            }
+        }
+
+        return `<div class="sa-legend-item d-flex align-items-center gap-1"
+                     draggable="true" data-party="${p.name}"
+                     title="${p.name}"
+                     style="font-size:0.82rem; cursor:grab; padding:4px 8px; border-radius:6px; border:2px solid transparent; transition:all 0.15s; ${sourceBorder}">
+                    <span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
+                    <span class="fw-semibold">${shortName}</span>
+                    <span class="text-muted">(${p.seats})</span>${deltaLabel}${jumperBtns}
+                </div>`;
+    }).join('');
+
+    let jumperHint = '';
+    if (jumpersActive && !jumperSource) {
+        jumperHint = `<div class="text-warning text-center mt-1" style="font-size:0.78rem;"><i class="bi bi-info-circle me-1"></i>Klikni <i class="bi bi-dash-lg"></i> na stranci od koje želiš oduzeti mandat</div>`;
+    } else if (jumpersActive && jumperSource) {
+        const shortSrc = jumperSource.length > 30 ? jumperSource.substring(0, 27) + '...' : jumperSource;
+        jumperHint = `<div class="text-success text-center mt-1" style="font-size:0.78rem;"><i class="bi bi-info-circle me-1"></i>Klikni <i class="bi bi-plus-lg"></i> na stranci kojoj želiš dodati mandat od <strong>${shortSrc}</strong></div>`;
+    }
+
+    legendContainer.innerHTML = `
+        <div class="d-flex flex-wrap gap-2 justify-content-center">${legendItems}</div>
+        ${jumperHint}
+        <div class="text-muted text-center mt-1" style="font-size:0.78rem;"><i class="bi bi-arrows-move me-1"></i>Povuci stranku na drugu u legendu ili tablici za spajanje</div>`;
+
+    // Drag-drop on legend
+    attachSALegendDragDrop(legendContainer);
+}
+
+function attachSALegendDragDrop(container) {
+    const items = container.querySelectorAll('.sa-legend-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', item.dataset.party);
+            item.style.opacity = '0.5';
+        });
+        item.addEventListener('dragend', () => {
+            item.style.opacity = '1';
+            items.forEach(it => { it.style.borderColor = 'transparent'; it.style.background = ''; });
+        });
+        item.addEventListener('dragover', e => {
+            e.preventDefault();
+            item.style.borderColor = '#0d6efd';
+            item.style.background = 'rgba(13,110,253,0.08)';
+        });
+        item.addEventListener('dragleave', () => {
+            item.style.borderColor = 'transparent';
+            item.style.background = '';
+        });
+        item.addEventListener('drop', e => {
+            e.preventDefault();
+            item.style.borderColor = 'transparent';
+            item.style.background = '';
+            const from = e.dataTransfer.getData('text/plain');
+            const to = item.dataset.party;
+            if (from && to && from !== to) mergeSAParties(from, to);
+        });
+    });
+}
+
+function mergeSAParties(from, to) {
+    const { merges } = _saState;
+    // Everything pointing to 'from' now points to 'to'
+    for (const key in merges) {
+        if (merges[key] === from) merges[key] = to;
+    }
+    computeAndRenderSA();
+}
+
+function excludeSAParty(name) {
+    // Exclude all list names that map to this group
+    const { merges, excluded } = _saState;
+    for (const key in merges) {
+        if (merges[key] === name) excluded.add(key);
+    }
+    computeAndRenderSA();
+}
+
+function includeSAParty(name) {
+    const { merges, excluded } = _saState;
+    for (const key in merges) {
+        if (merges[key] === name) excluded.delete(key);
+    }
+    computeAndRenderSA();
+}
+
+function forceIncludeSAParty(name) {
+    _saState.forceInclude.add(name);
+    computeAndRenderSA();
+}
+
+function unforceIncludeSAParty(name) {
+    _saState.forceInclude.delete(name);
+    computeAndRenderSA();
+}
+
+function resetSaborAnalysis() {
+    const { rawData, merges, excluded, forceInclude } = _saState;
+    excluded.clear();
+    forceInclude.clear();
+    _saState.jumpers = {};
+    _saState.jumperSource = null;
+    _saState.jumpersActive = false;
+    document.getElementById('saJumperBtn').classList.remove('active', 'btn-warning');
+    document.getElementById('saJumperBtn').classList.add('btn-outline-warning');
+    rawData.districts.forEach(d => d.lists.forEach(l => { merges[l.name] = l.group || l.name; }));
+    computeAndRenderSA();
+}
+
+function toggleJumpers() {
+    _saState.jumpersActive = !_saState.jumpersActive;
+    _saState.jumperSource = null;
+    const btn = document.getElementById('saJumperBtn');
+    btn.classList.toggle('btn-outline-warning', !_saState.jumpersActive);
+    btn.classList.toggle('btn-warning', _saState.jumpersActive);
+    btn.classList.toggle('active', _saState.jumpersActive);
+    computeAndRenderSA();
+}
+
+function selectJumperSource(partyName) {
+    _saState.jumperSource = partyName;
+    computeAndRenderSA();
+}
+
+function transferSeat(from, to) {
+    // Check source has seats to give
+    const computed = _saState.computed;
+    const baseSeats = computed.totalSeats[from] || 0;
+    const currentDelta = _saState.jumpers[from] || 0;
+    if (baseSeats + currentDelta <= 0) return;
+
+    _saState.jumpers[from] = (currentDelta) - 1;
+    _saState.jumpers[to] = (_saState.jumpers[to] || 0) + 1;
+    computeAndRenderSA();
+}
+
+async function exportSaborAnalysisPDF() {
+    const { year, computed, jumpers } = _saState;
+    if (!computed) return;
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - margin * 2;
+    let curY = margin;
+
+    // Helper: add text with page-break check
+    function checkPage(needed) {
+        if (curY + needed > pageH - margin) {
+            pdf.addPage();
+            curY = margin;
+        }
+    }
+
+    // Helper: capture a DOM element as image and add to PDF
+    async function addElementToPDF(el, maxHeightMM) {
+        // Ensure the section is visible for capture
+        const collapse = el.closest('.collapse');
+        const wasHidden = collapse && !collapse.classList.contains('show');
+        if (wasHidden) collapse.classList.add('show');
+
+        const canvas = await html2canvas(el, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+        });
+
+        if (wasHidden) collapse.classList.remove('show');
+
+        const imgData = canvas.toDataURL('image/png');
+        const ratio = canvas.width / canvas.height;
+        let imgW = contentW;
+        let imgH = imgW / ratio;
+
+        if (maxHeightMM && imgH > maxHeightMM) {
+            imgH = maxHeightMM;
+            imgW = imgH * ratio;
+        }
+
+        checkPage(imgH);
+        pdf.addImage(imgData, 'PNG', margin, curY, imgW, imgH);
+        curY += imgH + 5;
+    }
+
+    // Title
+    pdf.setFontSize(18);
+    pdf.setFont(undefined, 'bold');
+    pdf.text(`Analiza parlamentarnih izbora ${year}.`, margin, curY);
+    curY += 10;
+
+    // --- Section 1: Actual results hemicycle + legend ---
+    const actualCard = document.getElementById('saActualResultsCard');
+    if (actualCard && actualCard.style.display !== 'none') {
+        pdf.setFontSize(14);
+        pdf.setFont(undefined, 'bold');
+        pdf.text('Konačni rezultati — raspodjela mandata (D\'Hondt)', margin, curY);
+        curY += 7;
+
+        const actualHemi = document.getElementById('saActualHemicycle');
+        if (actualHemi) await addElementToPDF(actualHemi, 120);
+
+        const actualLegend = document.getElementById('saActualLegend');
+        if (actualLegend) await addElementToPDF(actualLegend, 60);
+    }
+
+    // --- Section 2: Simulation hemicycle + legend ---
+    checkPage(20);
+    pdf.setFontSize(14);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('Simulacija — raspodjela mandata', margin, curY);
+    curY += 7;
+
+    const simHemi = document.getElementById('saHemicycleContainer');
+    if (simHemi) await addElementToPDF(simHemi, 120);
+
+    const simLegend = document.getElementById('saLegend');
+    if (simLegend) await addElementToPDF(simLegend, 60);
+
+    // --- Section 3: Summary table ---
+    checkPage(30);
+    pdf.setFontSize(14);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('Ukupni rezultati', margin, curY);
+    curY += 7;
+
+    // Build adjusted seats (with jumpers applied)
+    const adjustedSeats = { ...computed.totalSeats };
+    for (const [name, delta] of Object.entries(jumpers)) {
+        adjustedSeats[name] = (adjustedSeats[name] || 0) + delta;
+        if (adjustedSeats[name] <= 0) delete adjustedSeats[name];
+    }
+    const totalParties = Object.entries(adjustedSeats).sort((a, b) => b[1] - a[1]);
+    const totalAllocated = totalParties.reduce((s, [_, v]) => s + v, 0);
+
+    pdf.setFontSize(9);
+    pdf.setFont(undefined, 'bold');
+    const col1 = margin, col2 = margin + 120, col3 = margin + 145;
+    pdf.text('Stranka / Koalicija', col1, curY);
+    pdf.text('Mandati', col2, curY);
+    pdf.text('% mandata', col3, curY);
+    curY += 1;
+    pdf.setDrawColor(180);
+    pdf.line(margin, curY, pageW - margin, curY);
+    curY += 4;
+
+    pdf.setFont(undefined, 'normal');
+    totalParties.forEach(([name, seats]) => {
+        checkPage(6);
+        const displayName = name.length > 70 ? name.substring(0, 67) + '...' : name;
+        pdf.text(displayName, col1, curY);
+        pdf.text(String(seats), col2, curY);
+        pdf.text((seats / totalAllocated * 100).toFixed(1) + '%', col3, curY);
+        curY += 5;
+    });
+
+    checkPage(8);
+    pdf.setFont(undefined, 'bold');
+    curY += 2;
+    pdf.line(margin, curY, pageW - margin, curY);
+    curY += 5;
+    pdf.text('Ukupno', col1, curY);
+    pdf.text(String(totalAllocated), col2, curY);
+    curY += 8;
+
+    // --- Section 4: Per-district results ---
+    computed.districts.forEach(dist => {
+        checkPage(40);
+        pdf.setFontSize(11);
+        pdf.setFont(undefined, 'bold');
+        pdf.text(`${dist.name} (${dist.seats} mandata)`, margin, curY);
+        curY += 6;
+
+        pdf.setFontSize(8);
+        pdf.setFont(undefined, 'bold');
+        const dc1 = margin, dc2 = margin + 100, dc3 = margin + 118, dc4 = margin + 136, dc5 = margin + 155;
+        pdf.text('Lista', dc1, curY);
+        pdf.text('Glasovi', dc2, curY);
+        pdf.text('% ukupno', dc3, curY);
+        pdf.text('Efektivni %', dc4, curY);
+        pdf.text('Mandati', dc5, curY);
+        curY += 1;
+        pdf.setDrawColor(200);
+        pdf.line(margin, curY, pageW - margin, curY);
+        curY += 4;
+
+        pdf.setFont(undefined, 'normal');
+        const sorted = Object.entries(dist.mergedVotes).sort((a, b) => b[1] - a[1]);
+        sorted.forEach(([name, votes]) => {
+            checkPage(6);
+            const displayName = name.length > 55 ? name.substring(0, 52) + '...' : name;
+            const rawPct = dist.totalVotes > 0 ? (votes / dist.totalVotes * 100).toFixed(1) : '0.0';
+            const effPct = dist.eligibleVotes > 0 ? (votes / dist.eligibleVotes * 100).toFixed(1) : '0.0';
+            const seats = dist.distSeats[name] || 0;
+            const isBelowThreshold = dist.belowThreshold.has(name);
+
+            pdf.text(displayName, dc1, curY);
+            pdf.text(String(votes), dc2, curY);
+            pdf.text(rawPct + '%', dc3, curY);
+            pdf.text(isBelowThreshold ? '-' : effPct + '%', dc4, curY);
+            pdf.text(String(seats), dc5, curY);
+            curY += 4.5;
+        });
+        curY += 5;
+    });
+
+    pdf.save(`Analiza_Sabor_${year}.pdf`);
+}
+
+function exportSaborAnalysisXLSX() {
+    const { computed, year, merges, excluded, forceInclude } = _saState;
+    if (!computed) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // --- Sheet 1: Ukupni rezultati (summary) ---
+    const summaryRows = [['Analiza parlamentarnih izbora ' + year], []];
+    const totalParties = Object.entries(computed.totalSeats).sort((a, b) => b[1] - a[1]);
+    const totalAllocated = totalParties.reduce((s, [_, v]) => s + v, 0);
+    summaryRows.push(['Stranka / Koalicija', 'Mandati', '% mandata']);
+    totalParties.forEach(([name, seats]) => {
+        summaryRows.push([name, seats, (seats / totalAllocated * 100).toFixed(1) + '%']);
+    });
+    summaryRows.push([], ['Ukupno', totalAllocated]);
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+    wsSummary['!cols'] = [{ wch: 60 }, { wch: 10 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Ukupno');
+
+    // --- One sheet per district ---
+    computed.districts.forEach((dist) => {
+        const groups = {};
+        dist.originalLists.forEach(l => {
+            const group = merges[l.name] || l.name;
+            if (!groups[group]) groups[group] = { names: [], votes: 0, excluded: excluded.has(l.name) };
+            groups[group].names.push(l.name);
+            groups[group].votes += l.votes;
+            if (!excluded.has(l.name)) groups[group].excluded = false;
+        });
+
+        const sorted = Object.entries(groups).sort((a, b) => b[1].votes - a[1].votes);
+        const sheetRows = [[dist.name + ' (' + dist.seats + ' mandata)'], []];
+        sheetRows.push(['Lista / Koalicija', 'Glasovi', '% ukupno', 'Efektivni %', 'Mandati', 'Status']);
+
+        sorted.forEach(([groupName, g]) => {
+            const rawPct = dist.totalVotes > 0 ? (g.votes / dist.totalVotes * 100).toFixed(1) : '0.0';
+            const effPct = dist.eligibleVotes > 0 ? (g.votes / dist.eligibleVotes * 100).toFixed(1) : '0.0';
+            const seats = dist.distSeats[groupName] || 0;
+            const isBelowThreshold = dist.belowThreshold.has(groupName);
+            const isForced = forceInclude.has(groupName);
+            const isExcl = g.excluded;
+
+            let status = '';
+            if (isExcl) status = 'Isključeno';
+            else if (isBelowThreshold && !isForced) status = 'Ispod praga 5%';
+            else if (isForced) status = 'Uključeno (zaobiđen prag)';
+            else status = 'Iznad praga';
+
+            const displayName = g.names.length > 1 ? g.names.join('\n') : g.names[0];
+            sheetRows.push([displayName, g.votes, rawPct + '%', (isExcl || (isBelowThreshold && !isForced)) ? '-' : effPct + '%', seats, status]);
+        });
+
+        const wastedVotes = dist.totalVotes - dist.eligibleVotes;
+        const wastedPct = dist.totalVotes > 0 ? (wastedVotes / dist.totalVotes * 100).toFixed(1) : '0.0';
+        sheetRows.push([]);
+        sheetRows.push(['Ukupno glasova', dist.totalVotes]);
+        sheetRows.push(['Efektivni glasovi (u raspodjeli)', dist.eligibleVotes]);
+        sheetRows.push(['Propali glasovi (ispod praga)', wastedVotes, wastedPct + '%']);
+        sheetRows.push(['Prag (5%)', Math.round(dist.thresholdVotes)]);
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+        ws['!cols'] = [{ wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 25 }];
+
+        // Trim sheet name to 31 chars (Excel limit)
+        let sheetName = dist.name.length > 31 ? dist.name.substring(0, 31) : dist.name;
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    XLSX.writeFile(wb, `Analiza_Sabor_${year}.xlsx`);
+}
+
+function renderSADistricts(districtResults) {
+    const container = document.getElementById('saDistrictsArea');
+    const { merges, excluded, forceInclude } = _saState;
+
+    const cards = districtResults.map((dist, di) => {
+        // Build rows: show merged groups
+        const groups = {};
+        dist.originalLists.forEach(l => {
+            const isExcl = excluded.has(l.name);
+            const group = merges[l.name] || l.name;
+            if (!groups[group]) groups[group] = { names: [], votes: 0, excluded: true };
+            groups[group].names.push(l.name);
+            groups[group].votes += l.votes;
+            if (!isExcl) groups[group].excluded = false;
+        });
+
+        const sortedGroups = Object.entries(groups).sort((a, b) => b[1].votes - a[1].votes);
+
+        const rows = sortedGroups.map(([groupName, g]) => {
+            const rawPct = dist.totalVotes > 0 ? (g.votes / dist.totalVotes * 100).toFixed(1) : '0.0';
+            const effPct = dist.eligibleVotes > 0 ? (g.votes / dist.eligibleVotes * 100).toFixed(1) : '0.0';
+            const seats = dist.distSeats[groupName] || 0;
+            const isBelowThreshold = dist.belowThreshold.has(groupName);
+            const isForced = forceInclude.has(groupName);
+            const isExcl = g.excluded;
+
+            // Show each merged list on its own line
+            let nameCell;
+            if (g.names.length === 1) {
+                nameCell = `<div style="white-space:normal; word-break:break-word;">${g.names[0]}</div>`;
+            } else {
+                const lines = g.names.map(n =>
+                    `<div style="white-space:normal; word-break:break-word; padding:4px 0;">${n}</div>`
+                ).join('');
+                nameCell = `<div style="border-left:4px solid #0d6efd; padding-left:10px; margin:4px 0; background:rgba(13,110,253,0.04); border-radius:0 6px 6px 0;">
+                    ${lines}
+                    <div class="pb-1"><span class="badge bg-info text-dark" style="font-size:0.65rem;">spojeno ${g.names.length}</span></div>
+                </div>`;
+            }
+
+            // Determine row style and action button
+            let rowClass = 'sa-dist-row';
+            let rowStyle = 'cursor:grab;';
+            let seatDisplay;
+            let actionBtn;
+            const esc = groupName.replace(/'/g, "\\'");
+
+            if (isExcl) {
+                // Manually excluded by user
+                rowClass += ' text-decoration-line-through text-muted';
+                rowStyle += ' opacity:0.5;';
+                seatDisplay = '-';
+                actionBtn = `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAParty('${esc}')" title="Uključi"><i class="bi bi-plus-circle"></i></button>`;
+            } else if (isBelowThreshold && !isForced) {
+                // Below 5% threshold — crossed out by default
+                rowClass += ' text-decoration-line-through';
+                rowStyle += ' opacity:0.6; background:rgba(220,53,69,0.04);';
+                seatDisplay = `<span class="text-muted" title="Ispod praga od 5%">⊘</span>`;
+                actionBtn = `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" title="Uključi u izračun (zaobiđi prag)"><i class="bi bi-plus-circle"></i></button>`;
+                // Add threshold badge to name cell
+                nameCell += `<span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">ispod 5%</span>`;
+            } else if (isForced) {
+                // Force-included (was below threshold, user enabled it)
+                rowStyle += ' background:rgba(25,135,84,0.06);';
+                seatDisplay = seats > 0 ? seats : '0';
+                actionBtn = `<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" title="Vrati prag od 5%"><i class="bi bi-dash-circle"></i></button>`;
+                nameCell += `<span class="badge bg-success bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">uključeno</span>`;
+            } else {
+                // Normal — above threshold
+                seatDisplay = seats > 0 ? seats : '0';
+                actionBtn = `<button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" title="Isključi"><i class="bi bi-x-circle"></i></button>`;
+            }
+
+            // For eligible parties: show effective %, for below-threshold: show raw %
+            const isEligible = !isExcl && (!isBelowThreshold || isForced);
+            const pctDisplay = isEligible
+                ? `<strong>${effPct}%</strong><br><small class="text-muted" style="font-size:0.7rem;">${rawPct}% ukupno</small>`
+                : `<span class="text-muted">${rawPct}%</span>`;
+
+            return `<tr draggable="true" data-group="${groupName}" data-district="${di}"
+                        class="${rowClass}" style="${rowStyle}">
+                <td title="${g.names.join(' + ')}" style="max-width:450px;">${nameCell}</td>
+                <td class="text-end align-middle">${formatNumber(g.votes)}</td>
+                <td class="text-end align-middle">${pctDisplay}</td>
+                <td class="text-center fw-bold align-middle">${seatDisplay}</td>
+                <td class="text-center align-middle" style="width:40px;">${actionBtn}</td>
+            </tr>`;
+        }).join('');
+
+        const allocatedSeats = Object.values(dist.distSeats).reduce((s, v) => s + v, 0);
+        const belowCount = dist.belowThreshold.size;
+        const wastedVotes = dist.totalVotes - dist.eligibleVotes;
+        const wastedPct = dist.totalVotes > 0 ? (wastedVotes / dist.totalVotes * 100).toFixed(1) : '0.0';
+        const thresholdInfo = dist.thresholdPct > 0
+            ? `<span class="badge bg-warning text-dark ms-1" title="Prag: ${formatNumber(Math.round(dist.thresholdVotes))} glasova">${belowCount} ispod ${dist.thresholdPct}%</span>
+               <span class="badge bg-secondary ms-1" title="Glasovi koji ne sudjeluju u raspodjeli">${wastedPct}% propalo (${formatNumber(wastedVotes)})</span>`
+            : '';
+
+        return `
+        <div class="card result-card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#saDist${di}">
+                <div>
+                    <strong>${dist.name}</strong>
+                    <span class="text-muted ms-2">(${dist.seats} mandata)</span>
+                    ${thresholdInfo}
+                </div>
+                <div>
+                    <span class="badge bg-primary">${allocatedSeats} dodijeljeno</span>
+                    <i class="bi bi-chevron-down ms-2"></i>
+                </div>
+            </div>
+            <div id="saDist${di}" class="collapse${di === 0 ? ' show' : ''}">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
+                            <thead><tr>
+                                <th>Lista / Koalicija</th>
+                                <th class="text-end">Glasovi</th>
+                                <th class="text-end" title="Efektivni % (preraspodjela) / ukupni %">Efektivni %</th>
+                                <th class="text-center">Mandati</th>
+                                <th></th>
+                            </tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = cards;
+
+    // Attach drag-drop to table rows
+    attachSARowDragDrop();
+}
+
+function attachSARowDragDrop() {
+    const rows = document.querySelectorAll('.sa-dist-row');
+    rows.forEach(row => {
+        row.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', row.dataset.group);
+            row.style.opacity = '0.5';
+        });
+        row.addEventListener('dragend', () => {
+            row.style.opacity = '1';
+            rows.forEach(r => { r.style.background = ''; });
+        });
+        row.addEventListener('dragover', e => {
+            e.preventDefault();
+            row.style.background = 'rgba(13,110,253,0.08)';
+        });
+        row.addEventListener('dragleave', () => { row.style.background = ''; });
+        row.addEventListener('drop', e => {
+            e.preventDefault();
+            row.style.background = '';
+            const from = e.dataTransfer.getData('text/plain');
+            const to = row.dataset.group;
+            if (from && to && from !== to) mergeSAParties(from, to);
+        });
+    });
+}
+
+// Init when module is shown
+const origModuleSwitch = document.querySelectorAll('.sidebar-nav a[data-module]');
+origModuleSwitch.forEach(link => {
+    link.addEventListener('click', () => {
+        if (link.dataset.module === 'sabor-analysis') initSaborAnalysis();
+    });
+});
 
 // ---- Compare feature ----
 const compareState = {
