@@ -9,9 +9,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Tech Stack
 
 - **Backend**: Django 6.0 + PostgreSQL 16
+- **Frontend/Analytics**: Flask (app.py) on port 5001 with SQLAlchemy, serving `templates/index.html`
 - **Python**: 3.12 (via Homebrew), virtualenv at `./venv`
 - **Data import**: Custom Django management commands with pandas/openpyxl
 - **Database**: `projekt_izbori` (local PostgreSQL)
+- **Frontend libs** (CDN): Bootstrap 5.3.3, Bootstrap Icons 1.11.3, Chart.js 4.4.7, SheetJS (XLSX), html2canvas 1.4.1, jsPDF 2.5.1
 
 ## Commands
 
@@ -21,7 +23,8 @@ source venv/bin/activate
 # Run imports
 python manage.py import_presidential
 python manage.py import_eu_parliament
-python manage.py import_sabor
+python manage.py import_sabor                         # all districts
+python manage.py import_sabor --district 12 --wipe-district  # re-import single district
 python manage.py import_local
 python manage.py normalize_persons [--dry-run]
 
@@ -29,6 +32,9 @@ python manage.py normalize_persons [--dry-run]
 python manage.py runserver
 python manage.py makemigrations elections
 python manage.py migrate
+
+# Flask analytics app
+python app.py  # runs on port 5001
 ```
 
 ## Architecture
@@ -44,9 +50,24 @@ Models split into 4 modules under `elections/models/`:
 ### Import Pipeline: `elections/importers/`
 - **base.py** — BaseImporter with geography/person caches and bulk result insertion (batch size 5000)
 - **presidential.py** — UTF-8 BOM CSV, semicolon delimited, title row + header + data
-- **sabor.py** — windows-1250 CSV. Districts 1-10: fixed 15 cols/list (1 list + 14 candidates). District 11 (diaspora): **variable-width** list groups (parties may nominate fewer than 14 candidates), parsed via `_is_list_name()` keyword heuristic in `_parse_list_groups_variable()`. District 12: individual minority candidates only. Supports `--district N` and `--wipe-district` flags for targeted re-import.
+- **sabor.py** — windows-1250 CSV. Districts 1-10: fixed 15 cols/list (1 list + 14 candidates). District 11 (diaspora): **variable-width** list groups (parties may nominate fewer than 14 candidates), parsed via `_is_list_name()` keyword heuristic in `_parse_list_groups_variable()`. District 12 (minorities): split into 6 sub-districts (121-126, one per minority group: Serbian 3 seats, others 1 each = 8 total). Supports `--district N` and `--wipe-district` flags for targeted re-import.
 - **eu_parliament.py** — windows-1250 CSV, 13 cols/list (1 list + 12 candidates), multiline coalition names
 - **local.py** — Excel .xlsx, 2-4 sheets per file, list-level results only (no per-candidate breakdown within lists)
+
+### Flask Analytics App (`app.py`)
+Single-page app with multiple modules, served at port 5001:
+- **Politician search** — cross-election search by name
+- **Polling station search** — by location (county → municipality → station)
+- **Interactive Croatia map** — SVG map (`static/croatia_map.svg`) with county selection
+- **National results** — aggregated results by election type and year
+- **Multi-compare** — side-by-side comparison of candidates/lists
+- **Sabor analysis** (`/api/national/sabor-seats/<year>`, `/api/national/sabor-raw/<year>`):
+  - **Konačni rezultati**: D'Hondt seat allocation with hemicycle visualization and candidate list
+  - **Složi svoju koaliciju — simulacija**: Client-side D'Hondt with drag-to-merge coalitions, 5% threshold toggle, and "Aktiviraj skakače" (manual seat transfers between parties)
+  - **Electoral district map** (`static/croatia_districts.svg`): Interactive SVG showing districts I-X, displayed next to hemicycle in both sections
+  - **Exports**: XLSX (SheetJS) and PDF (html2canvas + jsPDF) with hemicycle visuals
+- Coalition variants (e.g., "HDZ, HSLS" vs "HDZ, HSLS, HDS") are grouped by `primary_party()` (first name before comma)
+- Minority district returns individual winners with `group: "NACIONALNE MANJINE"` for unified display, but `fixed_seats` per candidate for correct allocation (no D'Hondt — seats assigned directly from sub-district results)
 
 ### Key Design Decisions
 - All election types share the same ListResult/CandidateResult tables
@@ -54,6 +75,8 @@ Models split into 4 modules under `elections/models/`:
 - Person.normalized_name (diacritics stripped, uppercase) enables cross-election search
 - Bulk insert with `ignore_conflicts=True` for performance
 - Geography and person caches in BaseImporter avoid repeated DB lookups
+- District 12 minorities use sub-districts 121-126 in DB, merged to single "NACIONALNE MANJINE" group in API responses
+- Raw API includes `group` field per list for client-side coalition grouping
 
 ### Data Files (not in git)
 Located in `files/` directory:
