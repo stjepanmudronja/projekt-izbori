@@ -1084,7 +1084,7 @@ def sabor_raw(year):
             'seats': 8,
             'total_votes': minority_total_votes,
             'lists': [{'name': w['name'], 'votes': w['votes'],
-                        'group': w['name'], 'fixed_seats': w['seats']}
+                        'group': 'NACIONALNE MANJINE', 'fixed_seats': w['seats']}
                        for w in minority_winners],
             'minority': True,
         })

@@ -213,6 +213,36 @@
             fill: #d6841e;
         }
 
+        /* Electoral district SVG map */
+        .district-map-wrap svg {
+            width: 100%;
+            height: auto;
+        }
+        .district-map-wrap svg path {
+            stroke: #ffffff;
+            stroke-width: 1.2;
+            stroke-linejoin: round;
+            cursor: pointer;
+            transition: opacity 0.2s, filter 0.2s;
+        }
+        .district-map-wrap svg .district-group:hover path {
+            opacity: 0.8;
+            filter: brightness(1.15);
+        }
+        .district-map-wrap svg .district-group.selected path {
+            stroke: #000;
+            stroke-width: 2.5;
+            filter: brightness(1.1);
+        }
+        .district-map-label {
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 4px;
+            font-weight: 600;
+            color: #555;
+            min-height: 1.4em;
+        }
+
         /* Station two-column layout */
         .station-layout {
             display: flex;
@@ -752,7 +782,15 @@
                     </div>
                     <div class="collapse" id="saActualCollapse">
                         <div class="card-body p-4">
-                            <div id="saActualHemicycle"></div>
+                            <div class="d-flex gap-3 align-items-start flex-wrap">
+                                <div style="flex:1; min-width:400px;">
+                                    <div id="saActualHemicycle"></div>
+                                </div>
+                                <div style="width:220px; flex-shrink:0;">
+                                    <div class="district-map-wrap" id="saActualMapWrap"></div>
+                                    <div class="district-map-label" id="saActualMapLabel"></div>
+                                </div>
+                            </div>
                             <div id="saActualLegend" class="mt-3"></div>
                             <div id="saActualCandidateList" class="mt-3"></div>
                         </div>
@@ -768,7 +806,15 @@
                     <div class="collapse" id="saSimCollapse">
                         <div class="card-body p-4">
                             <p class="text-muted mb-3" style="font-size:0.88rem;">Povlači stranke jedne na drugu za spajanje u koaliciju. Uključi stranke ispod praga i prati promjenu mandata u realnom vremenu.</p>
-                            <div id="saHemicycleContainer"></div>
+                            <div class="d-flex gap-3 align-items-start flex-wrap">
+                                <div style="flex:1; min-width:400px;">
+                                    <div id="saHemicycleContainer"></div>
+                                </div>
+                                <div style="width:220px; flex-shrink:0;">
+                                    <div class="district-map-wrap" id="saSimMapWrap"></div>
+                                    <div class="district-map-label" id="saSimMapLabel"></div>
+                                </div>
+                            </div>
                             <div id="saLegend" class="mt-3"></div>
                             <div class="d-flex justify-content-end mt-2 gap-2">
                                 <button class="btn btn-outline-warning btn-sm" id="saJumperBtn" onclick="toggleJumpers()">
@@ -2543,6 +2589,83 @@ function resetHemicycleMerges() {
 }
 
 // ---- Sabor Analysis Module ----
+// Electoral district colors for the map
+const DISTRICT_COLORS = {
+    'I': '#E8A838', 'II': '#E85050', 'III': '#9B59B6', 'IV': '#5B2C6F',
+    'V': '#82C341', 'VI': '#F5A0C0', 'VII': '#F0D050', 'VIII': '#2E7D32',
+    'IX': '#2E86C1', 'X': '#1A5276',
+};
+
+// District Roman numeral to Arabic for matching with data
+const DISTRICT_ROMAN_TO_NUM = {
+    'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
+    'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10,
+};
+
+let _districtSvgCache = null;
+
+async function loadDistrictMap(wrapperId, labelId, districtData, onClickDistrict) {
+    const wrap = document.getElementById(wrapperId);
+    if (!wrap) return;
+
+    if (!_districtSvgCache) {
+        const res = await fetch('/static/croatia_districts.svg');
+        _districtSvgCache = await res.text();
+    }
+
+    wrap.innerHTML = _districtSvgCache;
+    const svg = wrap.querySelector('svg');
+    if (!svg) return;
+
+    // Remove any embedded styles
+    const embeddedStyle = svg.querySelector('style');
+    if (embeddedStyle) embeddedStyle.remove();
+
+    // Color each district group
+    const groups = svg.querySelectorAll('.district-group');
+    groups.forEach(g => {
+        const distNum = g.dataset.district;
+        const color = DISTRICT_COLORS[distNum] || '#ccc';
+        g.querySelectorAll('path').forEach(p => { p.style.fill = color; });
+
+        // Hover: show district name in label
+        const label = document.getElementById(labelId);
+        g.addEventListener('mouseenter', () => {
+            if (label) label.textContent = distNum + '. izborna jedinica';
+        });
+        g.addEventListener('mouseleave', () => {
+            if (label && !g.classList.contains('selected')) label.textContent = '';
+        });
+
+        // Click: scroll to district details
+        g.addEventListener('click', () => {
+            // Toggle selection
+            groups.forEach(gg => gg.classList.remove('selected'));
+            g.classList.add('selected');
+            if (label) label.textContent = distNum + '. izborna jedinica';
+            if (onClickDistrict) onClickDistrict(distNum);
+        });
+    });
+}
+
+function scrollToDistrict(distRoman, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const num = DISTRICT_ROMAN_TO_NUM[distRoman];
+    if (!num) return;
+    // Find the district card/section that matches
+    const cards = container.querySelectorAll('[data-district-num]');
+    for (const card of cards) {
+        if (card.dataset.districtNum == num) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            card.style.transition = 'background 0.3s';
+            card.style.background = '#fff3cd';
+            setTimeout(() => { card.style.background = ''; }, 2000);
+            return;
+        }
+    }
+}
+
 const _saState = {
     rawData: null,
     merges: {},     // listName -> groupLeader
@@ -2674,6 +2797,12 @@ async function loadSaborAnalysis(year) {
     area.style.display = 'block';
 
     computeAndRenderSA();
+
+    // Load district maps for both sections
+    loadDistrictMap('saActualMapWrap', 'saActualMapLabel', seatsData, null);
+    loadDistrictMap('saSimMapWrap', 'saSimMapLabel', data, (distRoman) => {
+        scrollToDistrict(distRoman, 'saDistrictsArea');
+    });
 }
 
 function computeDHondtClient(districts, merges, excluded, forceInclude) {
@@ -3381,8 +3510,12 @@ function renderSADistricts(districtResults) {
                <span class="badge bg-secondary ms-1" title="Glasovi koji ne sudjeluju u raspodjeli">${wastedPct}% propalo (${formatNumber(wastedVotes)})</span>`
             : '';
 
+        // Extract district number from name (e.g., "I. IZBORNA JEDINICA" -> 1)
+        const romanMatch = dist.name.match(/^([IVXL]+)\./);
+        const distNum = romanMatch ? {'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,'VIII':8,'IX':9,'X':10,'XI':11,'XII':12}[romanMatch[1]] || di+1 : di+1;
+
         return `
-        <div class="card result-card mb-3">
+        <div class="card result-card mb-3" data-district-num="${distNum}">
             <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#saDist${di}">
                 <div>
                     <strong>${dist.name}</strong>
