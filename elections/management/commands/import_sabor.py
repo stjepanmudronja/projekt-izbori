@@ -67,7 +67,10 @@ class Command(BaseCommand):
             ListResult.objects.filter(electoral_list__in=lists_qs).delete()
             Candidacy.objects.filter(electoral_list__in=lists_qs).delete()
             lists_qs.delete()
-            if ps_ids:
+            # Only delete turnout for non-minority districts. District 12
+            # shares polling stations with districts 1-10 and its importer
+            # doesn't write turnout, so wiping it would destroy correct data.
+            if ps_ids and district_num != 12:
                 TurnoutData.objects.filter(
                     election_round=round1, polling_station_id__in=ps_ids
                 ).delete()

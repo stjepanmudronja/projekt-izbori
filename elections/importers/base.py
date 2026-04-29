@@ -22,8 +22,12 @@ class BaseImporter:
         self._municipality_cache = {}
         self._polling_station_cache = {}
         self._person_cache = {}
-        # Bulk insert buffers
-        self._turnout_buffer = []
+        # Bulk insert buffers.
+        # Turnout uses a dict so that the same (election_round, polling_station)
+        # encountered in multiple source files (e.g. Sabor "posebna"/"inozemstvo"
+        # stations that appear in every district file) is summed instead of
+        # dropped by the unique constraint.
+        self._turnout_buffer = {}
         self._list_result_buffer = []
         self._candidate_result_buffer = []
 
@@ -143,16 +147,22 @@ class BaseImporter:
     # --- Result helpers (buffered bulk insert) ---
 
     def create_turnout(self, election_round, polling_station, registered, cast, valid, invalid):
-        self._turnout_buffer.append(TurnoutData(
-            election_round=election_round,
-            polling_station=polling_station,
-            registered_voters=registered,
-            ballots_cast=cast,
-            valid_ballots=valid,
-            invalid_ballots=invalid,
-        ))
-        if len(self._turnout_buffer) >= BATCH_SIZE:
-            self._flush_turnout()
+        key = (election_round.id, polling_station.id)
+        existing = self._turnout_buffer.get(key)
+        if existing is None:
+            self._turnout_buffer[key] = TurnoutData(
+                election_round=election_round,
+                polling_station=polling_station,
+                registered_voters=registered,
+                ballots_cast=cast,
+                valid_ballots=valid,
+                invalid_ballots=invalid,
+            )
+        else:
+            existing.registered_voters += registered
+            existing.ballots_cast += cast
+            existing.valid_ballots += valid
+            existing.invalid_ballots += invalid
 
     def create_list_result(self, electoral_list, polling_station, votes):
         self._list_result_buffer.append(ListResult(
@@ -174,8 +184,12 @@ class BaseImporter:
 
     def _flush_turnout(self):
         if self._turnout_buffer:
-            TurnoutData.objects.bulk_create(self._turnout_buffer, ignore_conflicts=True)
-            self._turnout_buffer = []
+            TurnoutData.objects.bulk_create(
+                list(self._turnout_buffer.values()),
+                update_conflicts=True,
+                unique_fields=['election_round', 'polling_station'],
+                update_fields=['registered_voters', 'ballots_cast', 'valid_ballots', 'invalid_ballots'],
+            )
 
     def _flush_list_results(self):
         if self._list_result_buffer:

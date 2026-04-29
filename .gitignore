@@ -7,3 +7,6 @@ db.sqlite3
 .env
 files/
 notes/
+notes
+.DS_Store
+database_script.sql

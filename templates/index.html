@@ -491,6 +491,102 @@
         .module-panel { display: none; }
         .module-panel.active { display: block; }
 
+        /* Izlaznost analytics */
+        .izl-card-strip-wrap { position: relative; }
+        .izl-card-strip {
+            display: flex; gap: 0.6rem;
+            overflow-x: auto; scroll-behavior: smooth;
+            padding: 0.25rem 2.6rem 0.5rem;
+            scrollbar-width: thin;
+        }
+        .izl-card-strip::-webkit-scrollbar { height: 6px; }
+        .izl-card-strip::-webkit-scrollbar-thumb { background: #c4cad3; border-radius: 3px; }
+        .izl-strip-btn {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 32px; height: 32px; border-radius: 50%;
+            background: white; border: 1px solid #d0d7de;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 5;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+        .izl-strip-btn:hover { background: #f6f8fa; }
+        .izl-strip-btn.left { left: 0; }
+        .izl-strip-btn.right { right: 0; }
+        .izl-card {
+            flex: 0 0 auto; min-width: 200px;
+            border: 2px solid #e1e4e8; border-radius: 10px;
+            padding: 0.75rem 0.9rem; cursor: pointer;
+            background: white; transition: all 0.15s;
+            user-select: none;
+        }
+        .izl-card:hover { border-color: #b0b8c2; }
+        .izl-card.checked { border-color: #0f3460; background: #eaf0f9; }
+        .izl-card .izl-card-cat { font-size: 0.7rem; text-transform: uppercase;
+            letter-spacing: 0.05em; color: #6c757d; }
+        .izl-card .izl-card-year { font-size: 1.4rem; font-weight: 700; color: #0f3460; }
+        .izl-card .izl-card-round { font-size: 0.8rem; color: #495057; }
+        .izl-card.round-2 { border-style: dashed; }
+
+        .izl-breadcrumb {
+            display: flex; gap: 0.4rem; align-items: center;
+            font-size: 0.92rem; flex-wrap: wrap;
+        }
+        .izl-breadcrumb a { color: #0f3460; text-decoration: none; cursor: pointer; }
+        .izl-breadcrumb a:hover { text-decoration: underline; }
+        .izl-breadcrumb .sep { color: #adb5bd; }
+        .izl-breadcrumb .current { color: #495057; font-weight: 600; }
+
+        .izl-panels {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 1rem;
+        }
+        .izl-panel {
+            background: white; border-radius: 10px;
+            border: 1px solid #e1e4e8; padding: 1rem;
+        }
+        .izl-panel h6 {
+            font-weight: 700; margin: 0 0 0.25rem; color: #0f3460;
+        }
+        .izl-panel .izl-panel-meta {
+            font-size: 0.78rem; color: #6c757d; margin-bottom: 0.6rem;
+        }
+        .izl-bar-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.75rem; align-items: center;
+            padding: 0.45rem 0; cursor: pointer;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .izl-bar-row:last-child { border-bottom: 0; }
+        .izl-bar-row.no-drill { cursor: default; }
+        .izl-bar-row .izl-name {
+            font-size: 0.86rem; color: #212529;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .izl-bar-row .izl-bar-track {
+            position: relative; height: 14px; background: #f1f3f5;
+            border-radius: 7px; overflow: hidden; margin-top: 4px;
+        }
+        .izl-bar-row .izl-bar-fill {
+            height: 100%; background: linear-gradient(90deg, #0f3460, #1c5fa8);
+            border-radius: 7px;
+        }
+        .izl-bar-row .izl-bar-meta {
+            display: flex; justify-content: space-between;
+            font-size: 0.74rem; color: #6c757d; margin-top: 2px;
+        }
+        .izl-bar-row .izl-pct {
+            font-weight: 700; color: #0f3460; font-size: 0.95rem;
+            min-width: 56px; text-align: right;
+        }
+        .izl-summary-row {
+            display: flex; gap: 1.25rem; flex-wrap: wrap;
+            font-size: 0.85rem; padding: 0.6rem 0.75rem;
+            background: #f6f8fa; border-radius: 8px; margin-bottom: 0.6rem;
+        }
+        .izl-summary-row b { color: #0f3460; }
+        .izl-empty { color: #6c757d; font-size: 0.85rem; padding: 1rem; text-align: center; }
+
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar { width: 220px; }
@@ -527,9 +623,25 @@
                     </a></li>
                 </ul>
             </li>
+        </ul>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Analitika</div>
+        <ul class="sidebar-nav">
             <li>
-                <a href="#" data-module="national">
-                    <i class="bi bi-clipboard-data"></i> Pregled ukupnih rezultata
+                <a href="#" data-module="results-predsjednicki">
+                    <i class="bi bi-person-badge"></i> Predsjednički izbori
+                </a>
+            </li>
+            <li>
+                <a href="#" data-module="results-eu">
+                    <i class="bi bi-globe-europe-africa"></i> EU parlamentarni izbori
+                </a>
+            </li>
+            <li>
+                <a href="#" data-module="results-lokalni">
+                    <i class="bi bi-building"></i> Lokalni izbori
                 </a>
             </li>
             <li>
@@ -537,13 +649,7 @@
                     <i class="bi bi-people-fill"></i> Rezultati i koalicije (Sabor)
                 </a>
             </li>
-        </ul>
-    </div>
-
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Analitika</div>
-        <ul class="sidebar-nav">
-            <li><a href="#" data-module="analytics-turnout" class="disabled" style="opacity:0.4; pointer-events:none;">
+            <li><a href="#" data-module="analytics-turnout">
                 <i class="bi bi-graph-up"></i> Izlaznost
             </a></li>
             <li><a href="#" data-module="analytics-compare" class="disabled" style="opacity:0.4; pointer-events:none;">
@@ -751,16 +857,43 @@
         </div>
 
         <!-- National results module -->
-        <div id="module-national" class="module-panel">
+        <div id="module-results-predsjednicki" class="module-panel" data-category="predsjednicki">
             <div class="card search-card p-4 mb-4">
-                <div id="nationalAccordion" class="national-accordion"></div>
+                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
             </div>
-            <div class="spinner-wrapper mt-4" id="nationalSpinner">
+            <div class="spinner-wrapper mt-4 results-spinner">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Učitavanje...</span>
                 </div>
             </div>
-            <div id="nationalResultsArea" style="display:none;"></div>
+            <div class="results-area" style="display:none;"></div>
+        </div>
+
+        <div id="module-results-eu" class="module-panel" data-category="eu">
+            <div class="card search-card p-4 mb-4">
+                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
+            </div>
+            <div class="spinner-wrapper mt-4 results-spinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div class="results-area" style="display:none;"></div>
+        </div>
+
+        <div id="module-results-lokalni" class="module-panel" data-category="lokalni">
+            <div class="card search-card p-4 mb-4">
+                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
+            </div>
+            <div class="spinner-wrapper mt-4 results-spinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+            <div class="results-area" style="display:none;"></div>
         </div>
 
         <div id="module-sabor-analysis" class="module-panel">
@@ -838,6 +971,37 @@
                 </div>
             </div>
         </div>
+
+        <!-- Izlaznost (turnout) analytics -->
+        <div id="module-analytics-turnout" class="module-panel">
+            <div class="card search-card p-4 mb-3">
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="eu" id="izlCatEu" checked><label class="form-check-label" for="izlCatEu">EU parlamentarni</label></div>
+                    <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="lokalni" id="izlCatLokalni" checked><label class="form-check-label" for="izlCatLokalni">Lokalni izbori</label></div>
+                    <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="predsjednicki" id="izlCatPredsjednicki" checked><label class="form-check-label" for="izlCatPredsjednicki">Predsjednički</label></div>
+                    <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="sabor" id="izlCatSabor" checked><label class="form-check-label" for="izlCatSabor">Sabor</label></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" id="izlShowRound2" checked><label class="form-check-label" for="izlShowRound2">2. krug</label></div>
+                </div>
+            </div>
+
+            <div class="spinner-wrapper" id="izlSpinner" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Učitavanje...</span>
+                </div>
+            </div>
+
+            <div class="card search-card p-4 mb-3" id="izlChartCard" style="display:none;">
+                <h6 class="fw-bold mb-3" style="color:#0f3460;">
+                    <i class="bi bi-graph-up me-2"></i>Izlaznost — ukupno (Hrvatska)
+                </h6>
+                <div style="position:relative; height:380px;">
+                    <canvas id="izlChartCanvas"></canvas>
+                </div>
+                <div id="izlChartTable" class="mt-3"></div>
+            </div>
+
+            <div id="izlEmpty" class="izl-empty">Odaberi barem jedne izbore za prikaz.</div>
+        </div>
     </div>
 </div>
 
@@ -856,8 +1020,11 @@ const moduleTitles = {
     party: '<i class="bi bi-people me-2"></i>Stranka',
     station: '<i class="bi bi-geo-alt me-2"></i>Prema lokaciji',
     compare: '<i class="bi bi-arrow-left-right me-2"></i>Usporedi biračka mjesta',
-    national: '<i class="bi bi-clipboard-data me-2"></i>Pregled ukupnih rezultata',
+    'results-predsjednicki': '<i class="bi bi-person-badge me-2"></i>Predsjednički izbori',
+    'results-eu': '<i class="bi bi-globe-europe-africa me-2"></i>EU parlamentarni izbori',
+    'results-lokalni': '<i class="bi bi-building me-2"></i>Lokalni izbori',
     'sabor-analysis': '<i class="bi bi-people-fill me-2"></i>Rezultati i koalicije (Sabor)',
+    'analytics-turnout': '<i class="bi bi-graph-up me-2"></i>Izlaznost',
 };
 
 const stationSubnav = document.getElementById('stationSubnav');
@@ -891,6 +1058,11 @@ sidebarLinks.forEach(link => {
         // Update top bar title
         if (moduleTitles[mod]) {
             moduleTitle.innerHTML = moduleTitles[mod];
+        }
+
+        if (mod === 'analytics-turnout') initIzlaznost();
+        if (mod && mod.startsWith('results-')) {
+            initResultsModule(mod.substring('results-'.length));
         }
     });
 });
@@ -2106,67 +2278,47 @@ const nationalIcons = {
 
 let _nationalData = null; // store for re-rendering
 
-(async function loadNationalAccordion() {
+const _resultsModuleInitialized = {};
+
+async function initResultsModule(category) {
+    if (_resultsModuleInitialized[category]) return;
+    _resultsModuleInitialized[category] = true;
+
+    const panel = document.getElementById(`module-results-${category}`);
+    const picker = panel.querySelector('.results-year-picker');
+
     const res = await fetch('/api/national/election-types');
     const categories = await res.json();
-    const container = document.getElementById('nationalAccordion');
+    const cat = categories.find(c => c.key === category);
+    if (!cat || !cat.years || !cat.years.length) {
+        picker.innerHTML = '<span class="text-muted">Nema podataka</span>';
+        return;
+    }
 
-    // Filter out sabor — it has its own dedicated module
-    const filteredCategories = categories.filter(cat => cat.key !== 'sabor');
-
-    container.innerHTML = filteredCategories.map(cat => `
-        <div class="nat-category">
-            <div class="nat-cat-header" data-cat="${cat.key}">
-                <span><i class="bi ${nationalIcons[cat.key] || 'bi-list'} me-2"></i>${cat.label}</span>
-                <i class="bi bi-plus toggle-icon"></i>
-            </div>
-            <div class="nat-years" id="natYears_${cat.key}">
-                ${cat.years.map(y => `
-                    <button class="nat-year-btn" data-cat="${cat.key}" data-year="${y}">${y}.</button>
-                `).join('')}
-            </div>
-        </div>
-    `).join('');
-
-    // Toggle accordion
-    container.querySelectorAll('.nat-cat-header').forEach(header => {
-        header.addEventListener('click', () => {
-            const isOpen = header.classList.contains('open');
-            // Close all
-            container.querySelectorAll('.nat-cat-header').forEach(h => h.classList.remove('open'));
-            container.querySelectorAll('.nat-years').forEach(y => y.classList.remove('open'));
-            if (!isOpen) {
-                header.classList.add('open');
-                document.getElementById(`natYears_${header.dataset.cat}`).classList.add('open');
-            }
-        });
-    });
-
-    // Year click
-    container.querySelectorAll('.nat-year-btn').forEach(btn => {
+    picker.innerHTML = cat.years.map(y =>
+        `<button class="btn btn-outline-primary btn-sm sa-year-btn results-year-btn" data-cat="${category}" data-year="${y}">${y}.</button>`
+    ).join('');
+    picker.querySelectorAll('.results-year-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            container.querySelectorAll('.nat-year-btn').forEach(b => b.classList.remove('active'));
+            picker.querySelectorAll('.results-year-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            loadNationalResults(btn.dataset.cat, parseInt(btn.dataset.year));
+            loadNationalResults(category, parseInt(btn.dataset.year, 10));
         });
     });
-})();
+}
 
 async function loadNationalResults(category, year) {
-    const spinner = document.getElementById('nationalSpinner');
-    const resultsArea = document.getElementById('nationalResultsArea');
+    const panel = document.getElementById(`module-results-${category}`);
+    if (!panel) return;
+    const spinner = panel.querySelector('.results-spinner');
+    const resultsArea = panel.querySelector('.results-area');
 
     resultsArea.style.display = 'none';
     spinner.classList.add('show');
 
     const res = await fetch(`/api/national/results/${category}/${year}`);
     const data = await res.json();
-
-    // For sabor, also fetch seat calculation
-    if (category === 'sabor') {
-        const seatsRes = await fetch(`/api/national/sabor-seats/${year}`);
-        data.saborSeats = await seatsRes.json();
-    }
+    data._panel = panel;
 
     spinner.classList.remove('show');
     resultsArea.style.display = 'block';
@@ -2176,7 +2328,9 @@ async function loadNationalResults(category, year) {
 }
 
 function renderNationalResults(data) {
-    const container = document.getElementById('nationalResultsArea');
+    const panel = data._panel || document.getElementById(`module-results-${data.category}`);
+    const container = panel ? panel.querySelector('.results-area') : null;
+    if (!container) return;
     const elections = data.elections || [];
 
     if (elections.length === 0) {
@@ -2184,22 +2338,7 @@ function renderNationalResults(data) {
         return;
     }
 
-    // Sabor hemicycle section
-    let hemicycleHTML = '';
-    if (data.saborSeats) {
-        hemicycleHTML = `
-        <div class="card result-card mb-4 p-4">
-            <h5 class="fw-bold mb-3"><i class="bi bi-bank me-2"></i>Raspodjela mandata u Saboru (D'Hondt metoda)</h5>
-            <div id="hemicycleContainer"></div>
-            <div id="seatLegend" class="mt-3"></div>
-            <div id="seatCandidateList" class="mt-3"></div>
-        </div>`;
-    }
-
-    // Skip bar chart cards when hemicycle already covers sabor
-    const displayElections = data.saborSeats ? [] : elections;
-
-    const electionCards = displayElections.map((el, idx) => {
+    const electionCards = elections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
             ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
         const chartId = `nat_${idx}`;
@@ -2232,12 +2371,7 @@ function renderNationalResults(data) {
         </div>`;
     }).join('');
 
-    container.innerHTML = hemicycleHTML + electionCards;
-
-    // Render hemicycle if sabor
-    if (data.saborSeats) {
-        renderHemicycle(data.saborSeats);
-    }
+    container.innerHTML = electionCards;
 
     // Build bar charts
     elections.forEach((el, idx) => {
@@ -2455,8 +2589,11 @@ function renderHemicycleLegend() {
         groups[leader].seats += p.seats;
     });
 
-    // Order: preserve original party order for leaders
-    const orderedLeaders = parties.map(p => p.name).filter(n => mergeMap[n] === n);
+    // Order: by merged seat count descending (ties broken by name) so rows don't reflow jarringly
+    const orderedLeaders = parties
+        .map(p => p.name)
+        .filter(n => mergeMap[n] === n)
+        .sort((a, b) => groups[b].seats - groups[a].seats || a.localeCompare(b));
 
     const hasMerges = Object.keys(groups).length < parties.length;
 
@@ -2478,7 +2615,7 @@ function renderHemicycleLegend() {
     }).join('');
 
     legendContainer.innerHTML = `
-        <div class="d-flex flex-wrap gap-2 justify-content-center align-items-center mb-2">
+        <div class="d-flex flex-column gap-1 align-items-stretch mx-auto mb-2" style="max-width:520px;">
             ${legendItems}
         </div>
         <div class="d-flex justify-content-between align-items-center mt-1">
@@ -2737,10 +2874,11 @@ function renderActualSaborResults(seatsData) {
             <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="12" fill="#6c757d">mandata</text>
         </svg>`;
 
-    // Legend
+    // Legend — stacked vertically, sorted by seats desc
+    const legendParties = [...parties].sort((a, b) => b.seats - a.seats || a.name.localeCompare(b.name));
     document.getElementById('saActualLegend').innerHTML = `
-        <div class="d-flex flex-wrap gap-2 justify-content-center">
-            ${parties.map(p => `<div class="d-flex align-items-center gap-1" style="font-size:0.82rem;" title="${p.name}">
+        <div class="d-flex flex-column gap-1 align-items-stretch mx-auto" style="max-width:520px;">
+            ${legendParties.map(p => `<div class="d-flex align-items-center gap-1" style="font-size:0.82rem; padding:4px 8px; border-radius:6px;" title="${p.name}">
                 <span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
                 <span class="fw-semibold">${p.name.length > 35 ? p.name.substring(0, 32) + '...' : p.name}</span>
                 <span class="text-muted">(${p.seats})</span>
@@ -2785,12 +2923,15 @@ async function loadSaborAnalysis(year) {
     _saState.rawData = data;
     _saState.year = year;
     _saState.merges = {};
+    _saState.initialGroups = {};  // listName -> original primary_party label (for "A + B" merge display)
     _saState.excluded = new Set();
     _saState.forceInclude = new Set();
 
     // Init merge map: use group field to pre-merge coalition variants
     data.districts.forEach(d => d.lists.forEach(l => {
-        _saState.merges[l.name] = l.group || l.name;
+        const primary = l.group || l.name;
+        _saState.merges[l.name] = primary;
+        _saState.initialGroups[l.name] = primary;
     }));
 
     spinner.classList.remove('show');
@@ -2903,6 +3044,11 @@ function computeAndRenderSA() {
         if (adjustedSeats[name] <= 0) delete adjustedSeats[name];
     }
 
+    // Auto-clear jumper source if it has no seats left to give
+    if (_saState.jumperSource && !adjustedSeats[_saState.jumperSource]) {
+        _saState.jumperSource = null;
+    }
+
     const totalAllocated = Object.values(adjustedSeats).reduce((s, v) => s + v, 0);
 
     // Build parties array sorted by seats desc
@@ -3004,9 +3150,24 @@ function renderSAHemicycle(parties, totalAllocated) {
 
     // Legend with drag-and-drop + jumper controls
     const { jumpersActive, jumperSource, jumpers, computed } = _saState;
+    const merges = _saState.merges || {};
+    const initialGroups = _saState.initialGroups || {};
 
-    const legendItems = parties.map(p => {
-        const shortName = p.name.length > 35 ? p.name.substring(0, 32) + '...' : p.name;
+    // Build merged labels: for each current leader, collect distinct original primary-party names
+    const mergedLabels = {};
+    for (const [listName, leader] of Object.entries(merges)) {
+        const primary = initialGroups[listName] || listName;
+        if (!mergedLabels[leader]) mergedLabels[leader] = [];
+        if (!mergedLabels[leader].includes(primary)) mergedLabels[leader].push(primary);
+    }
+
+    // Always sort by seats desc and stack vertically so rows don't shift on change
+    const legendParties = [...parties].sort((a, b) => b.seats - a.seats || a.name.localeCompare(b.name));
+
+    const legendItems = legendParties.map(p => {
+        const labelParts = mergedLabels[p.name] && mergedLabels[p.name].length > 0 ? mergedLabels[p.name] : [p.name];
+        const fullLabel = labelParts.join(' + ');
+        const shortName = fullLabel.length > 90 ? fullLabel.substring(0, 87) + '...' : fullLabel;
         const delta = jumpers[p.name] || 0;
         const deltaLabel = delta > 0 ? ` <span class="text-success fw-bold">+${delta}</span>` : delta < 0 ? ` <span class="text-danger fw-bold">${delta}</span>` : '';
         const isSource = jumperSource === p.name;
@@ -3032,13 +3193,13 @@ function renderSAHemicycle(parties, totalAllocated) {
             }
         }
 
-        return `<div class="sa-legend-item d-flex align-items-center gap-1"
+        return `<div class="sa-legend-item d-flex align-items-start gap-1"
                      draggable="true" data-party="${p.name}"
-                     title="${p.name}"
+                     title="${fullLabel}"
                      style="font-size:0.82rem; cursor:grab; padding:4px 8px; border-radius:6px; border:2px solid transparent; transition:all 0.15s; ${sourceBorder}">
-                    <span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
-                    <span class="fw-semibold">${shortName}</span>
-                    <span class="text-muted">(${p.seats})</span>${deltaLabel}${jumperBtns}
+                    <span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15); margin-top:3px;"></span>
+                    <span class="fw-semibold" style="flex:1; word-break:break-word;">${shortName}</span>
+                    <span class="text-muted flex-shrink-0">(${p.seats})</span>${deltaLabel}${jumperBtns}
                 </div>`;
     }).join('');
 
@@ -3051,7 +3212,7 @@ function renderSAHemicycle(parties, totalAllocated) {
     }
 
     legendContainer.innerHTML = `
-        <div class="d-flex flex-wrap gap-2 justify-content-center">${legendItems}</div>
+        <div class="d-flex flex-column gap-1 align-items-stretch mx-auto" style="max-width:520px;">${legendItems}</div>
         ${jumperHint}
         <div class="text-muted text-center mt-1" style="font-size:0.78rem;"><i class="bi bi-arrows-move me-1"></i>Povuci stranku na drugu u legendu ili tablici za spajanje</div>`;
 
@@ -3096,6 +3257,23 @@ function mergeSAParties(from, to) {
     for (const key in merges) {
         if (merges[key] === from) merges[key] = to;
     }
+    computeAndRenderSA();
+}
+
+function unmergeSAParty(listName) {
+    // Pop one list out of its merged group. Other members of the group stay merged.
+    const { merges } = _saState;
+    const currentLeader = merges[listName] || listName;
+    if (currentLeader === listName) {
+        // listName is the group's leader — promote another member so the rest remain grouped
+        const members = Object.keys(merges).filter(k => merges[k] === listName && k !== listName);
+        if (members.length > 0) {
+            const newLeader = members[0];
+            members.forEach(m => { merges[m] = newLeader; });
+            merges[newLeader] = newLeader;
+        }
+    }
+    merges[listName] = listName;
     computeAndRenderSA();
 }
 
@@ -3443,9 +3621,19 @@ function renderSADistricts(districtResults) {
             if (g.names.length === 1) {
                 nameCell = `<div style="white-space:normal; word-break:break-word;">${g.names[0]}</div>`;
             } else {
-                const lines = g.names.map(n =>
-                    `<div style="white-space:normal; word-break:break-word; padding:4px 0;">${n}</div>`
-                ).join('');
+                const lines = g.names.map(n => {
+                    const esc = n.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    return `<div style="white-space:normal; word-break:break-word; padding:4px 0; display:flex; align-items:flex-start; gap:6px;">
+                        <button class="btn btn-outline-secondary btn-sm p-0 px-1 flex-shrink-0"
+                                style="font-size:0.7rem; line-height:1; margin-top:2px;"
+                                onmousedown="event.stopPropagation();"
+                                onclick="event.stopPropagation(); unmergeSAParty('${esc}')"
+                                title="Odspoji ovu listu iz koalicije">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                        <span style="flex:1;">${n}</span>
+                    </div>`;
+                }).join('');
                 nameCell = `<div style="border-left:4px solid #0d6efd; padding-left:10px; margin:4px 0; background:rgba(13,110,253,0.04); border-radius:0 6px 6px 0;">
                     ${lines}
                     <div class="pb-1"><span class="badge bg-info text-dark" style="font-size:0.65rem;">spojeno ${g.names.length}</span></div>
@@ -3754,6 +3942,263 @@ document.addEventListener('click', e => {
         document.querySelectorAll('.dropdown-results').forEach(d => d.classList.remove('show'));
     }
 });
+
+// === Izlaznost (turnout) analytics module ===
+const izl = {
+    initialized: false,
+    elections: [],
+    chart: null,
+};
+
+const IZL_CATEGORY_COLORS = {
+    sabor: 'rgb(220, 53, 69)',
+    predsjednicki: 'rgb(15, 52, 96)',
+    eu: 'rgb(0, 110, 195)',
+    lokalni: 'rgb(25, 135, 84)',
+};
+
+async function initIzlaznost() {
+    if (izl.initialized) return;
+    izl.initialized = true;
+
+    const res = await fetch('/api/analytics/elections');
+    izl.elections = await res.json();
+
+    document.querySelectorAll('.izl-filter-cat').forEach(cb => {
+        cb.addEventListener('change', loadIzlaznostData);
+    });
+    document.getElementById('izlShowRound2').addEventListener('change', loadIzlaznostData);
+
+    loadIzlaznostData();
+}
+
+function izlSelectedIds() {
+    const cats = new Set(
+        [...document.querySelectorAll('.izl-filter-cat:checked')].map(cb => cb.value)
+    );
+    const showR2 = document.getElementById('izlShowRound2').checked;
+    return izl.elections
+        .filter(el => cats.has(el.category) && (showR2 || el.round_number !== 2))
+        .map(el => el.id);
+}
+
+async function loadIzlaznostData() {
+    const chartCard = document.getElementById('izlChartCard');
+    const empty = document.getElementById('izlEmpty');
+    const spinner = document.getElementById('izlSpinner');
+
+    const selectedIds = izlSelectedIds();
+    if (selectedIds.length === 0) {
+        chartCard.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = 'Odaberi barem jednu kategoriju izbora.';
+        return;
+    }
+    empty.style.display = 'none';
+    spinner.style.display = '';
+
+    const params = new URLSearchParams();
+    params.set('groups', selectedIds.join(','));
+    params.set('level', 'national');
+    const res = await fetch('/api/analytics/turnout?' + params.toString());
+    const data = await res.json();
+    spinner.style.display = 'none';
+
+    renderIzlaznostChart(data);
+}
+
+function renderIzlaznostChart(data) {
+    const chartCard = document.getElementById('izlChartCard');
+    const empty = document.getElementById('izlEmpty');
+
+    if (!data.groups || data.groups.length === 0) {
+        chartCard.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = 'Nema podataka.';
+        return;
+    }
+    chartCard.style.display = '';
+
+    // Sort selected groups chronologically by election date, then round
+    const points = data.groups.map(g => {
+        const meta = izl.elections.find(e => e.id === g.id);
+        const row = g.rows[0];
+        const turnout = row.registered > 0 ? (row.cast / row.registered * 100) : 0;
+        return {
+            id: g.id,
+            label: g.label,
+            category: g.category,
+            year: g.year,
+            round: g.round_number,
+            date: meta ? meta.date : null,
+            registered: row.registered,
+            cast: row.cast,
+            valid: row.valid,
+            invalid: row.invalid,
+            turnout: turnout,
+        };
+    }).sort((a, b) => {
+        const da = a.date || `${a.year}-12-31`;
+        const db = b.date || `${b.year}-12-31`;
+        if (da !== db) return da < db ? -1 : 1;
+        return a.round - b.round;
+    });
+
+    const labels = points.map(p => {
+        let l = p.label;
+        if (p.date) {
+            const d = new Date(p.date);
+            l += `\n${d.toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        }
+        return l;
+    });
+    const values = points.map(p => +p.turnout.toFixed(2));
+    const pointColors = points.map(p => IZL_CATEGORY_COLORS[p.category] || '#6c757d');
+
+    const canvas = document.getElementById('izlChartCanvas');
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+    gradient.addColorStop(0, 'rgba(15, 52, 96, 0.25)');
+    gradient.addColorStop(1, 'rgba(15, 52, 96, 0.02)');
+
+    if (izl.chart) { izl.chart.destroy(); izl.chart = null; }
+
+    izl.chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Izlaznost (%)',
+                data: values,
+                borderColor: 'rgb(15, 52, 96)',
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.3,
+                borderWidth: 3,
+                pointBackgroundColor: pointColors,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2.5,
+                pointRadius: 7,
+                pointHoverRadius: 10,
+                pointHoverBorderWidth: 3,
+                spanGaps: true,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            onClick: (evt, items) => {
+                if (items && items.length) {
+                    const p = points[items[0].index];
+                    izlNavigateTo(p.category, p.year);
+                }
+            },
+            onHover: (evt, items) => {
+                evt.native.target.style.cursor = items && items.length ? 'pointer' : 'default';
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                    padding: 14,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(c) {
+                            const p = points[c.dataIndex];
+                            return [
+                                `Izlaznost: ${p.turnout.toFixed(1)}%`,
+                                `Glasovalo: ${p.cast.toLocaleString('hr-HR')}`,
+                                `Upisanih: ${p.registered.toLocaleString('hr-HR')}`,
+                            ];
+                        },
+                    },
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    title: { display: true, text: 'Izlaznost (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' },
+                },
+                x: {
+                    grid: { color: 'rgba(0,0,0,0.03)' },
+                    ticks: { font: { size: 11 }, maxRotation: 45 },
+                },
+            },
+            animation: { duration: 700, easing: 'easeOutQuart' },
+        },
+    });
+
+    // Compact data table beneath the chart
+    const table = document.getElementById('izlChartTable');
+    table.innerHTML = `
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr>
+                <th>Izbori</th><th class="text-end">Upisani</th>
+                <th class="text-end">Glasovali</th><th class="text-end">Valjani</th>
+                <th class="text-end">Izlaznost</th>
+            </tr></thead>
+            <tbody>
+                ${points.map(p => `<tr class="izl-tbl-row" data-cat="${p.category}" data-year="${p.year}" style="cursor:pointer;">
+                    <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${IZL_CATEGORY_COLORS[p.category] || '#6c757d'};margin-right:8px;"></span><a href="#" class="text-decoration-none" style="color:#0f3460;">${escapeHtml(p.label)}</a></td>
+                    <td class="text-end">${p.registered.toLocaleString('hr-HR')}</td>
+                    <td class="text-end">${p.cast.toLocaleString('hr-HR')}</td>
+                    <td class="text-end">${p.valid.toLocaleString('hr-HR')}</td>
+                    <td class="text-end fw-bold" style="color:#0f3460;">${p.turnout.toFixed(1)}%</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>
+    `;
+    table.querySelectorAll('.izl-tbl-row').forEach(tr => {
+        tr.addEventListener('click', e => {
+            e.preventDefault();
+            izlNavigateTo(tr.dataset.cat, parseInt(tr.dataset.year, 10));
+        });
+    });
+}
+
+function izlNavigateTo(category, year) {
+    if (category === 'sabor') {
+        const link = document.querySelector('.sidebar-nav a[data-module="sabor-analysis"]');
+        if (link) link.click();
+        // Wait for module init (fetches year list), then trigger year load
+        const tryLoad = (attempts = 0) => {
+            const btn = document.querySelector(`.sa-year-btn[data-year="${year}"]`);
+            if (btn) {
+                btn.click();
+            } else if (attempts < 20) {
+                setTimeout(() => tryLoad(attempts + 1), 100);
+            }
+        };
+        tryLoad();
+        return;
+    }
+
+    // predsjednicki, eu, lokalni → dedicated module with the right year preselected
+    const link = document.querySelector(`.sidebar-nav a[data-module="results-${category}"]`);
+    if (link) link.click();
+    const tryLoad = (attempts = 0) => {
+        const yearBtn = document.querySelector(
+            `#module-results-${category} .results-year-btn[data-year="${year}"]`
+        );
+        if (yearBtn) {
+            yearBtn.click();
+        } else if (attempts < 20) {
+            setTimeout(() => tryLoad(attempts + 1), 100);
+        }
+    };
+    tryLoad();
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+}
 </script>
 
 </body>

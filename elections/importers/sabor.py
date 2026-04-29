@@ -207,6 +207,13 @@ class SaborImporter(BaseImporter):
         return groups
 
     def _import_file(self, election_round, district, filepath, list_data):
+        # Posebna (mobile) and inozemstvo (abroad) files reuse the number series
+        # 001-0NN, which collides with main-file stations in the same municipality
+        # label (e.g. in Sabor data, "ZAGREB - VI. IZBORNA JEDINICA" muni contains
+        # both regular station 006 = ČEHI and mobile station 006 = DOM 85). Without
+        # a prefix the importer merges unrelated physical stations into one row.
+        num_prefix = self._station_number_prefix(filepath)
+
         with open(filepath, encoding='windows-1250') as f:
             reader = csv.reader(f, delimiter=';')
             next(reader)  # skip header
@@ -233,7 +240,7 @@ class SaborImporter(BaseImporter):
                 county = self.get_or_create_county(county_code, county_name)
                 municipality = self.get_or_create_municipality(county, muni_name, muni_type)
                 polling_station = self.get_or_create_polling_station(
-                    municipality, ps_number, ps_name, ps_location, ps_address
+                    municipality, f'{num_prefix}{ps_number}', ps_name, ps_location, ps_address
                 )
 
                 self.create_turnout(election_round, polling_station, registered, cast, valid, invalid)
@@ -253,6 +260,15 @@ class SaborImporter(BaseImporter):
         self.log(f"  {filepath.name}: {row_count} rows")
 
     def _import_file_d12(self, election_round, district, filepath, list_data):
+        """Import district 12 minority results.
+
+        IMPORTANT: Skip turnout creation here. These CSV files contain
+        minority-specific turnout (e.g. reg=0, cast=2) which is a subset
+                of the station's total turnout. Real turnout is already set
+        by the district 1-10 import for the same polling stations.
+        """
+        num_prefix = self._station_number_prefix(filepath)
+
         with open(filepath, encoding='windows-1250') as f:
             reader = csv.reader(f, delimiter=';')
             next(reader)  # skip header
@@ -271,18 +287,13 @@ class SaborImporter(BaseImporter):
                 ps_location = row[8].strip()
                 ps_address = row[9].strip()
 
-                registered = self.parse_int(row[10])
-                cast = self.parse_int(row[11])
-                valid = self.parse_int(row[13])
-                invalid = self.parse_int(row[14])
-
                 county = self.get_or_create_county(county_code, county_name)
                 municipality = self.get_or_create_municipality(county, muni_name, muni_type)
                 polling_station = self.get_or_create_polling_station(
-                    municipality, ps_number, ps_name, ps_location, ps_address
+                    municipality, f'{num_prefix}{ps_number}', ps_name, ps_location, ps_address
                 )
 
-                self.create_turnout(election_round, polling_station, registered, cast, valid, invalid)
+                # Skip turnout — d12 files have minority-only voter counts, not station totals
 
                 for idx, (el_list, candidacies) in enumerate(list_data):
                     col = self.GEO_COLS + idx
@@ -294,6 +305,18 @@ class SaborImporter(BaseImporter):
 
         self.flush_all()
         self.log(f"  {filepath.name}: {row_count} rows")
+
+    @staticmethod
+    def _station_number_prefix(filepath):
+        """Return a prefix to apply to polling-station numbers so that
+        posebna/inozemstvo station #006 doesn't collide with a main-file
+        station #006 in the same municipality."""
+        name = filepath.name
+        if '_posebna' in name:
+            return 'P'
+        if '_inozemstvo' in name:
+            return 'I'
+        return ''
 
     @staticmethod
     def _roman(n):
