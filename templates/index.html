@@ -4031,32 +4031,49 @@ async function initIzlaznost() {
     if (izl.initialized) return;
     izl.initialized = true;
 
-    const res = await fetch('/api/analytics/elections');
-    izl.elections = await res.json();
-
+    // Wire up event handlers up front so they survive any data-fetch failure.
     document.querySelectorAll('.izl-filter-cat').forEach(cb => {
         cb.addEventListener('change', loadIzlaznostData);
     });
     document.getElementById('izlShowRound2').addEventListener('change', loadIzlaznostData);
-
-    // Cascading dropdowns
-    const cRes = await fetch('/api/counties');
-    const counties = await cRes.json();
-    const selC = document.getElementById('izlSelCounty');
-    counties.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = c.name;
-        selC.appendChild(opt);
-    });
-
-    selC.addEventListener('change', onIzlCountyChange);
+    document.getElementById('izlSelCounty').addEventListener('change', onIzlCountyChange);
     document.getElementById('izlSelMuni').addEventListener('change', onIzlMuniChange);
     document.getElementById('izlSelStation').addEventListener('change', onIzlStationChange);
     document.getElementById('izlAddCompareBtn').addEventListener('click', onIzlAddCompare);
     document.getElementById('izlClearScopeBtn').addEventListener('click', onIzlClearScope);
 
-    await loadIzlCroatiaMap();
+    // Map is a static asset — load independently so a DB outage doesn't hide it.
+    loadIzlCroatiaMap().catch(err => console.warn('Croatia map load failed:', err));
+
+    const empty = document.getElementById('izlEmpty');
+    try {
+        const eRes = await fetch('/api/analytics/elections');
+        if (!eRes.ok) throw new Error(`HTTP ${eRes.status}`);
+        izl.elections = await eRes.json();
+    } catch (err) {
+        izl.initialized = false; // allow retry on next module switch
+        empty.style.display = '';
+        empty.innerHTML = `<div class="text-danger fw-semibold mb-1">Greška pri učitavanju izbora</div>
+            <div class="text-muted small">Provjeri da Flask server radi i da je baza dostupna (vidi konzolu).</div>`;
+        console.error('initIzlaznost: /api/analytics/elections failed', err);
+        return;
+    }
+
+    try {
+        const cRes = await fetch('/api/counties');
+        if (!cRes.ok) throw new Error(`HTTP ${cRes.status}`);
+        const counties = await cRes.json();
+        const selC = document.getElementById('izlSelCounty');
+        counties.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            selC.appendChild(opt);
+        });
+    } catch (err) {
+        // Non-fatal — Hrvatska view still works without the dropdowns
+        console.warn('initIzlaznost: /api/counties failed', err);
+    }
 
     loadIzlaznostData();
 }
