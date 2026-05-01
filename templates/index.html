@@ -600,10 +600,18 @@
             border: 0; background: transparent; padding: 0; font-size: 0.95rem;
         }
         .izl-compare-chip .chip-x:hover { opacity: 1; }
-        #izlCroatiaMapWrap svg { width: 100%; height: auto; max-height: 220px; }
-        #izlCroatiaMapWrap path { cursor: pointer; transition: fill 0.15s; }
-        #izlCroatiaMapWrap path:hover { fill: #b9c6e2; }
-        #izlCroatiaMapWrap path.selected { fill: #0f3460; }
+        #izlCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
+        #izlCroatiaMapWrap svg path {
+            fill: #ececec;
+            stroke: #b0b0b0;
+            stroke-width: 0.8;
+            stroke-linejoin: round;
+            cursor: pointer;
+            transition: fill 0.15s;
+        }
+        #izlCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
+        #izlCroatiaMapWrap svg path.selected { fill: #e8942e; }
+        #izlCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -993,14 +1001,14 @@
         <!-- Izlaznost (turnout) analytics -->
         <div id="module-analytics-turnout" class="module-panel">
             <div class="card search-card p-4 mb-3">
-                <div class="d-flex gap-4 align-items-start flex-wrap">
+                <div class="row g-4 align-items-start">
                     <!-- Croatia SVG map -->
-                    <div style="flex-shrink:0; width:240px;">
+                    <div class="col-md-3">
                         <div id="izlCroatiaMapWrap"></div>
                         <div id="izlMapCountyLabel" class="text-center mt-1" style="font-size:0.8rem; color:#666; font-weight:500;"></div>
                     </div>
                     <!-- Dropdowns + filters -->
-                    <div class="flex-grow-1" style="min-width:300px;">
+                    <div class="col-md-9">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Županija</label>
