@@ -1117,6 +1117,137 @@ def sabor_raw(year):
     })
 
 
+@app.route('/api/national/eu-seats/<int:year>')
+def eu_seats(year):
+    """D'Hondt seat allocation for the EU parliament election (Croatia).
+
+    Croatia is a single nationwide constituency for EU elections, with a 5%
+    threshold of total valid votes and 12 seats (number per Election year
+    can be overridden via EU_SEATS_BY_YEAR if it ever changes).
+    """
+    EU_SEATS_BY_YEAR = {2013: 12, 2014: 11, 2019: 12, 2024: 12}
+    THRESHOLD_PCT = 5.0
+
+    etype = ElectionType.query.filter_by(name='Izbori za Europski parlament').first()
+    if not etype:
+        return jsonify({'error': 'No EU election type'}), 404
+
+    election = Election.query.filter_by(election_type_id=etype.id, year=year).first()
+    if not election:
+        return jsonify({'error': 'No EU election for this year'}), 404
+
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+    if not er:
+        return jsonify({'error': 'No round 1'}), 404
+
+    n_seats = EU_SEATS_BY_YEAR.get(year, 12)
+
+    list_rows = (
+        db.session.query(
+            ElectoralList.id,
+            ElectoralList.name,
+            db.func.sum(ListResult.votes).label('total_votes'),
+        )
+        .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
+        .filter(ElectoralList.election_round_id == er.id)
+        .group_by(ElectoralList.id, ElectoralList.name)
+        .order_by(db.func.sum(ListResult.votes).desc())
+        .all()
+    )
+    if not list_rows:
+        return jsonify({'error': 'No list results'}), 404
+
+    total_votes = sum(r.total_votes or 0 for r in list_rows)
+    threshold_votes = total_votes * THRESHOLD_PCT / 100.0
+
+    def primary_party(full_name):
+        # EU coalitions are stored as multi-line cells (one party per line);
+        # Sabor coalitions use comma-separated single line. Handle both.
+        first_line = full_name.split('\n', 1)[0]
+        return first_line.split(',', 1)[0].strip()
+
+    # Filter eligible (>= 5% threshold) and apply D'Hondt
+    eligible = [(r.id, r.name, r.total_votes or 0) for r in list_rows if (r.total_votes or 0) >= threshold_votes]
+    quotients = []
+    for list_id, list_name, votes in eligible:
+        for divisor in range(1, n_seats + 1):
+            quotients.append((votes / divisor, list_id, list_name))
+    quotients.sort(key=lambda x: -x[0])
+    winners = quotients[:n_seats]
+
+    seats_by_list = {}  # list_id -> seat count
+    for _, list_id, _ in winners:
+        seats_by_list[list_id] = seats_by_list.get(list_id, 0) + 1
+
+    # Build party rows: include EVERY list (even below threshold) for transparency,
+    # but only eligible ones can have seats.
+    parties = []
+    for r in list_rows:
+        votes = r.total_votes or 0
+        seats = seats_by_list.get(r.id, 0)
+        parties.append({
+            'name': primary_party(r.name),
+            'full_name': r.name,
+            'votes': votes,
+            'votes_pct': (votes / total_votes * 100.0) if total_votes else 0.0,
+            'seats': seats,
+            'eligible': votes >= threshold_votes,
+        })
+    # Group rows that share the same primary_party (defensive — usually 1:1 here)
+    grouped = {}
+    for p in parties:
+        if p['name'] not in grouped:
+            grouped[p['name']] = {'name': p['name'], 'votes': 0, 'votes_pct': 0.0, 'seats': 0, 'eligible': False}
+        g = grouped[p['name']]
+        g['votes'] += p['votes']
+        g['votes_pct'] += p['votes_pct']
+        g['seats'] += p['seats']
+        g['eligible'] = g['eligible'] or p['eligible']
+    party_list = sorted(grouped.values(), key=lambda x: (-x['seats'], -x['votes']))
+
+    # Candidate names from winning lists, in list-position order
+    candidates = []
+    for list_id, list_name, _ in eligible:
+        seats_won = seats_by_list.get(list_id, 0)
+        if seats_won == 0:
+            continue
+        cands = (
+            db.session.query(Person.first_name, Person.last_name, Candidacy.position_on_list)
+            .join(Candidacy, Person.id == Candidacy.person_id)
+            .filter(Candidacy.electoral_list_id == list_id)
+            .order_by(Candidacy.position_on_list)
+            .limit(seats_won)
+            .all()
+        )
+        group = primary_party(list_name)
+        for c in cands:
+            candidates.append({
+                'name': f"{c.first_name} {c.last_name}",
+                'party': group,
+                'district': 'Hrvatska',
+            })
+        for _ in range(seats_won - len(cands)):
+            candidates.append({'name': group, 'party': group, 'district': 'Hrvatska'})
+
+    # Re-order candidates to match party_list order
+    by_party = {}
+    for c in candidates:
+        by_party.setdefault(c['party'], []).append(c)
+    ordered = []
+    for p in party_list:
+        ordered.extend(by_party.get(p['name'], []))
+
+    return jsonify({
+        'year': year,
+        'total_seats': n_seats,
+        'total_votes': total_votes,
+        'threshold_pct': THRESHOLD_PCT,
+        'threshold_votes': int(round(threshold_votes)),
+        'parties': party_list,
+        'candidates': ordered,
+    })
+
+
 # --- Analytics: Izlaznost (turnout) ---
 
 ANALYTICS_CATEGORIES = {

@@ -2436,6 +2436,7 @@ function renderNationalResults(data) {
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
                 </button>
             </div>
+            <div class="eu-seats-slot mt-3" id="euSeatsSlot_${chartId}" data-year="${el.year}"></div>
         </div>`;
     }).join('');
 
@@ -2463,6 +2464,137 @@ function renderNationalResults(data) {
 
         buildBarChart(chartId);
     });
+
+    // EU only: fetch + render D'Hondt seat allocation under each year card
+    if (data.category === 'eu') {
+        elections.forEach((el, idx) => {
+            const slot = document.getElementById(`euSeatsSlot_nat_${idx}`);
+            if (!slot) return;
+            fetch(`/api/national/eu-seats/${el.year}`)
+                .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+                .then(seatsData => renderEuSeats(slot, seatsData))
+                .catch(err => { console.warn(`EU seats fetch failed for ${el.year}:`, err); });
+        });
+    }
+}
+
+function renderEuSeats(slot, data) {
+    if (!data || !data.parties || data.parties.length === 0) return;
+    const parties = data.parties;
+    const totalSeats = data.total_seats;
+    const candidates = data.candidates || [];
+
+    const partyColors = {};
+    parties.forEach((p, i) => { partyColors[p.name] = hemicycleColors[i % hemicycleColors.length]; });
+
+    // Seat list (one entry per seat, ordered by party rank)
+    const seatList = [];
+    let candIdx = 0;
+    parties.forEach(p => {
+        for (let i = 0; i < p.seats; i++) {
+            const c = candidates[candIdx] || {};
+            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || p.name });
+            candIdx++;
+        }
+    });
+
+    // Hemicycle layout (mirrors renderActualResults so it visually matches Sabor)
+    const svgW = 700, svgH = 300, cx = svgW / 2, cy = svgH - 30, dotR = 12, dotSpacing = dotR * 2.5, innerR = 80;
+    const rows = []; let totalCap = 0; let r = innerR;
+    while (totalCap < seatList.length) {
+        const arc = Math.PI * r;
+        const cap = Math.floor(arc / dotSpacing);
+        rows.push({ radius: r, capacity: cap });
+        totalCap += cap;
+        r += dotSpacing;
+    }
+    const nRows = rows.length;
+    let seatsToPlace = seatList.length;
+    const rowSeats = [];
+    const capSum = rows.reduce((s, rr) => s + rr.capacity, 0);
+    for (let i = 0; i < nRows; i++) {
+        if (i === nRows - 1) rowSeats.push(seatsToPlace);
+        else {
+            const n = Math.round((rows[i].capacity / capSum) * seatList.length);
+            rowSeats.push(Math.min(n, seatsToPlace));
+            seatsToPlace -= rowSeats[i];
+        }
+    }
+    const positions = [];
+    for (let ri = 0; ri < nRows; ri++) {
+        const count = rowSeats[ri];
+        const radius = rows[ri].radius;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.PI - (Math.PI * (i + 0.5) / count);
+            positions.push({ x: cx + radius * Math.cos(angle), y: cy - radius * Math.sin(angle) });
+        }
+    }
+    positions.sort((a, b) => Math.atan2(cy - b.y, b.x - cx) - Math.atan2(cy - a.y, a.x - cx));
+
+    let dots = '';
+    positions.forEach((pos, i) => {
+        const seat = seatList[i]; if (!seat) return;
+        dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="2" style="cursor:pointer;"><title>${escapeHtml(seat.candidate)}\n${escapeHtml(seat.party)}</title></circle>`;
+    });
+    const hemiSvg = `
+        <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:560px; display:block; margin:0 auto;">
+            ${dots}
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="32" font-weight="bold" fill="#1a1a2e">${totalSeats}</text>
+            <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="13" fill="#6c757d">mandata</text>
+        </svg>`;
+
+    // Legend — show every party (with seats and over-threshold flag); below-threshold rows greyed out
+    const legendRows = parties.map(p => {
+        const dim = p.seats === 0 ? 'opacity:0.55;' : '';
+        const swatch = p.seats > 0
+            ? `<span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>`
+            : `<span style="width:14px;height:14px;border-radius:50%;background:#dee2e6;display:inline-block;flex-shrink:0;border:1px solid #ccc;"></span>`;
+        const thresholdNote = !p.eligible
+            ? ` <span class="badge bg-light text-muted ms-1" style="font-size:0.65rem;">ispod 5%</span>`
+            : '';
+        const shortName = p.name.length > 50 ? p.name.substring(0, 47) + '…' : p.name;
+        return `<div class="d-flex align-items-center gap-2" style="font-size:0.85rem; padding:3px 6px; ${dim}" title="${escapeHtml(p.name)}">
+            ${swatch}
+            <span class="fw-semibold flex-grow-1">${escapeHtml(shortName)}</span>
+            <span class="text-muted small">${p.votes.toLocaleString('hr-HR')} (${p.votes_pct.toFixed(2)}%)</span>
+            <span class="text-muted" style="min-width:28px; text-align:right;"><strong>${p.seats}</strong></span>
+            ${thresholdNote}
+        </div>`;
+    }).join('');
+
+    const candTable = seatList.map((s, i) => `<tr>
+        <td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td>
+        <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${escapeHtml(s.candidate)}</td>
+        <td class="text-muted" style="font-size:0.85rem;">${escapeHtml(s.party.split('\n')[0])}</td>
+    </tr>`).join('');
+
+    slot.innerHTML = `
+        <div class="card border-0" style="background:#f8f9fa; border-radius:10px;">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2" style="color:#0f3460;">
+                    <i class="bi bi-bank me-2"></i>Raspodjela mandata (D'Hondt, prag 5 %)
+                </h6>
+                ${hemiSvg}
+                <div class="d-flex flex-column gap-1 mx-auto mt-2" style="max-width:560px;">
+                    ${legendRows}
+                </div>
+                <div class="text-center text-muted small mt-1">
+                    Ukupno valjanih glasova: <strong>${data.total_votes.toLocaleString('hr-HR')}</strong>
+                    · Prag (5 %): <strong>${data.threshold_votes.toLocaleString('hr-HR')}</strong> glasova
+                </div>
+                <details class="mt-3">
+                    <summary class="fw-semibold" style="cursor:pointer; color:#0f3460; font-size:0.9rem;">
+                        <i class="bi bi-person-lines-fill me-1"></i>Zastupnici (${seatList.length})
+                    </summary>
+                    <div class="table-responsive mt-2">
+                        <table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
+                            <thead><tr><th></th><th>Ime i prezime</th><th>Stranka / Koalicija</th></tr></thead>
+                            <tbody>${candTable}</tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        </div>`;
 }
 
 const hemicycleColors = [
