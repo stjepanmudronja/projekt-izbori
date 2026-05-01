@@ -2429,6 +2429,7 @@ function renderNationalResults(data) {
                 <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
                 <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
             </div>
+            <div class="eu-seats-slot mb-3" id="euSeatsSlot_${chartId}" data-year="${el.year}"></div>
             <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
             <div class="d-flex justify-content-between align-items-center mt-1">
                 <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac na drugi za spajanje rezultata</div>
@@ -2436,7 +2437,6 @@ function renderNationalResults(data) {
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
                 </button>
             </div>
-            <div class="eu-seats-slot mt-3" id="euSeatsSlot_${chartId}" data-year="${el.year}"></div>
         </div>`;
     }).join('');
 
