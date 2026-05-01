@@ -4549,7 +4549,24 @@ function renderIzlaznostChart(data) {
     // Data table beneath the chart
     const table = document.getElementById('izlChartTable');
     if (!multi) {
-        table.innerHTML = `
+        // Banner: name selected elections that had no data for this scope.
+        // For stations this typically means a mobile/abroad station that
+        // only participated in parliamentary elections.
+        const missingLabels = tableRows.filter(r => r.turnoutStr === '—').map(r => r.label);
+        let banner = '';
+        if (missingLabels.length > 0 && izl.scope.level === 'station') {
+            banner = `<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.82rem;">
+                <i class="bi bi-info-circle me-1"></i>Ovo biračko mjesto nije korišteno za:
+                <strong>${missingLabels.map(escapeHtml).join(', ')}</strong>.
+                Mobilna i inozemna birališta obično se otvaraju samo za parlamentarne izbore.
+            </div>`;
+        } else if (missingLabels.length > 0 && izl.scope.level !== 'national') {
+            banner = `<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.82rem;">
+                <i class="bi bi-info-circle me-1"></i>Nema podataka za:
+                <strong>${missingLabels.map(escapeHtml).join(', ')}</strong>.
+            </div>`;
+        }
+        table.innerHTML = banner + `
             <table class="table table-sm align-middle mb-0">
                 <thead><tr>
                     <th>Izbori</th><th class="text-end">Upisani</th>
