@@ -1341,11 +1341,24 @@ def analytics_turnout():
         return jsonify({'level': level, 'parent_id': parent_id, 'groups': groups_out})
 
     if level == 'station':
-        if not parent_id:
-            return jsonify({'error': 'parent_id (municipality) required'}), 400
+        # Either parent_id (= municipality.id, returns all stations in muni) OR
+        # station_ids (= explicit comma-separated list, used by the multi-station
+        # comparison flow which can span multiple municipalities) is required.
+        station_ids_param = request.args.get('station_ids', '').strip()
+        explicit_ids = None
+        if station_ids_param:
+            try:
+                explicit_ids = [int(x) for x in station_ids_param.split(',') if x.strip()]
+            except ValueError:
+                return jsonify({'error': 'Invalid station_ids'}), 400
+            if not explicit_ids:
+                return jsonify({'level': level, 'station_ids': [], 'groups': []})
+        elif not parent_id:
+            return jsonify({'error': 'parent_id (municipality) or station_ids required'}), 400
+
         groups_out = []
         for g in selected:
-            rows = (
+            q = (
                 db.session.query(
                     PollingStation.id,
                     PollingStation.number,
@@ -1358,11 +1371,14 @@ def analytics_turnout():
                     db.func.sum(TurnoutData.invalid_ballots),
                 )
                 .join(TurnoutData, TurnoutData.polling_station_id == PollingStation.id)
-                .filter(
-                    TurnoutData.election_round_id.in_(g['round_ids']),
-                    PollingStation.municipality_id == parent_id,
-                )
-                .group_by(
+                .filter(TurnoutData.election_round_id.in_(g['round_ids']))
+            )
+            if explicit_ids is not None:
+                q = q.filter(PollingStation.id.in_(explicit_ids))
+            else:
+                q = q.filter(PollingStation.municipality_id == parent_id)
+            rows = (
+                q.group_by(
                     PollingStation.id, PollingStation.number,
                     PollingStation.name, PollingStation.location, PollingStation.address,
                 )
@@ -1380,7 +1396,12 @@ def analytics_turnout():
                     'valid': r[7] or 0, 'invalid': r[8] or 0,
                 } for r in rows],
             })
-        return jsonify({'level': level, 'parent_id': parent_id, 'groups': groups_out})
+        out = {'level': level, 'groups': groups_out}
+        if explicit_ids is not None:
+            out['station_ids'] = explicit_ids
+        else:
+            out['parent_id'] = parent_id
+        return jsonify(out)
 
     return jsonify({'error': f'Unknown level: {level}'}), 400
 
