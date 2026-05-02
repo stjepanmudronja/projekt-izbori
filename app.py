@@ -1205,36 +1205,15 @@ def eu_seats(year):
         g['eligible'] = g['eligible'] or p['eligible']
     party_list = sorted(grouped.values(), key=lambda x: (-x['seats'], -x['votes']))
 
-    # Identify winning candidacy IDs (top N by list-position on each winning list)
-    winner_candidacy_ids = set()
-    winner_meta = {}  # candidacy_id -> dict with party label
-    for list_id, list_name, _ in eligible:
-        seats_won = seats_by_list.get(list_id, 0)
-        if seats_won == 0:
-            continue
-        rows = (
-            db.session.query(Candidacy.id)
-            .filter(Candidacy.electoral_list_id == list_id)
-            .order_by(Candidacy.position_on_list)
-            .limit(seats_won)
-            .all()
-        )
-        for (cand_id,) in rows:
-            winner_candidacy_ids.add(cand_id)
-            winner_meta[cand_id] = primary_party(list_name)
-
-    # Pull per-candidate personal-preference vote totals.
-    # Always include winners; also include any non-winner with >= NOTABLE_PCT of total valid votes.
-    NOTABLE_PCT = 1.0
-    notable_threshold = total_votes * NOTABLE_PCT / 100.0
+    # Pull every candidacy's personal preferential vote total across all lists.
     cand_rows = (
         db.session.query(
             Candidacy.id,
             Person.first_name,
             Person.last_name,
             Candidacy.position_on_list,
-            ElectoralList.id,
-            ElectoralList.name,
+            ElectoralList.id.label('list_id'),
+            ElectoralList.name.label('list_name'),
             db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('personal_votes'),
         )
         .join(Person, Person.id == Candidacy.person_id)
@@ -1246,19 +1225,64 @@ def eu_seats(year):
         .all()
     )
 
+    # Group candidacies by list for the within-list seat assignment below.
+    by_list = {}
+    for r in cand_rows:
+        by_list.setdefault(r.list_id, []).append(r)
+
+    # Apply Croatian preferential-vote rule to map list-level seats to specific
+    # candidates: any candidate whose personal preferential votes reach
+    # PREF_THRESHOLD_PCT of the list's votes is promoted ahead of the list-position
+    # order, in descending order of preferential votes. Remaining seats then go
+    # by list position, skipping candidates already promoted.
+    PREF_THRESHOLD_PCT = 10.0
+    winner_candidacy_ids = set()
+    list_total_votes = {next(iter(by_list)): 0}  # placeholder, real values below
+    for list_id, list_name, votes in eligible:
+        seats_won = seats_by_list.get(list_id, 0)
+        if seats_won == 0:
+            continue
+        members = by_list.get(list_id, [])
+        list_total = votes  # total list votes from D'Hondt input
+        pref_floor = list_total * PREF_THRESHOLD_PCT / 100.0
+        promoted = sorted(
+            [m for m in members if m.personal_votes >= pref_floor],
+            key=lambda m: -m.personal_votes,
+        )
+        chosen = []
+        seen = set()
+        for m in promoted:
+            if len(chosen) >= seats_won:
+                break
+            chosen.append(m.id)
+            seen.add(m.id)
+        for m in sorted(members, key=lambda m: m.position_on_list):
+            if len(chosen) >= seats_won:
+                break
+            if m.id in seen:
+                continue
+            chosen.append(m.id)
+            seen.add(m.id)
+        winner_candidacy_ids.update(chosen)
+
+    # Build the response list: every winner, plus any non-winner whose personal
+    # preferential votes reach NOTABLE_PCT of total valid votes (~7,400 in 2024).
+    NOTABLE_PCT = 1.0
+    notable_threshold = total_votes * NOTABLE_PCT / 100.0
+
     candidates = []
-    for cand_id, first, last, position, list_id, list_name, personal_votes in cand_rows:
-        is_winner = cand_id in winner_candidacy_ids
-        if not is_winner and personal_votes < notable_threshold:
+    for r in cand_rows:
+        is_winner = r.id in winner_candidacy_ids
+        if not is_winner and r.personal_votes < notable_threshold:
             continue
         candidates.append({
-            'candidacy_id': cand_id,
-            'name': f"{first} {last}",
-            'party': primary_party(list_name),
-            'list_name': list_name,
-            'list_position': position,
-            'personal_votes': int(personal_votes),
-            'personal_pct': (personal_votes / total_votes * 100.0) if total_votes else 0.0,
+            'candidacy_id': r.id,
+            'name': f"{r.first_name} {r.last_name}",
+            'party': primary_party(r.list_name),
+            'list_name': r.list_name,
+            'list_position': r.position_on_list,
+            'personal_votes': int(r.personal_votes),
+            'personal_pct': (r.personal_votes / total_votes * 100.0) if total_votes else 0.0,
             'is_winner': is_winner,
         })
     candidates.sort(key=lambda c: -c['personal_votes'])
