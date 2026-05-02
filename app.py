@@ -1265,16 +1265,9 @@ def eu_seats(year):
             seen.add(m.id)
         winner_candidacy_ids.update(chosen)
 
-    # Build the response list: every winner, plus any non-winner whose personal
-    # preferential votes reach NOTABLE_PCT of total valid votes (~7,400 in 2024).
-    NOTABLE_PCT = 1.0
-    notable_threshold = total_votes * NOTABLE_PCT / 100.0
-
+    # Return every candidate; the frontend handles initial display + "show more".
     candidates = []
     for r in cand_rows:
-        is_winner = r.id in winner_candidacy_ids
-        if not is_winner and r.personal_votes < notable_threshold:
-            continue
         candidates.append({
             'candidacy_id': r.id,
             'name': f"{r.first_name} {r.last_name}",
@@ -1283,7 +1276,7 @@ def eu_seats(year):
             'list_position': r.position_on_list,
             'personal_votes': int(r.personal_votes),
             'personal_pct': (r.personal_votes / total_votes * 100.0) if total_votes else 0.0,
-            'is_winner': is_winner,
+            'is_winner': r.id in winner_candidacy_ids,
         })
     candidates.sort(key=lambda c: -c['personal_votes'])
 
@@ -1293,7 +1286,6 @@ def eu_seats(year):
         'total_votes': total_votes,
         'threshold_pct': THRESHOLD_PCT,
         'threshold_votes': int(round(threshold_votes)),
-        'notable_pct': NOTABLE_PCT,
         'parties': party_list,
         'candidates': candidates,
     })

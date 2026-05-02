@@ -2565,11 +2565,18 @@ function renderEuSeats(slot, data) {
         </div>`;
     }).join('');
 
-    // Candidates table — winners + everyone else with >= notable_pct of valid votes,
-    // sorted by personal preferential votes desc. Non-winners are dimmed.
-    const allCands = data.candidates || [];
+    // Candidates: winners first (by preference desc), then non-winners (by preference desc).
+    // First 50 visible; rest revealed with a "Prikaži još" button.
+    const allCands = (data.candidates || []).slice();
+    allCands.sort((a, b) => {
+        if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+        return b.personal_votes - a.personal_votes;
+    });
     const winnerCount = allCands.filter(c => c.is_winner).length;
-    const candRows = allCands.map(c => {
+    const INITIAL = 50;
+    const STEP = 50;
+
+    const buildRow = c => {
         const partyShort = (c.party || '').split('\n')[0];
         const color = partyColors[c.party] || '#adb5bd';
         const dim = c.is_winner ? '' : 'opacity:0.55;';
@@ -2582,8 +2589,26 @@ function renderEuSeats(slot, data) {
             <td class="text-end" style="white-space:nowrap;"><strong>${c.personal_votes.toLocaleString('hr-HR')}</strong></td>
             <td class="text-end text-muted" style="white-space:nowrap;">${c.personal_pct.toFixed(2)}%</td>
         </tr>`;
+    };
+
+    const candRows = allCands.map((c, i) => {
+        const hidden = i >= INITIAL ? ' class="eu-cand-extra" style="display:none;"' : '';
+        // For non-winner rows we already inline opacity, so just merge attributes
+        if (i >= INITIAL) {
+            const r = buildRow(c);
+            return r.replace('<tr style="', '<tr class="eu-cand-extra" data-idx="' + i + '" style="display:none;');
+        }
+        return buildRow(c);
     }).join('');
-    const notablePct = data.notable_pct || 1.0;
+
+    const slotId = slot.id;
+    const showMoreBtn = allCands.length > INITIAL
+        ? `<div class="text-center mt-2">
+             <button class="btn btn-outline-primary btn-sm" data-show-more="${slotId}" data-step="${STEP}">
+                 <i class="bi bi-chevron-down me-1"></i>Prikaži još (${allCands.length - INITIAL} preostalih)
+             </button>
+           </div>`
+        : '';
 
     slot.innerHTML = `
         <div class="card border-0" style="background:#f8f9fa; border-radius:10px;">
@@ -2601,10 +2626,10 @@ function renderEuSeats(slot, data) {
                 </div>
                 <details class="mt-3" open>
                     <summary class="fw-semibold" style="cursor:pointer; color:#0f3460; font-size:0.9rem;">
-                        <i class="bi bi-person-lines-fill me-1"></i>Zastupnici (${winnerCount}) + kandidati ≥ ${notablePct.toFixed(0)} %
+                        <i class="bi bi-person-lines-fill me-1"></i>Zastupnici (${winnerCount}) + ostali kandidati po preferencijama
                     </summary>
                     <div class="text-muted small mt-1 mb-2">
-                        Sortirano po preferencijalnim glasovima. Kandidati koji nisu izabrani prikazani su prigušeno.
+                        Izabrani prikazani prvi, zatim ostali kandidati od najviše prema najmanje preferencijalnih glasova.
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
@@ -2617,9 +2642,28 @@ function renderEuSeats(slot, data) {
                             <tbody>${candRows}</tbody>
                         </table>
                     </div>
+                    ${showMoreBtn}
                 </details>
             </div>
         </div>`;
+
+    // Wire "Prikaži još" — reveals the next STEP hidden rows.
+    const btn = slot.querySelector('button[data-show-more]');
+    if (btn) {
+        btn.addEventListener('click', () => {
+            const hiddenRows = slot.querySelectorAll('tr.eu-cand-extra[style*="display:none"]');
+            const step = parseInt(btn.dataset.step, 10) || STEP;
+            for (let i = 0; i < step && i < hiddenRows.length; i++) {
+                hiddenRows[i].style.display = '';
+            }
+            const stillHidden = slot.querySelectorAll('tr.eu-cand-extra[style*="display:none"]').length;
+            if (stillHidden === 0) {
+                btn.remove();
+            } else {
+                btn.innerHTML = `<i class="bi bi-chevron-down me-1"></i>Prikaži još (${stillHidden} preostalih)`;
+            }
+        });
+    }
 }
 
 const hemicycleColors = [
