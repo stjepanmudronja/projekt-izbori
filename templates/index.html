@@ -2483,20 +2483,148 @@ function renderNationalResults(data) {
 
 function renderEuSeats(slot, data) {
     if (!data || !data.parties || data.parties.length === 0) return;
-    const parties = data.parties;
-    const totalSeats = data.total_seats;
-    const candidates = data.candidates || [];
+    // Initialize per-slot merge state. Each party initially "leads itself";
+    // dragging A onto B remaps A's leader to B and triggers a recompute.
+    const state = {
+        rawParties: data.parties,
+        rawCandidates: data.candidates || [],
+        totalSeats: data.total_seats,
+        totalVotes: data.total_votes,
+        thresholdVotes: data.threshold_votes,
+        thresholdPct: data.threshold_pct,
+        merges: {},
+        partyColors: {},
+    };
+    data.parties.forEach((p, i) => {
+        state.merges[p.name] = p.name;
+        state.partyColors[p.name] = hemicycleColors[i % hemicycleColors.length];
+    });
+    slot._euState = state;
+    renderEuView(slot);
+}
 
-    const partyColors = {};
-    parties.forEach((p, i) => { partyColors[p.name] = hemicycleColors[i % hemicycleColors.length]; });
+function computeEuView(state) {
+    // Group raw parties by their current merge leader
+    const grouped = {};
+    state.rawParties.forEach(p => {
+        const leader = state.merges[p.name] || p.name;
+        if (!grouped[leader]) grouped[leader] = { name: leader, votes: 0, members: [] };
+        grouped[leader].votes += p.votes;
+        grouped[leader].members.push(p.name);
+    });
+
+    // 5 % threshold + D'Hondt over the (possibly merged) groups
+    const eligible = Object.values(grouped).filter(g => g.votes >= state.thresholdVotes);
+    const quotients = [];
+    eligible.forEach(g => {
+        for (let d = 1; d <= state.totalSeats; d++) quotients.push({ q: g.votes / d, leader: g.name });
+    });
+    quotients.sort((a, b) => b.q - a.q);
+    const seatsByLeader = {};
+    quotients.slice(0, state.totalSeats).forEach(w => {
+        seatsByLeader[w.leader] = (seatsByLeader[w.leader] || 0) + 1;
+    });
+
+    const parties = Object.values(grouped).map(g => ({
+        name: g.name,
+        members: g.members,
+        votes: g.votes,
+        votes_pct: state.totalVotes ? (g.votes / state.totalVotes * 100) : 0,
+        seats: seatsByLeader[g.name] || 0,
+        eligible: g.votes >= state.thresholdVotes,
+    })).sort((a, b) => b.seats - a.seats || b.votes - a.votes);
+
+    // Re-mark winners: pool candidates by current leader, sort by preferential
+    // votes desc, top N within each leader's pool become winners.
+    const candsByLeader = {};
+    state.rawCandidates.forEach(c => {
+        const leader = state.merges[c.party] || c.party;
+        if (!candsByLeader[leader]) candsByLeader[leader] = [];
+        candsByLeader[leader].push(c);
+    });
+    Object.values(candsByLeader).forEach(arr => arr.sort((a, b) => b.personal_votes - a.personal_votes));
+    const winnerIds = new Set();
+    parties.forEach(p => {
+        if (p.seats === 0) return;
+        (candsByLeader[p.name] || []).slice(0, p.seats).forEach(c => winnerIds.add(c.candidacy_id));
+    });
+    const candidates = state.rawCandidates.map(c => ({ ...c, is_winner: winnerIds.has(c.candidacy_id) }));
+
+    const hasMerges = Object.entries(state.merges).some(([k, v]) => k !== v);
+    return { parties, candidates, hasMerges };
+}
+
+function mergeEuParties(slot, fromName, toName) {
+    const state = slot._euState;
+    if (!state || fromName === toName) return;
+    Object.entries(state.merges).forEach(([party, leader]) => {
+        if (leader === fromName) state.merges[party] = toName;
+    });
+    renderEuView(slot);
+}
+
+function resetEuParties(slot) {
+    const state = slot._euState;
+    if (!state) return;
+    state.rawParties.forEach(p => { state.merges[p.name] = p.name; });
+    renderEuView(slot);
+}
+
+function attachEuLegendDragDrop(slot) {
+    const items = slot.querySelectorAll('.eu-legend-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', item.dataset.party);
+            item.style.opacity = '0.5';
+        });
+        item.addEventListener('dragend', () => {
+            item.style.opacity = '1';
+            items.forEach(it => { it.style.borderColor = 'transparent'; it.style.background = ''; });
+        });
+        item.addEventListener('dragover', e => {
+            e.preventDefault();
+            item.style.borderColor = '#0d6efd';
+            item.style.background = 'rgba(13,110,253,0.08)';
+        });
+        item.addEventListener('dragleave', () => {
+            item.style.borderColor = 'transparent';
+            item.style.background = '';
+        });
+        item.addEventListener('drop', e => {
+            e.preventDefault();
+            item.style.borderColor = 'transparent';
+            item.style.background = '';
+            const from = e.dataTransfer.getData('text/plain');
+            const to = item.dataset.party;
+            if (from && to && from !== to) mergeEuParties(slot, from, to);
+        });
+    });
+}
+
+function renderEuView(slot) {
+    const state = slot._euState;
+    const { parties, candidates, hasMerges } = computeEuView(state);
+    const partyColors = state.partyColors;
+    const totalSeats = state.totalSeats;
+
+    // Original primary-party labels per leader, for "A + B + C" display after merges
+    const mergedLabels = {};
+    Object.entries(state.merges).forEach(([party, leader]) => {
+        if (!mergedLabels[leader]) mergedLabels[leader] = [];
+        if (!mergedLabels[leader].includes(party)) mergedLabels[leader].push(party);
+    });
 
     // Seat list (one entry per seat, ordered by party rank)
     const seatList = [];
     let candIdx = 0;
+    const winnersInOrder = candidates.filter(c => c.is_winner)
+        .sort((a, b) => b.personal_votes - a.personal_votes);
     parties.forEach(p => {
         for (let i = 0; i < p.seats; i++) {
-            const c = candidates[candIdx] || {};
-            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || p.name });
+            // Find the next unassigned winner from this party
+            const c = winnersInOrder.find(x => !x._used && (state.merges[x.party] || x.party) === p.name);
+            if (c) { c._used = true; seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name }); }
+            else seatList.push({ party: p.name, color: partyColors[p.name], candidate: p.name });
             candIdx++;
         }
     });
@@ -2546,7 +2674,7 @@ function renderEuSeats(slot, data) {
             <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="13" fill="#6c757d">mandata</text>
         </svg>`;
 
-    // Legend — show every party (with seats and over-threshold flag); below-threshold rows greyed out
+    // Legend — every party (draggable to merge); below-threshold rows greyed out.
     const legendRows = parties.map(p => {
         const dim = p.seats === 0 ? 'opacity:0.55;' : '';
         const swatch = p.seats > 0
@@ -2555,8 +2683,14 @@ function renderEuSeats(slot, data) {
         const thresholdNote = !p.eligible
             ? ` <span class="badge bg-light text-muted ms-1" style="font-size:0.65rem;">ispod 5%</span>`
             : '';
-        const shortName = p.name.length > 50 ? p.name.substring(0, 47) + '…' : p.name;
-        return `<div class="d-flex align-items-center gap-2" style="font-size:0.85rem; padding:3px 6px; ${dim}" title="${escapeHtml(p.name)}">
+        // Build merge label "PARTY A + PARTY B + ..."
+        const memberLabels = (mergedLabels[p.name] || [p.name]);
+        const fullLabel = memberLabels.join(' + ');
+        const shortName = fullLabel.length > 50 ? fullLabel.substring(0, 47) + '…' : fullLabel;
+        return `<div class="eu-legend-item d-flex align-items-center gap-2"
+             draggable="true" data-party="${escapeHtml(p.name)}"
+             style="font-size:0.85rem; padding:3px 6px; ${dim} cursor:grab; border:2px solid transparent; border-radius:6px; transition:all 0.15s;"
+             title="${escapeHtml(fullLabel)}">
             ${swatch}
             <span class="fw-semibold flex-grow-1">${escapeHtml(shortName)}</span>
             <span class="text-muted small">${p.votes.toLocaleString('hr-HR')} (${p.votes_pct.toFixed(2)}%)</span>
@@ -2567,7 +2701,7 @@ function renderEuSeats(slot, data) {
 
     // Candidates: winners first (by preference desc), then non-winners (by preference desc).
     // First 50 visible; rest revealed with a "Prikaži još" button.
-    const allCands = (data.candidates || []).slice();
+    const allCands = candidates.slice();
     allCands.sort((a, b) => {
         if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
         return b.personal_votes - a.personal_votes;
@@ -2578,7 +2712,8 @@ function renderEuSeats(slot, data) {
 
     const buildRow = c => {
         const partyShort = (c.party || '').split('\n')[0];
-        const color = partyColors[c.party] || '#adb5bd';
+        const leader = state.merges[c.party] || c.party;
+        const color = partyColors[leader] || '#adb5bd';
         const dim = c.is_winner ? '' : 'opacity:0.55;';
         const winnerBadge = c.is_winner
             ? '<span class="badge bg-success-subtle text-success ms-2" style="font-size:0.65rem;">izabran</span>'
@@ -2592,11 +2727,8 @@ function renderEuSeats(slot, data) {
     };
 
     const candRows = allCands.map((c, i) => {
-        const hidden = i >= INITIAL ? ' class="eu-cand-extra" style="display:none;"' : '';
-        // For non-winner rows we already inline opacity, so just merge attributes
         if (i >= INITIAL) {
-            const r = buildRow(c);
-            return r.replace('<tr style="', '<tr class="eu-cand-extra" data-idx="' + i + '" style="display:none;');
+            return buildRow(c).replace('<tr style="', '<tr class="eu-cand-extra" style="display:none;');
         }
         return buildRow(c);
     }).join('');
@@ -2610,19 +2742,31 @@ function renderEuSeats(slot, data) {
            </div>`
         : '';
 
+    const resetBtn = hasMerges
+        ? `<button class="btn btn-outline-secondary btn-sm" data-eu-reset="${slotId}">
+               <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi spajanja
+           </button>`
+        : '';
+
     slot.innerHTML = `
         <div class="card border-0" style="background:#f8f9fa; border-radius:10px;">
             <div class="card-body p-3">
-                <h6 class="fw-bold mb-2" style="color:#0f3460;">
-                    <i class="bi bi-bank me-2"></i>Raspodjela mandata (D'Hondt, prag 5 %)
-                </h6>
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <h6 class="fw-bold mb-0" style="color:#0f3460;">
+                        <i class="bi bi-bank me-2"></i>Raspodjela mandata (D'Hondt, prag 5 %)${hasMerges ? ' — simulacija' : ''}
+                    </h6>
+                    ${resetBtn}
+                </div>
                 ${hemiSvg}
                 <div class="d-flex flex-column gap-1 mx-auto mt-2" style="max-width:560px;">
                     ${legendRows}
                 </div>
+                <div class="text-muted text-center mt-1" style="font-size:0.78rem;">
+                    <i class="bi bi-arrows-move me-1"></i>Povuci stranku na drugu za spajanje u koaliciju
+                </div>
                 <div class="text-center text-muted small mt-1">
-                    Ukupno valjanih glasova: <strong>${data.total_votes.toLocaleString('hr-HR')}</strong>
-                    · Prag (5 %): <strong>${data.threshold_votes.toLocaleString('hr-HR')}</strong> glasova
+                    Ukupno valjanih glasova: <strong>${state.totalVotes.toLocaleString('hr-HR')}</strong>
+                    · Prag (5 %): <strong>${state.thresholdVotes.toLocaleString('hr-HR')}</strong> glasova
                 </div>
                 <details class="mt-3" open>
                     <summary class="fw-semibold" style="cursor:pointer; color:#0f3460; font-size:0.9rem;">
@@ -2647,7 +2791,10 @@ function renderEuSeats(slot, data) {
             </div>
         </div>`;
 
-    // Wire "Prikaži još" — reveals the next STEP hidden rows.
+    // Wire drag-drop on legend, reset, and "Prikaži još" — fresh handlers each render.
+    attachEuLegendDragDrop(slot);
+    const reset = slot.querySelector('button[data-eu-reset]');
+    if (reset) reset.addEventListener('click', () => resetEuParties(slot));
     const btn = slot.querySelector('button[data-show-more]');
     if (btn) {
         btn.addEventListener('click', () => {
@@ -2657,11 +2804,8 @@ function renderEuSeats(slot, data) {
                 hiddenRows[i].style.display = '';
             }
             const stillHidden = slot.querySelectorAll('tr.eu-cand-extra[style*="display:none"]').length;
-            if (stillHidden === 0) {
-                btn.remove();
-            } else {
-                btn.innerHTML = `<i class="bi bi-chevron-down me-1"></i>Prikaži još (${stillHidden} preostalih)`;
-            }
+            if (stillHidden === 0) btn.remove();
+            else btn.innerHTML = `<i class="bi bi-chevron-down me-1"></i>Prikaži još (${stillHidden} preostalih)`;
         });
     }
 }
