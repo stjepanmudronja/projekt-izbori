@@ -4740,14 +4740,25 @@ function renderLokResults(data) {
     const bars = items.map((it, i) => {
         const color = palette[i % palette.length];
         const widthPct = maxVotes > 0 ? (it.votes / maxVotes * 100) : 0;
+        const labelText = `${it.votes.toLocaleString('hr-HR')} (${it.votes_pct.toFixed(1)}%)`;
+        // When the bar is too narrow to fit its label inside cleanly, render the
+        // label after the bar in dark text instead of wrapping inside.
+        const inside = widthPct >= 18;
+        const innerLabel = inside
+            ? `<span style="color:white; font-weight:600; font-size:0.85rem; white-space:nowrap;">${labelText}</span>`
+            : '';
+        const outerLabel = inside
+            ? ''
+            : `<span style="font-weight:600; font-size:0.85rem; color:${color}; white-space:nowrap; margin-left:8px; align-self:center;">${labelText}</span>`;
         return `<div class="d-flex align-items-center gap-2 mb-2">
             <div style="width:200px; flex-shrink:0; font-size:0.85rem; text-align:right; padding-right:8px;" title="${escapeHtml(it.name)}">
                 ${escapeHtml(it.name.length > 38 ? it.name.substring(0, 35) + '…' : it.name)}
             </div>
-            <div style="flex:1; background:#f1f3f5; border-radius:4px; position:relative; height:30px;">
-                <div style="width:${widthPct}%; background:${color}; height:100%; border-radius:4px; display:flex; align-items:center; padding:0 10px; color:white; font-weight:600; font-size:0.85rem;">
-                    ${it.votes.toLocaleString('hr-HR')} (${it.votes_pct.toFixed(1)}%)
+            <div style="flex:1; background:#f1f3f5; border-radius:4px; position:relative; height:30px; display:flex; align-items:center;">
+                <div style="width:${widthPct}%; background:${color}; height:100%; border-radius:4px; display:flex; align-items:center; padding:0 10px; min-width:6px;">
+                    ${innerLabel}
                 </div>
+                ${outerLabel}
             </div>
         </div>`;
     }).join('');
