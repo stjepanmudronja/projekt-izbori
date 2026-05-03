@@ -4694,36 +4694,42 @@ async function loadLokResults() {
     area.style.display = 'none';
     spinner.style.display = '';
 
-    const params = new URLSearchParams({ kind, round: lok.currentRound });
-    if (stationId) params.set('station_id', stationId);
-    else params.set('municipality_id', muniId);
-    const res = await fetch('/api/lokalni/station-results?' + params.toString());
+    // When 2. krug button is active, fetch both rounds and render them stacked.
+    const roundsToFetch = lok.currentRound === 2 ? [1, 2] : [1];
+    const fetchOne = async (rn) => {
+        const params = new URLSearchParams({ kind, round: rn });
+        if (stationId) params.set('station_id', stationId);
+        else params.set('municipality_id', muniId);
+        const res = await fetch('/api/lokalni/station-results?' + params.toString());
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            return { error: err.error || `HTTP ${res.status}`, round: rn };
+        }
+        return await res.json();
+    };
+    const results = await Promise.all(roundsToFetch.map(fetchOne));
     spinner.style.display = 'none';
 
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        area.innerHTML = `<div class="alert alert-warning">${escapeHtml(err.error || `HTTP ${res.status}`)}</div>`;
-        area.style.display = '';
-        return;
-    }
-    const data = await res.json();
-    renderLokResults(data);
-}
-
-function renderLokResults(data) {
-    const area = document.getElementById('lokResultsArea');
+    // Round toggle visibility — based on the first successful round's metadata.
     const toggle = document.getElementById('lokRoundToggle');
-
-    // Show round toggle only when 2 rounds exist (mayor runoff)
-    if (data.rounds_available && data.rounds_available.length > 1) {
+    const meta = results.find(r => !r.error);
+    if (meta && meta.rounds_available && meta.rounds_available.length > 1) {
         toggle.classList.remove('d-none');
         document.querySelectorAll('#lokRoundToggle button').forEach(b => {
-            b.classList.toggle('active', parseInt(b.dataset.round, 10) === data.round);
+            b.classList.toggle('active', parseInt(b.dataset.round, 10) === lok.currentRound);
         });
     } else {
         toggle.classList.add('d-none');
     }
 
+    area.innerHTML = results.map(d => d.error
+        ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
+        : renderLokResultCard(d)
+    ).join('');
+    area.style.display = '';
+}
+
+function renderLokResultCard(data) {
     const t = data.turnout;
     const turnoutPct = t && t.registered_voters > 0
         ? Math.round((t.ballots_cast / t.registered_voters) * 100) : 0;
@@ -4769,11 +4775,11 @@ function renderLokResults(data) {
     const scopeLine = data.scope === 'station'
         ? `${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · ${escapeHtml(data.station_label || '')}${data.station_address ? ` · ${escapeHtml(data.station_address)}` : ''}`
         : `${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · <em>cijela ${data.municipality_type === 'grad' ? 'gradska' : 'općinska'} razina</em>`;
-    area.innerHTML = `
+    return `
         <div class="card result-card mb-3 p-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                 <div>
-                    <h5 class="fw-bold mb-1">${escapeHtml(data.election_type)}${data.round > 1 ? ` — ${data.round}. krug` : ''}</h5>
+                    <h5 class="fw-bold mb-1">${escapeHtml(data.election_type)} — ${data.round}. krug</h5>
                     <div class="text-muted" style="font-size:0.85rem;">
                         ${scopeLine}
                     </div>
@@ -4791,7 +4797,6 @@ function renderLokResults(data) {
             ${bars}
             ${noVotes}
         </div>`;
-    area.style.display = '';
 }
 
 async function initIzlaznost() {
