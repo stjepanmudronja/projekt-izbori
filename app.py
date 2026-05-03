@@ -1301,28 +1301,36 @@ LOKALNI_KIND_TO_TYPE = {
 
 @app.route('/api/lokalni/station-results')
 def lokalni_station_results():
-    """Local-election list/candidate results for a single polling station.
+    """Local-election list/candidate results.
 
     Query params:
-      - station_id: PollingStation.id (required)
+      - station_id: PollingStation.id (narrow to one station), OR
+      - municipality_id: Municipality.id (aggregate across the whole muni)
       - kind: 'vijece' or 'nacelnik' (required)
       - year: defaults to most recent local-election year
       - round: defaults to 1; 2 only meaningful for nacelnik (mayor runoff)
     """
     station_id = request.args.get('station_id', type=int)
+    muni_id = request.args.get('municipality_id', type=int)
     kind = (request.args.get('kind') or '').strip()
     year = request.args.get('year', type=int)
     round_num = request.args.get('round', default=1, type=int)
 
-    if not station_id:
-        return jsonify({'error': 'station_id required'}), 400
+    if not station_id and not muni_id:
+        return jsonify({'error': 'station_id or municipality_id required'}), 400
     if kind not in LOKALNI_KIND_TO_TYPE:
         return jsonify({'error': f'kind must be one of {list(LOKALNI_KIND_TO_TYPE)}'}), 400
 
-    station = PollingStation.query.get(station_id)
-    if not station:
-        return jsonify({'error': 'station not found'}), 404
-    muni = station.municipality
+    station = None
+    if station_id:
+        station = PollingStation.query.get(station_id)
+        if not station:
+            return jsonify({'error': 'station not found'}), 404
+        muni = station.municipality
+    else:
+        muni = Municipality.query.get(muni_id)
+        if not muni:
+            return jsonify({'error': 'municipality not found'}), 404
     if not muni or muni.type not in ('grad', 'općina'):
         return jsonify({'error': f'muni type {muni.type if muni else "?"} unsupported for kind={kind}'}), 400
 
@@ -1342,25 +1350,46 @@ def lokalni_station_results():
     if not er:
         return jsonify({'error': f'no round {round_num} for election {election.id}'}), 404
 
-    # All rounds available for this election (so the UI can offer a runoff toggle)
     rounds_available = sorted([
         r.round_number for r in ElectionRound.query.filter_by(election_id=election.id).all()
     ])
 
-    list_rows = (
-        db.session.query(
-            ElectoralList.name,
-            db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
+    # Vote totals.
+    if station_id:
+        list_rows = (
+            db.session.query(
+                ElectoralList.name,
+                db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
+            )
+            .outerjoin(ListResult, db.and_(
+                ListResult.electoral_list_id == ElectoralList.id,
+                ListResult.polling_station_id == station_id,
+            ))
+            .filter(ElectoralList.election_round_id == er.id)
+            .group_by(ElectoralList.id, ElectoralList.name)
+            .order_by(db.func.sum(ListResult.votes).desc().nullslast())
+            .all()
         )
-        .outerjoin(ListResult, db.and_(
-            ListResult.electoral_list_id == ElectoralList.id,
-            ListResult.polling_station_id == station_id,
-        ))
-        .filter(ElectoralList.election_round_id == er.id)
-        .group_by(ElectoralList.id, ElectoralList.name)
-        .order_by(db.func.sum(ListResult.votes).desc().nullslast())
-        .all()
-    )
+    else:
+        # Aggregate across every polling station in this muni — restrict via a
+        # subquery rather than another outer-join so the JOIN tree stays clean.
+        muni_station_ids = db.session.query(PollingStation.id).filter(
+            PollingStation.municipality_id == muni.id
+        )
+        list_rows = (
+            db.session.query(
+                ElectoralList.name,
+                db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
+            )
+            .outerjoin(ListResult, db.and_(
+                ListResult.electoral_list_id == ElectoralList.id,
+                ListResult.polling_station_id.in_(muni_station_ids),
+            ))
+            .filter(ElectoralList.election_round_id == er.id)
+            .group_by(ElectoralList.id, ElectoralList.name)
+            .order_by(db.func.sum(ListResult.votes).desc().nullslast())
+            .all()
+        )
     total = sum(r.votes or 0 for r in list_rows)
     items = [{
         'name': r.name,
@@ -1368,20 +1397,44 @@ def lokalni_station_results():
         'votes_pct': (r.votes / total * 100.0) if total else 0.0,
     } for r in list_rows]
 
-    turnout = TurnoutData.query.filter_by(
-        election_round_id=er.id, polling_station_id=station_id
-    ).first()
-    turnout_data = {
-        'registered_voters': turnout.registered_voters if turnout else 0,
-        'ballots_cast': turnout.ballots_cast if turnout else 0,
-        'valid_ballots': turnout.valid_ballots if turnout else 0,
-        'invalid_ballots': turnout.invalid_ballots if turnout else 0,
-    } if turnout else None
+    # Turnout
+    if station_id:
+        turnout_row = TurnoutData.query.filter_by(
+            election_round_id=er.id, polling_station_id=station_id
+        ).first()
+        turnout_data = {
+            'registered_voters': turnout_row.registered_voters if turnout_row else 0,
+            'ballots_cast': turnout_row.ballots_cast if turnout_row else 0,
+            'valid_ballots': turnout_row.valid_ballots if turnout_row else 0,
+            'invalid_ballots': turnout_row.invalid_ballots if turnout_row else 0,
+        } if turnout_row else None
+    else:
+        agg = (
+            db.session.query(
+                db.func.coalesce(db.func.sum(TurnoutData.registered_voters), 0),
+                db.func.coalesce(db.func.sum(TurnoutData.ballots_cast), 0),
+                db.func.coalesce(db.func.sum(TurnoutData.valid_ballots), 0),
+                db.func.coalesce(db.func.sum(TurnoutData.invalid_ballots), 0),
+            )
+            .join(PollingStation, PollingStation.id == TurnoutData.polling_station_id)
+            .filter(
+                TurnoutData.election_round_id == er.id,
+                PollingStation.municipality_id == muni.id,
+            )
+            .first()
+        )
+        turnout_data = {
+            'registered_voters': int(agg[0] or 0),
+            'ballots_cast': int(agg[1] or 0),
+            'valid_ballots': int(agg[2] or 0),
+            'invalid_ballots': int(agg[3] or 0),
+        } if agg else None
 
     return jsonify({
+        'scope': 'station' if station_id else 'municipality',
         'station_id': station_id,
-        'station_label': f'{station.number} — {station.location or station.name or ""}'.strip(' —'),
-        'station_address': station.address or '',
+        'station_label': f'{station.number} — {station.location or station.name or ""}'.strip(' —') if station else None,
+        'station_address': (station.address if station else '') or '',
         'municipality': muni.name,
         'municipality_type': muni.type,
         'county': muni.county.name if muni.county else '',

@@ -4658,8 +4658,9 @@ async function onLokMuniChange() {
     const selM = document.getElementById('lokSelMuni');
     const selS = document.getElementById('lokSelStation');
     const selK = document.getElementById('lokSelKind');
-    selS.innerHTML = '<option value="">Odaberi biračko mjesto...</option>';
-    selS.disabled = true; selK.disabled = true;
+    selS.innerHTML = '<option value="">Sva biračka mjesta (cijela općina/grad)</option>';
+    selS.disabled = true;
+    selK.disabled = !selM.value;
     document.getElementById('lokResultsArea').style.display = 'none';
     document.getElementById('lokEmpty').style.display = '';
     if (!selM.value) return;
@@ -4671,24 +4672,20 @@ async function onLokMuniChange() {
         selS.appendChild(opt);
     });
     selS.disabled = false;
+    // Re-fetch if vrsta is already chosen — switches to muni-wide aggregation
+    if (selK.value) loadLokResults();
 }
 
 function onLokStationChange() {
-    const selS = document.getElementById('lokSelStation');
     const selK = document.getElementById('lokSelKind');
-    selK.disabled = !selS.value;
-    if (!selS.value) {
-        document.getElementById('lokResultsArea').style.display = 'none';
-        document.getElementById('lokEmpty').style.display = '';
-        return;
-    }
     if (selK.value) loadLokResults();
 }
 
 async function loadLokResults() {
+    const muniId = document.getElementById('lokSelMuni').value;
     const stationId = document.getElementById('lokSelStation').value;
     const kind = document.getElementById('lokSelKind').value;
-    if (!stationId || !kind) return;
+    if (!kind || (!stationId && !muniId)) return;
 
     const empty = document.getElementById('lokEmpty');
     const area = document.getElementById('lokResultsArea');
@@ -4697,7 +4694,9 @@ async function loadLokResults() {
     area.style.display = 'none';
     spinner.style.display = '';
 
-    const params = new URLSearchParams({ station_id: stationId, kind, round: lok.currentRound });
+    const params = new URLSearchParams({ kind, round: lok.currentRound });
+    if (stationId) params.set('station_id', stationId);
+    else params.set('municipality_id', muniId);
     const res = await fetch('/api/lokalni/station-results?' + params.toString());
     spinner.style.display = 'none';
 
@@ -4767,14 +4766,16 @@ function renderLokResults(data) {
         ? '<div class="text-muted text-center py-3">Nema rezultata za ovo biračko mjesto u odabranoj vrsti izbora.</div>'
         : '';
 
+    const scopeLine = data.scope === 'station'
+        ? `${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · ${escapeHtml(data.station_label || '')}${data.station_address ? ` · ${escapeHtml(data.station_address)}` : ''}`
+        : `${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · <em>cijela ${data.municipality_type === 'grad' ? 'gradska' : 'općinska'} razina</em>`;
     area.innerHTML = `
         <div class="card result-card mb-3 p-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                 <div>
                     <h5 class="fw-bold mb-1">${escapeHtml(data.election_type)}${data.round > 1 ? ` — ${data.round}. krug` : ''}</h5>
                     <div class="text-muted" style="font-size:0.85rem;">
-                        ${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · ${escapeHtml(data.station_label)}
-                        ${data.station_address ? ` · ${escapeHtml(data.station_address)}` : ''}
+                        ${scopeLine}
                     </div>
                 </div>
                 ${t ? `<div class="text-end">
