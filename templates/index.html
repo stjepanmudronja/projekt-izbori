@@ -911,15 +911,51 @@
 
         <div id="module-results-lokalni" class="module-panel" data-category="lokalni">
             <div class="card search-card p-4 mb-4">
-                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
-                <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Županija</label>
+                        <select id="lokSelCounty" class="form-select">
+                            <option value="">Odaberi županiju...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Grad / Općina</label>
+                        <select id="lokSelMuni" class="form-select" disabled>
+                            <option value="">Odaberi grad/općinu...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Biračko mjesto</label>
+                        <select id="lokSelStation" class="form-select" disabled>
+                            <option value="">Odaberi biračko mjesto...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Vrsta izbora</label>
+                        <select id="lokSelKind" class="form-select" disabled>
+                            <option value="">Odaberi vrstu...</option>
+                            <option value="vijece">Gradsko / Općinsko vijeće</option>
+                            <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <small class="text-muted">Lokalni izbori 2025.</small>
+                    <div id="lokRoundToggle" class="d-none">
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Krug">
+                            <button type="button" class="btn btn-outline-primary active" data-round="1">1. krug</button>
+                            <button type="button" class="btn btn-outline-primary" data-round="2">2. krug</button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="spinner-wrapper mt-4 results-spinner">
+            <div class="spinner-wrapper mt-4" id="lokSpinner" style="display:none;">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Učitavanje...</span>
                 </div>
             </div>
-            <div class="results-area" style="display:none;"></div>
+            <div id="lokResultsArea" style="display:none;"></div>
+            <div id="lokEmpty" class="text-muted text-center p-4">Odaberi sva 4 polja iznad za prikaz rezultata.</div>
         </div>
 
         <div id="module-sabor-analysis" class="module-panel">
@@ -1129,7 +1165,8 @@ sidebarLinks.forEach(link => {
         }
 
         if (mod === 'analytics-turnout') initIzlaznost();
-        if (mod && mod.startsWith('results-')) {
+        if (mod === 'results-lokalni') initLokalniModule();
+        else if (mod && mod.startsWith('results-')) {
             initResultsModule(mod.substring('results-'.length));
         }
     });
@@ -4558,6 +4595,192 @@ const IZL_COMPARE_PALETTE = [
     '#0f3460', '#dc3545', '#198754', '#fd7e14', '#6f42c1',
     '#0dcaf0', '#d63384', '#20c997', '#ffc107', '#6c757d',
 ];
+
+// === Lokalni izbori — per-station results module ===
+const lok = { initialized: false, currentRound: 1 };
+
+async function initLokalniModule() {
+    if (lok.initialized) return;
+    lok.initialized = true;
+    const selC = document.getElementById('lokSelCounty');
+    const selM = document.getElementById('lokSelMuni');
+    const selS = document.getElementById('lokSelStation');
+    const selK = document.getElementById('lokSelKind');
+
+    const cRes = await fetch('/api/counties');
+    if (cRes.ok) {
+        const counties = await cRes.json();
+        counties.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            selC.appendChild(opt);
+        });
+    }
+
+    selC.addEventListener('change', onLokCountyChange);
+    selM.addEventListener('change', onLokMuniChange);
+    selS.addEventListener('change', onLokStationChange);
+    selK.addEventListener('change', loadLokResults);
+
+    document.querySelectorAll('#lokRoundToggle button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#lokRoundToggle button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            lok.currentRound = parseInt(btn.dataset.round, 10);
+            loadLokResults();
+        });
+    });
+}
+
+async function onLokCountyChange() {
+    const selC = document.getElementById('lokSelCounty');
+    const selM = document.getElementById('lokSelMuni');
+    const selS = document.getElementById('lokSelStation');
+    const selK = document.getElementById('lokSelKind');
+    selM.innerHTML = '<option value="">Odaberi grad/općinu...</option>';
+    selS.innerHTML = '<option value="">Odaberi biračko mjesto...</option>';
+    selM.disabled = true; selS.disabled = true; selK.disabled = true;
+    document.getElementById('lokResultsArea').style.display = 'none';
+    document.getElementById('lokEmpty').style.display = '';
+    if (!selC.value) return;
+    const res = await fetch(`/api/municipalities/${selC.value}`);
+    const data = await res.json();
+    data.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id; opt.textContent = m.name;
+        selM.appendChild(opt);
+    });
+    selM.disabled = false;
+}
+
+async function onLokMuniChange() {
+    const selM = document.getElementById('lokSelMuni');
+    const selS = document.getElementById('lokSelStation');
+    const selK = document.getElementById('lokSelKind');
+    selS.innerHTML = '<option value="">Odaberi biračko mjesto...</option>';
+    selS.disabled = true; selK.disabled = true;
+    document.getElementById('lokResultsArea').style.display = 'none';
+    document.getElementById('lokEmpty').style.display = '';
+    if (!selM.value) return;
+    const res = await fetch(`/api/polling-stations/${selM.value}`);
+    const data = await res.json();
+    data.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id; opt.textContent = s.name;
+        selS.appendChild(opt);
+    });
+    selS.disabled = false;
+}
+
+function onLokStationChange() {
+    const selS = document.getElementById('lokSelStation');
+    const selK = document.getElementById('lokSelKind');
+    selK.disabled = !selS.value;
+    if (!selS.value) {
+        document.getElementById('lokResultsArea').style.display = 'none';
+        document.getElementById('lokEmpty').style.display = '';
+        return;
+    }
+    if (selK.value) loadLokResults();
+}
+
+async function loadLokResults() {
+    const stationId = document.getElementById('lokSelStation').value;
+    const kind = document.getElementById('lokSelKind').value;
+    if (!stationId || !kind) return;
+
+    const empty = document.getElementById('lokEmpty');
+    const area = document.getElementById('lokResultsArea');
+    const spinner = document.getElementById('lokSpinner');
+    empty.style.display = 'none';
+    area.style.display = 'none';
+    spinner.style.display = '';
+
+    const params = new URLSearchParams({ station_id: stationId, kind, round: lok.currentRound });
+    const res = await fetch('/api/lokalni/station-results?' + params.toString());
+    spinner.style.display = 'none';
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        area.innerHTML = `<div class="alert alert-warning">${escapeHtml(err.error || `HTTP ${res.status}`)}</div>`;
+        area.style.display = '';
+        return;
+    }
+    const data = await res.json();
+    renderLokResults(data);
+}
+
+function renderLokResults(data) {
+    const area = document.getElementById('lokResultsArea');
+    const toggle = document.getElementById('lokRoundToggle');
+
+    // Show round toggle only when 2 rounds exist (mayor runoff)
+    if (data.rounds_available && data.rounds_available.length > 1) {
+        toggle.classList.remove('d-none');
+        document.querySelectorAll('#lokRoundToggle button').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.round, 10) === data.round);
+        });
+    } else {
+        toggle.classList.add('d-none');
+    }
+
+    const t = data.turnout;
+    const turnoutPct = t && t.registered_voters > 0
+        ? Math.round((t.ballots_cast / t.registered_voters) * 100) : 0;
+
+    const items = (data.items || []).filter(i => i.votes > 0);
+    const palette = [
+        '#0f3460', '#dc3545', '#198754', '#fd7e14', '#6f42c1',
+        '#0dcaf0', '#ca8a04', '#db2777', '#4f46e5', '#059669',
+        '#d97706', '#7c3aed', '#0d9488', '#e11d48', '#6366f1',
+        '#65a30d', '#c026d3', '#0284c7', '#b91c1c', '#047857',
+    ];
+    const maxVotes = items.length > 0 ? items[0].votes : 1;
+    const bars = items.map((it, i) => {
+        const color = palette[i % palette.length];
+        const widthPct = maxVotes > 0 ? (it.votes / maxVotes * 100) : 0;
+        return `<div class="d-flex align-items-center gap-2 mb-2">
+            <div style="width:200px; flex-shrink:0; font-size:0.85rem; text-align:right; padding-right:8px;" title="${escapeHtml(it.name)}">
+                ${escapeHtml(it.name.length > 38 ? it.name.substring(0, 35) + '…' : it.name)}
+            </div>
+            <div style="flex:1; background:#f1f3f5; border-radius:4px; position:relative; height:30px;">
+                <div style="width:${widthPct}%; background:${color}; height:100%; border-radius:4px; display:flex; align-items:center; padding:0 10px; color:white; font-weight:600; font-size:0.85rem;">
+                    ${it.votes.toLocaleString('hr-HR')} (${it.votes_pct.toFixed(1)}%)
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    const noVotes = items.length === 0
+        ? '<div class="text-muted text-center py-3">Nema rezultata za ovo biračko mjesto u odabranoj vrsti izbora.</div>'
+        : '';
+
+    area.innerHTML = `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    <h5 class="fw-bold mb-1">${escapeHtml(data.election_type)}${data.round > 1 ? ` — ${data.round}. krug` : ''}</h5>
+                    <div class="text-muted" style="font-size:0.85rem;">
+                        ${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · ${escapeHtml(data.station_label)}
+                        ${data.station_address ? ` · ${escapeHtml(data.station_address)}` : ''}
+                    </div>
+                </div>
+                ${t ? `<div class="text-end">
+                    <span class="vote-number">${turnoutPct}%</span>
+                    <br><small class="text-muted">izlaznost</small>
+                </div>` : ''}
+            </div>
+            ${t ? `<div class="d-flex gap-3 flex-wrap mb-3">
+                <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${t.registered_voters.toLocaleString('hr-HR')}</strong></small>
+                <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${t.ballots_cast.toLocaleString('hr-HR')}</strong></small>
+                <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${t.valid_ballots.toLocaleString('hr-HR')}</strong></small>
+            </div>` : ''}
+            ${bars}
+            ${noVotes}
+        </div>`;
+    area.style.display = '';
+}
 
 async function initIzlaznost() {
     if (izl.initialized) return;

@@ -1291,6 +1291,111 @@ def eu_seats(year):
     })
 
 
+# --- Lokalni: per-station list/candidate results ---
+
+LOKALNI_KIND_TO_TYPE = {
+    'vijece': {'grad': 'Gradsko vijeće', 'općina': 'Općinsko vijeće'},
+    'nacelnik': {'grad': 'Gradonačelnik', 'općina': 'Načelnik'},
+}
+
+
+@app.route('/api/lokalni/station-results')
+def lokalni_station_results():
+    """Local-election list/candidate results for a single polling station.
+
+    Query params:
+      - station_id: PollingStation.id (required)
+      - kind: 'vijece' or 'nacelnik' (required)
+      - year: defaults to most recent local-election year
+      - round: defaults to 1; 2 only meaningful for nacelnik (mayor runoff)
+    """
+    station_id = request.args.get('station_id', type=int)
+    kind = (request.args.get('kind') or '').strip()
+    year = request.args.get('year', type=int)
+    round_num = request.args.get('round', default=1, type=int)
+
+    if not station_id:
+        return jsonify({'error': 'station_id required'}), 400
+    if kind not in LOKALNI_KIND_TO_TYPE:
+        return jsonify({'error': f'kind must be one of {list(LOKALNI_KIND_TO_TYPE)}'}), 400
+
+    station = PollingStation.query.get(station_id)
+    if not station:
+        return jsonify({'error': 'station not found'}), 404
+    muni = station.municipality
+    if not muni or muni.type not in ('grad', 'općina'):
+        return jsonify({'error': f'muni type {muni.type if muni else "?"} unsupported for kind={kind}'}), 400
+
+    type_name = LOKALNI_KIND_TO_TYPE[kind][muni.type]
+    etype = ElectionType.query.filter_by(name=type_name).first()
+    if not etype:
+        return jsonify({'error': f'no election type "{type_name}"'}), 404
+
+    eq = Election.query.filter_by(election_type_id=etype.id)
+    if year:
+        eq = eq.filter_by(year=year)
+    election = eq.order_by(Election.year.desc()).first()
+    if not election:
+        return jsonify({'error': f'no election for type "{type_name}" year={year}'}), 404
+
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=round_num).first()
+    if not er:
+        return jsonify({'error': f'no round {round_num} for election {election.id}'}), 404
+
+    # All rounds available for this election (so the UI can offer a runoff toggle)
+    rounds_available = sorted([
+        r.round_number for r in ElectionRound.query.filter_by(election_id=election.id).all()
+    ])
+
+    list_rows = (
+        db.session.query(
+            ElectoralList.name,
+            db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
+        )
+        .outerjoin(ListResult, db.and_(
+            ListResult.electoral_list_id == ElectoralList.id,
+            ListResult.polling_station_id == station_id,
+        ))
+        .filter(ElectoralList.election_round_id == er.id)
+        .group_by(ElectoralList.id, ElectoralList.name)
+        .order_by(db.func.sum(ListResult.votes).desc().nullslast())
+        .all()
+    )
+    total = sum(r.votes or 0 for r in list_rows)
+    items = [{
+        'name': r.name,
+        'votes': int(r.votes or 0),
+        'votes_pct': (r.votes / total * 100.0) if total else 0.0,
+    } for r in list_rows]
+
+    turnout = TurnoutData.query.filter_by(
+        election_round_id=er.id, polling_station_id=station_id
+    ).first()
+    turnout_data = {
+        'registered_voters': turnout.registered_voters if turnout else 0,
+        'ballots_cast': turnout.ballots_cast if turnout else 0,
+        'valid_ballots': turnout.valid_ballots if turnout else 0,
+        'invalid_ballots': turnout.invalid_ballots if turnout else 0,
+    } if turnout else None
+
+    return jsonify({
+        'station_id': station_id,
+        'station_label': f'{station.number} — {station.location or station.name or ""}'.strip(' —'),
+        'station_address': station.address or '',
+        'municipality': muni.name,
+        'municipality_type': muni.type,
+        'county': muni.county.name if muni.county else '',
+        'kind': kind,
+        'election_type': type_name,
+        'year': election.year,
+        'round': round_num,
+        'rounds_available': rounds_available,
+        'total_votes': total,
+        'turnout': turnout_data,
+        'items': items,
+    })
+
+
 # --- Analytics: Izlaznost (turnout) ---
 
 ANALYTICS_CATEGORIES = {
