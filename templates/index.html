@@ -2570,6 +2570,168 @@ function resetEuParties(slot) {
     renderEuView(slot);
 }
 
+async function exportEuPDF(slot) {
+    const state = slot._euState;
+    if (!state) return;
+    const { parties, candidates, hasMerges } = computeEuView(state);
+    const year = slot.dataset.year || '';
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - margin * 2;
+    let curY = margin;
+
+    function checkPage(needed) {
+        if (curY + needed > pageH - margin) { pdf.addPage(); curY = margin; }
+    }
+
+    pdf.setFontSize(18);
+    pdf.setFont(undefined, 'bold');
+    pdf.text(`Izbori za Europski parlament ${year}.`, margin, curY);
+    curY += 8;
+    pdf.setFontSize(11);
+    pdf.setFont(undefined, 'normal');
+    pdf.text(hasMerges ? 'Simulacija (drag & drop koalicije)' : 'Konačna raspodjela mandata (D\'Hondt, prag 5 %)', margin, curY);
+    curY += 8;
+
+    // Capture hemicycle + legend image
+    const region = slot.querySelector('.eu-export-region');
+    if (region) {
+        const canvas = await html2canvas(region, { scale: 2, backgroundColor: '#ffffff', logging: false });
+        const imgData = canvas.toDataURL('image/png');
+        const ratio = canvas.width / canvas.height;
+        let imgW = contentW;
+        let imgH = imgW / ratio;
+        if (imgH > 130) { imgH = 130; imgW = imgH * ratio; }
+        checkPage(imgH);
+        pdf.addImage(imgData, 'PNG', margin + (contentW - imgW) / 2, curY, imgW, imgH);
+        curY += imgH + 6;
+    }
+
+    // Parties summary table
+    checkPage(20);
+    pdf.setFontSize(13);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('Stranke / koalicije', margin, curY);
+    curY += 6;
+    pdf.setFontSize(9);
+    pdf.setFont(undefined, 'bold');
+    const colW = [contentW * 0.55, contentW * 0.18, contentW * 0.12, contentW * 0.15];
+    pdf.text('Naziv', margin, curY);
+    pdf.text('Glasovi', margin + colW[0], curY, { align: 'left' });
+    pdf.text('% valjanih', margin + colW[0] + colW[1], curY);
+    pdf.text('Mandati', margin + colW[0] + colW[1] + colW[2], curY);
+    curY += 5;
+    pdf.setFont(undefined, 'normal');
+    parties.forEach(p => {
+        if (curY > pageH - margin - 5) { pdf.addPage(); curY = margin; }
+        const memberLabels = (state.merges && Object.entries(state.merges).filter(([_, l]) => l === p.name).map(([k]) => k)) || [p.name];
+        const fullLabel = memberLabels.join(' + ');
+        const display = fullLabel.length > 65 ? fullLabel.substring(0, 62) + '…' : fullLabel;
+        pdf.text(display, margin, curY);
+        pdf.text(p.votes.toLocaleString('hr-HR'), margin + colW[0], curY);
+        pdf.text(p.votes_pct.toFixed(2) + '%', margin + colW[0] + colW[1], curY);
+        pdf.text(String(p.seats) + (p.eligible ? '' : ' *'), margin + colW[0] + colW[1] + colW[2], curY);
+        curY += 5;
+    });
+    curY += 2;
+    pdf.setFontSize(8);
+    pdf.text('* ispod 5 % praga', margin, curY);
+    curY += 6;
+
+    // Candidates table — winners then top non-winners
+    checkPage(15);
+    pdf.setFontSize(13);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('Kandidati', margin, curY);
+    curY += 6;
+    pdf.setFontSize(9);
+    pdf.setFont(undefined, 'bold');
+    const cc = [contentW * 0.05, contentW * 0.40, contentW * 0.30, contentW * 0.13, contentW * 0.12];
+    pdf.text('#', margin, curY);
+    pdf.text('Ime', margin + cc[0], curY);
+    pdf.text('Stranka', margin + cc[0] + cc[1], curY);
+    pdf.text('Pref. glasovi', margin + cc[0] + cc[1] + cc[2], curY);
+    pdf.text('% valj.', margin + cc[0] + cc[1] + cc[2] + cc[3], curY);
+    curY += 5;
+    pdf.setFont(undefined, 'normal');
+    const sorted = candidates.slice().sort((a, b) => {
+        if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+        return b.personal_votes - a.personal_votes;
+    });
+    sorted.forEach((c, i) => {
+        if (curY > pageH - margin - 5) { pdf.addPage(); curY = margin; }
+        const partyShort = (c.party || '').split('\n')[0];
+        const partyDisp = partyShort.length > 38 ? partyShort.substring(0, 35) + '…' : partyShort;
+        if (!c.is_winner) pdf.setTextColor(160);
+        pdf.text(String(i + 1), margin, curY);
+        pdf.text((c.is_winner ? '✓ ' : '   ') + c.name, margin + cc[0], curY);
+        pdf.text(partyDisp, margin + cc[0] + cc[1], curY);
+        pdf.text(c.personal_votes.toLocaleString('hr-HR'), margin + cc[0] + cc[1] + cc[2], curY);
+        pdf.text(c.personal_pct.toFixed(2) + '%', margin + cc[0] + cc[1] + cc[2] + cc[3], curY);
+        if (!c.is_winner) pdf.setTextColor(0);
+        curY += 4.5;
+    });
+
+    pdf.save(`EU_parlament_${year}${hasMerges ? '_simulacija' : ''}.pdf`);
+}
+
+function exportEuXLSX(slot) {
+    const state = slot._euState;
+    if (!state) return;
+    const { parties, candidates, hasMerges } = computeEuView(state);
+    const year = slot.dataset.year || '';
+
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: parties
+    const partyRows = [
+        [`Izbori za Europski parlament ${year}.${hasMerges ? ' — simulacija' : ''}`],
+        [`Ukupno valjanih glasova: ${state.totalVotes.toLocaleString('hr-HR')}  ·  Prag (5 %): ${state.thresholdVotes.toLocaleString('hr-HR')}`],
+        [],
+        ['Stranka / koalicija', 'Glasovi', '% valjanih', 'Mandati', 'Status'],
+    ];
+    parties.forEach(p => {
+        const memberLabels = Object.entries(state.merges).filter(([_, l]) => l === p.name).map(([k]) => k);
+        const fullLabel = memberLabels.length > 0 ? memberLabels.join(' + ') : p.name;
+        const status = p.eligible ? (p.seats > 0 ? 'Iznad praga (mandat)' : 'Iznad praga') : 'Ispod 5 %';
+        partyRows.push([fullLabel, p.votes, +(p.votes_pct.toFixed(2)), p.seats, status]);
+    });
+    const wsP = XLSX.utils.aoa_to_sheet(partyRows);
+    wsP['!cols'] = [{ wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsP, 'Stranke');
+
+    // Sheet 2: candidates
+    const sortedCands = candidates.slice().sort((a, b) => {
+        if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+        return b.personal_votes - a.personal_votes;
+    });
+    const candRows = [
+        [`Kandidati — Izbori za Europski parlament ${year}.`],
+        [],
+        ['#', 'Ime i prezime', 'Stranka / lista', 'Pozicija na listi', 'Pref. glasovi', '% valjanih', 'Status'],
+    ];
+    sortedCands.forEach((c, i) => {
+        candRows.push([
+            i + 1,
+            c.name,
+            (c.party || '').split('\n')[0],
+            c.list_position,
+            c.personal_votes,
+            +(c.personal_pct.toFixed(2)),
+            c.is_winner ? 'Izabran' : 'Nije izabran',
+        ]);
+    });
+    const wsC = XLSX.utils.aoa_to_sheet(candRows);
+    wsC['!cols'] = [{ wch: 5 }, { wch: 32 }, { wch: 50 }, { wch: 8 }, { wch: 13 }, { wch: 12 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsC, 'Kandidati');
+
+    XLSX.writeFile(wb, `EU_parlament_${year}${hasMerges ? '_simulacija' : ''}.xlsx`);
+}
+
 function attachEuLegendDragDrop(slot) {
     const items = slot.querySelectorAll('.eu-legend-item');
     items.forEach(item => {
@@ -2748,18 +2910,31 @@ function renderEuView(slot) {
            </button>`
         : '';
 
+    const exportButtons = `
+        <button class="btn btn-danger btn-sm" data-eu-pdf="${slotId}">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+        </button>
+        <button class="btn btn-success btn-sm" data-eu-xlsx="${slotId}">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>XLSX
+        </button>`;
+
     slot.innerHTML = `
         <div class="card border-0" style="background:#f8f9fa; border-radius:10px;">
             <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
                     <h6 class="fw-bold mb-0" style="color:#0f3460;">
                         <i class="bi bi-bank me-2"></i>Raspodjela mandata (D'Hondt, prag 5 %)${hasMerges ? ' — simulacija' : ''}
                     </h6>
-                    ${resetBtn}
+                    <div class="d-flex gap-2 flex-wrap">
+                        ${resetBtn}
+                        ${exportButtons}
+                    </div>
                 </div>
+                <div class="eu-export-region">
                 ${hemiSvg}
                 <div class="d-flex flex-column gap-1 mx-auto mt-2" style="max-width:560px;">
                     ${legendRows}
+                </div>
                 </div>
                 <div class="text-muted text-center mt-1" style="font-size:0.78rem;">
                     <i class="bi bi-arrows-move me-1"></i>Povuci stranku na drugu za spajanje u koaliciju
@@ -2791,10 +2966,14 @@ function renderEuView(slot) {
             </div>
         </div>`;
 
-    // Wire drag-drop on legend, reset, and "Prikaži još" — fresh handlers each render.
+    // Wire drag-drop on legend, reset, exports, and "Prikaži još" — fresh handlers each render.
     attachEuLegendDragDrop(slot);
     const reset = slot.querySelector('button[data-eu-reset]');
     if (reset) reset.addEventListener('click', () => resetEuParties(slot));
+    const pdfBtn = slot.querySelector('button[data-eu-pdf]');
+    if (pdfBtn) pdfBtn.addEventListener('click', () => exportEuPDF(slot));
+    const xlsxBtn = slot.querySelector('button[data-eu-xlsx]');
+    if (xlsxBtn) xlsxBtn.addEventListener('click', () => exportEuXLSX(slot));
     const btn = slot.querySelector('button[data-show-more]');
     if (btn) {
         btn.addEventListener('click', () => {
