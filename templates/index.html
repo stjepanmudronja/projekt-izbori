@@ -4625,11 +4625,20 @@ async function initLokalniModule() {
 
     document.querySelectorAll('#lokRoundToggle button').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('#lokRoundToggle button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
             lok.currentRound = parseInt(btn.dataset.round, 10);
+            updateLokRoundButtons();
             loadLokResults();
         });
+    });
+}
+
+function updateLokRoundButtons() {
+    // 2. krug active means BOTH rounds are visible — highlight both buttons.
+    // 1. krug active means only round 1 — highlight only that button.
+    document.querySelectorAll('#lokRoundToggle button').forEach(b => {
+        const r = parseInt(b.dataset.round, 10);
+        const active = lok.currentRound === 2 || r === lok.currentRound;
+        b.classList.toggle('active', active);
     });
 }
 
@@ -4715,9 +4724,7 @@ async function loadLokResults() {
     const meta = results.find(r => !r.error);
     if (meta && meta.rounds_available && meta.rounds_available.length > 1) {
         toggle.classList.remove('d-none');
-        document.querySelectorAll('#lokRoundToggle button').forEach(b => {
-            b.classList.toggle('active', parseInt(b.dataset.round, 10) === lok.currentRound);
-        });
+        updateLokRoundButtons();
     } else {
         toggle.classList.add('d-none');
     }
