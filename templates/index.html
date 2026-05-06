@@ -4779,6 +4779,59 @@ function renderLokResultCard(data) {
         ? '<div class="text-muted text-center py-3">Nema rezultata za ovo biračko mjesto u odabranoj vrsti izbora.</div>'
         : '';
 
+    // Per-station turnout breakdown (only present when scope=municipality)
+    let stationsBlock = '';
+    if (data.stations && data.stations.length > 0) {
+        const totalRows = data.stations.length;
+        const INITIAL_STATIONS = 12;
+        const stationRow = (s, i) => {
+            const pct = s.turnout_pct;
+            const barWidth = Math.min(100, Math.max(0, pct));
+            const barColor = pct >= 50 ? '#198754' : pct >= 30 ? '#fd7e14' : '#dc3545';
+            const hidden = i >= INITIAL_STATIONS ? ' class="lok-station-extra" style="display:none;"' : '';
+            return `<tr${hidden}>
+                <td class="text-muted text-end pe-2" style="width:50px;">${s.number}</td>
+                <td style="font-size:0.85rem;" title="${escapeHtml(s.address || '')}">${escapeHtml(s.location || s.name || '')}</td>
+                <td class="text-end" style="font-size:0.85rem; white-space:nowrap;">${s.registered_voters.toLocaleString('hr-HR')}</td>
+                <td class="text-end" style="font-size:0.85rem; white-space:nowrap;">${s.ballots_cast.toLocaleString('hr-HR')}</td>
+                <td style="width:160px;">
+                    <div style="background:#f1f3f5; border-radius:4px; position:relative; height:18px;">
+                        <div style="width:${barWidth}%; background:${barColor}; height:100%; border-radius:4px;"></div>
+                    </div>
+                </td>
+                <td class="text-end fw-bold" style="white-space:nowrap; color:#0f3460;">${pct.toFixed(1)}%</td>
+            </tr>`;
+        };
+        const tableBody = data.stations.map(stationRow).join('');
+        const showMore = totalRows > INITIAL_STATIONS
+            ? `<div class="text-center mt-2">
+                <button class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll('.lok-station-extra').forEach(r => r.style.display=''); this.style.display='none';">
+                    <i class="bi bi-chevron-down me-1"></i>Prikaži sve (${totalRows - INITIAL_STATIONS} preostalih)
+                </button>
+              </div>`
+            : '';
+        stationsBlock = `
+            <details class="mt-3" open>
+                <summary class="fw-semibold" style="cursor:pointer; color:#0f3460; font-size:0.9rem;">
+                    <i class="bi bi-geo-alt me-1"></i>Izlaznost po biračkim mjestima (${totalRows})
+                </summary>
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr>
+                            <th class="text-end pe-2" style="width:50px;">Br.</th>
+                            <th>Lokacija</th>
+                            <th class="text-end">Upisani</th>
+                            <th class="text-end">Glasali</th>
+                            <th></th>
+                            <th class="text-end">Izlaznost</th>
+                        </tr></thead>
+                        <tbody>${tableBody}</tbody>
+                    </table>
+                </div>
+                ${showMore}
+            </details>`;
+    }
+
     const scopeLine = data.scope === 'station'
         ? `${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · ${escapeHtml(data.station_label || '')}${data.station_address ? ` · ${escapeHtml(data.station_address)}` : ''}`
         : `${escapeHtml(data.county)} · ${escapeHtml(data.municipality)} · <em>cijela ${data.municipality_type === 'grad' ? 'gradska' : 'općinska'} razina</em>`;
@@ -4803,6 +4856,7 @@ function renderLokResultCard(data) {
             </div>` : ''}
             ${bars}
             ${noVotes}
+            ${stationsBlock}
         </div>`;
 }
 

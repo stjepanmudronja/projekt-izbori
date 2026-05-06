@@ -1430,6 +1430,43 @@ def lokalni_station_results():
             'invalid_ballots': int(agg[3] or 0),
         } if agg else None
 
+    # When the scope is the whole muni, return per-station turnout so the UI
+    # can show a breakdown of every biračko mjesto in this town/municipality.
+    stations_breakdown = None
+    if not station_id:
+        sb_rows = (
+            db.session.query(
+                PollingStation.id,
+                PollingStation.number,
+                PollingStation.name,
+                PollingStation.location,
+                PollingStation.address,
+                db.func.coalesce(TurnoutData.registered_voters, 0),
+                db.func.coalesce(TurnoutData.ballots_cast, 0),
+                db.func.coalesce(TurnoutData.valid_ballots, 0),
+                db.func.coalesce(TurnoutData.invalid_ballots, 0),
+            )
+            .outerjoin(TurnoutData, db.and_(
+                TurnoutData.polling_station_id == PollingStation.id,
+                TurnoutData.election_round_id == er.id,
+            ))
+            .filter(PollingStation.municipality_id == muni.id)
+            .order_by(PollingStation.number)
+            .all()
+        )
+        stations_breakdown = [{
+            'id': r[0],
+            'number': r[1],
+            'name': r[2] or '',
+            'location': r[3] or '',
+            'address': r[4] or '',
+            'registered_voters': int(r[5] or 0),
+            'ballots_cast': int(r[6] or 0),
+            'valid_ballots': int(r[7] or 0),
+            'invalid_ballots': int(r[8] or 0),
+            'turnout_pct': (float(r[6]) / float(r[5]) * 100.0) if (r[5] and r[5] > 0) else 0.0,
+        } for r in sb_rows]
+
     return jsonify({
         'scope': 'station' if station_id else 'municipality',
         'station_id': station_id,
@@ -1446,6 +1483,7 @@ def lokalni_station_results():
         'total_votes': total,
         'turnout': turnout_data,
         'items': items,
+        'stations': stations_breakdown,
     })
 
 
