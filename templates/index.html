@@ -2466,7 +2466,7 @@ function renderNationalResults(data) {
                 <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
                 <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
             </div>
-            <div class="eu-seats-slot mb-3" id="euSeatsSlot_${chartId}" data-year="${el.year}"></div>
+            ${data.category === 'eu' ? `<div class="eu-seats-slot mb-3" id="euSeatsSlot_${data.category}_${chartId}" data-year="${el.year}"></div>` : ''}
             ${data.category === 'eu' ? '' : `
             <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
             <div class="d-flex justify-content-between align-items-center mt-1">
@@ -2505,10 +2505,13 @@ function renderNationalResults(data) {
         });
     }
 
-    // EU only: fetch + render D'Hondt seat allocation under each year card
+    // EU only: fetch + render D'Hondt seat allocation under each year card.
+    // Use scoped lookup inside the panel — slot IDs are now namespaced by
+    // category, but querying within the panel guarantees we never grab a
+    // slot from another module even if IDs ever collide again.
     if (data.category === 'eu') {
         elections.forEach((el, idx) => {
-            const slot = document.getElementById(`euSeatsSlot_nat_${idx}`);
+            const slot = panel.querySelector(`#euSeatsSlot_eu_nat_${idx}`);
             if (!slot) return;
             fetch(`/api/national/eu-seats/${el.year}`)
                 .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
