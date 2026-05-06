@@ -4766,13 +4766,6 @@ function renderLokResultCard(data) {
     const turnoutPct = t && t.registered_voters > 0
         ? Math.round((t.ballots_cast / t.registered_voters) * 100) : 0;
 
-    const items = (data.items || []).filter(i => i.votes > 0);
-    const palette = [
-        '#0f3460', '#dc3545', '#198754', '#fd7e14', '#6f42c1',
-        '#0dcaf0', '#ca8a04', '#db2777', '#4f46e5', '#059669',
-        '#d97706', '#7c3aed', '#0d9488', '#e11d48', '#6366f1',
-        '#65a30d', '#c026d3', '#0284c7', '#b91c1c', '#047857',
-    ];
     // Bar chart placeholder — populated by buildBarChart(chartId) after insertion.
     const bars = `
         <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
