@@ -600,8 +600,8 @@
             border: 0; background: transparent; padding: 0; font-size: 0.95rem;
         }
         .izl-compare-chip .chip-x:hover { opacity: 1; }
-        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg, #eusCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
-        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path, #eusCroatiaMapWrap svg path {
+        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg, #eusCroatiaMapWrap svg, #lokCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
+        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path, #eusCroatiaMapWrap svg path, #lokCroatiaMapWrap svg path {
             fill: #ececec;
             stroke: #b0b0b0;
             stroke-width: 0.8;
@@ -609,9 +609,9 @@
             cursor: pointer;
             transition: fill 0.15s;
         }
-        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover, #eusCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
-        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected, #eusCroatiaMapWrap svg path.selected { fill: #e8942e; }
-        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover, #eusCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
+        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover, #eusCroatiaMapWrap svg path:hover, #lokCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
+        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected, #eusCroatiaMapWrap svg path.selected, #lokCroatiaMapWrap svg path.selected { fill: #e8942e; }
+        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover, #eusCroatiaMapWrap svg path.selected:hover, #lokCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -991,40 +991,59 @@
 
         <div id="module-results-lokalni" class="module-panel" data-category="lokalni">
             <div class="card search-card p-4 mb-4">
-                <div class="row g-3">
+                <div class="row g-4 align-items-start">
                     <div class="col-md-3">
-                        <label class="form-label fw-semibold">Županija</label>
-                        <select id="lokSelCounty" class="form-select">
-                            <option value="">Odaberi županiju...</option>
-                        </select>
+                        <div id="lokCroatiaMapWrap"></div>
+                        <div id="lokMapCountyLabel" class="text-center mt-1" style="font-size:0.8rem; color:#666; font-weight:500;"></div>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Grad / Općina</label>
-                        <select id="lokSelMuni" class="form-select" disabled>
-                            <option value="">Odaberi grad/općinu...</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Biračko mjesto</label>
-                        <select id="lokSelStation" class="form-select" disabled>
-                            <option value="">Odaberi biračko mjesto...</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Vrsta izbora</label>
-                        <select id="lokSelKind" class="form-select" disabled>
-                            <option value="">Odaberi vrstu...</option>
-                            <option value="vijece">Gradsko / Općinsko vijeće</option>
-                            <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <small class="text-muted">Lokalni izbori 2025.</small>
-                    <div id="lokRoundToggle" class="d-none">
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Krug">
-                            <button type="button" class="btn btn-outline-primary active" data-round="1">1. krug</button>
-                            <button type="button" class="btn btn-outline-primary" data-round="2">2. krug</button>
+                    <div class="col-md-9">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Županija</label>
+                                <select id="lokSelCounty" class="form-select">
+                                    <option value="">Odaberi županiju...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Grad / Općina</label>
+                                <select id="lokSelMuni" class="form-select" disabled>
+                                    <option value="">Odaberi grad/općinu...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Biračko mjesto</label>
+                                <select id="lokSelStation" class="form-select" disabled>
+                                    <option value="">Sva biračka mjesta (cijela općina/grad)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Vrsta izbora</label>
+                                <select id="lokSelKind" class="form-select" disabled>
+                                    <option value="">Odaberi vrstu...</option>
+                                    <option value="vijece">Gradsko / Općinsko vijeće</option>
+                                    <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex gap-2 flex-wrap">
+                                <button id="lokAddCompareBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="bi bi-plus-circle me-1"></i>Dodaj na usporedbu
+                                </button>
+                                <button id="lokClearScopeBtn" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Resetiraj
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <div id="lokCompareChips" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <small class="text-muted">Lokalni izbori 2025.</small>
+                            <div id="lokRoundToggle" class="d-none">
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Krug">
+                                    <button type="button" class="btn btn-outline-primary active" data-round="1">1. krug</button>
+                                    <button type="button" class="btn btn-outline-primary" data-round="2">2. krug</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5165,7 +5184,7 @@ const IZL_COMPARE_PALETTE = [
 ];
 
 // === Lokalni izbori — per-station results module ===
-const lok = { initialized: false, currentRound: 1 };
+const lok = { initialized: false, currentRound: 1, mapPaths: [], compareScopes: [] };
 
 async function initLokalniModule() {
     if (lok.initialized) return;
@@ -5186,10 +5205,15 @@ async function initLokalniModule() {
         });
     }
 
+    loadLokCroatiaMap().catch(e => console.warn('lok map load failed', e));
+
     selC.addEventListener('change', onLokCountyChange);
     selM.addEventListener('change', onLokMuniChange);
     selS.addEventListener('change', onLokStationChange);
-    selK.addEventListener('change', loadLokResults);
+    selK.addEventListener('change', () => { lokUpdateAddBtn(); loadLokResults(); });
+
+    document.getElementById('lokAddCompareBtn').addEventListener('click', onLokAddCompare);
+    document.getElementById('lokClearScopeBtn').addEventListener('click', onLokClearScope);
 
     document.querySelectorAll('#lokRoundToggle button').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -5197,6 +5221,129 @@ async function initLokalniModule() {
             updateLokRoundButtons();
             loadLokResults();
         });
+    });
+}
+
+async function loadLokCroatiaMap() {
+    const wrap = document.getElementById('lokCroatiaMapWrap');
+    const res = await fetch('/static/croatia_map.svg');
+    const svgText = await res.text();
+    wrap.innerHTML = svgText;
+    const embeddedStyle = wrap.querySelector('svg style');
+    if (embeddedStyle) embeddedStyle.remove();
+    const svgTitle = wrap.querySelector('svg title');
+    if (svgTitle) svgTitle.remove();
+    lok.mapPaths = wrap.querySelectorAll('path[data-county]');
+    const label = document.getElementById('lokMapCountyLabel');
+    lok.mapPaths.forEach(path => {
+        path.addEventListener('click', () => {
+            const sel = document.getElementById('lokSelCounty');
+            const name = path.getAttribute('data-county');
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].textContent.toUpperCase() === name.toUpperCase()) {
+                    sel.value = sel.options[i].value;
+                    sel.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        });
+        path.addEventListener('mouseenter', () => {
+            if (!path.classList.contains('selected')) label.textContent = path.getAttribute('data-county');
+        });
+        path.addEventListener('mouseleave', () => {
+            const selected = wrap.querySelector('path.selected');
+            label.textContent = selected ? selected.getAttribute('data-county') : '';
+        });
+    });
+}
+
+function lokHighlightMapCounty(name) {
+    lok.mapPaths.forEach(p => p.classList.remove('selected'));
+    const label = document.getElementById('lokMapCountyLabel');
+    if (name) {
+        const target = document.getElementById('lokCroatiaMapWrap')
+            .querySelector(`path[data-county="${name}"]`);
+        if (target) target.classList.add('selected');
+        label.textContent = name;
+    } else if (label) {
+        label.textContent = '';
+    }
+}
+
+function lokUpdateAddBtn() {
+    // Enable when we have at least muni + vrsta — those are needed for a meaningful card
+    const btn = document.getElementById('lokAddCompareBtn');
+    if (!btn) return;
+    const mId = document.getElementById('lokSelMuni').value;
+    const k = document.getElementById('lokSelKind').value;
+    btn.disabled = !(mId && k);
+}
+
+function lokCurrentScopeKey() {
+    const sId = document.getElementById('lokSelStation').value;
+    const mId = document.getElementById('lokSelMuni').value;
+    const k = document.getElementById('lokSelKind').value;
+    const sel = document.getElementById('lokSelStation');
+    const selM = document.getElementById('lokSelMuni');
+    if (!mId || !k) return null;
+    if (sId) {
+        return { type: 'station', id: parseInt(sId, 10), kind: k,
+                 label: sel.options[sel.selectedIndex].textContent,
+                 muniLabel: selM.options[selM.selectedIndex].textContent };
+    }
+    return { type: 'municipality', id: parseInt(mId, 10), kind: k,
+             label: selM.options[selM.selectedIndex].textContent };
+}
+
+function onLokAddCompare() {
+    const sc = lokCurrentScopeKey();
+    if (!sc) return;
+    if (lok.compareScopes.find(x => x.type === sc.type && x.id === sc.id && x.kind === sc.kind)) return;
+    if (lok.compareScopes.length >= 6) return;
+    lok.compareScopes.push(sc);
+    renderLokCompareChips();
+    loadLokResults();
+}
+
+function onLokRemoveCompare(type, id, kind) {
+    lok.compareScopes = lok.compareScopes.filter(x => !(x.type === type && x.id === id && x.kind === kind));
+    renderLokCompareChips();
+    loadLokResults();
+}
+
+function onLokClearScope() {
+    document.getElementById('lokSelCounty').value = '';
+    document.getElementById('lokSelMuni').innerHTML = '<option value="">Odaberi grad/općinu...</option>';
+    document.getElementById('lokSelStation').innerHTML = '<option value="">Sva biračka mjesta (cijela općina/grad)</option>';
+    document.getElementById('lokSelKind').value = '';
+    document.getElementById('lokSelMuni').disabled = true;
+    document.getElementById('lokSelStation').disabled = true;
+    document.getElementById('lokSelKind').disabled = true;
+    lok.compareScopes = [];
+    lokHighlightMapCounty(null);
+    lokUpdateAddBtn();
+    renderLokCompareChips();
+    document.getElementById('lokResultsArea').style.display = 'none';
+    document.getElementById('lokEmpty').style.display = '';
+}
+
+function renderLokCompareChips() {
+    const wrap = document.getElementById('lokCompareChips');
+    if (!wrap) return;
+    if (lok.compareScopes.length === 0) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = lok.compareScopes.map(s => {
+        const typeLabel = s.type === 'station' ? 'BM' : 'Gr/Op';
+        const kindLabel = s.kind === 'vijece' ? 'Vijeće' : 'Načelnik';
+        const sub = s.muniLabel ? ` <span style="color:#888">· ${escapeHtml(s.muniLabel)}</span>` : '';
+        return `<span class="izl-compare-chip">
+            <span class="badge bg-secondary me-1" style="font-size:0.6rem;">${typeLabel}</span>
+            <span class="badge bg-info text-dark me-1" style="font-size:0.6rem;">${kindLabel}</span>
+            ${escapeHtml(s.label)}${sub}
+            <button type="button" class="chip-x" data-type="${s.type}" data-id="${s.id}" data-kind="${s.kind}" aria-label="Ukloni">×</button>
+        </span>`;
+    }).join('');
+    wrap.querySelectorAll('.chip-x').forEach(btn => {
+        btn.addEventListener('click', () => onLokRemoveCompare(btn.dataset.type, parseInt(btn.dataset.id, 10), btn.dataset.kind));
     });
 }
 
@@ -5216,10 +5363,15 @@ async function onLokCountyChange() {
     const selS = document.getElementById('lokSelStation');
     const selK = document.getElementById('lokSelKind');
     selM.innerHTML = '<option value="">Odaberi grad/općinu...</option>';
-    selS.innerHTML = '<option value="">Odaberi biračko mjesto...</option>';
+    selS.innerHTML = '<option value="">Sva biračka mjesta (cijela općina/grad)</option>';
     selM.disabled = true; selS.disabled = true; selK.disabled = true;
-    document.getElementById('lokResultsArea').style.display = 'none';
-    document.getElementById('lokEmpty').style.display = '';
+    const txt = selC.value ? selC.options[selC.selectedIndex].textContent : '';
+    lokHighlightMapCounty(txt || null);
+    if (lok.compareScopes.length === 0) {
+        document.getElementById('lokResultsArea').style.display = 'none';
+        document.getElementById('lokEmpty').style.display = '';
+    }
+    lokUpdateAddBtn();
     if (!selC.value) return;
     const res = await fetch(`/api/municipalities/${selC.value}`);
     const data = await res.json();
@@ -5238,8 +5390,11 @@ async function onLokMuniChange() {
     selS.innerHTML = '<option value="">Sva biračka mjesta (cijela općina/grad)</option>';
     selS.disabled = true;
     selK.disabled = !selM.value;
-    document.getElementById('lokResultsArea').style.display = 'none';
-    document.getElementById('lokEmpty').style.display = '';
+    if (lok.compareScopes.length === 0) {
+        document.getElementById('lokResultsArea').style.display = 'none';
+        document.getElementById('lokEmpty').style.display = '';
+    }
+    lokUpdateAddBtn();
     if (!selM.value) return;
     const res = await fetch(`/api/polling-stations/${selM.value}`);
     const data = await res.json();
@@ -5255,41 +5410,61 @@ async function onLokMuniChange() {
 
 function onLokStationChange() {
     const selK = document.getElementById('lokSelKind');
+    lokUpdateAddBtn();
     if (selK.value) loadLokResults();
 }
 
 async function loadLokResults() {
-    const muniId = document.getElementById('lokSelMuni').value;
-    const stationId = document.getElementById('lokSelStation').value;
-    const kind = document.getElementById('lokSelKind').value;
-    if (!kind || (!stationId && !muniId)) return;
-
     const empty = document.getElementById('lokEmpty');
     const area = document.getElementById('lokResultsArea');
     const spinner = document.getElementById('lokSpinner');
+
+    // Define what to fetch:
+    //   - compare mode (chips exist): one fetch per chip using its own kind
+    //   - single mode (no chips): use the current dropdown selection
+    const targets = [];
+    if (lok.compareScopes.length > 0) {
+        lok.compareScopes.forEach((sc, i) => {
+            targets.push({ scope: sc, prefix: `cmp${i}_` });
+        });
+    } else {
+        const muniId = document.getElementById('lokSelMuni').value;
+        const stationId = document.getElementById('lokSelStation').value;
+        const kind = document.getElementById('lokSelKind').value;
+        if (!kind || (!stationId && !muniId)) return;
+        const sc = stationId
+            ? { type: 'station', id: parseInt(stationId, 10), kind }
+            : { type: 'municipality', id: parseInt(muniId, 10), kind };
+        targets.push({ scope: sc, prefix: '' });
+    }
+
     empty.style.display = 'none';
     area.style.display = 'none';
     spinner.style.display = '';
 
-    // When 2. krug button is active, fetch both rounds and render them stacked.
     const roundsToFetch = lok.currentRound === 2 ? [1, 2] : [1];
-    const fetchOne = async (rn) => {
-        const params = new URLSearchParams({ kind, round: rn });
-        if (stationId) params.set('station_id', stationId);
-        else params.set('municipality_id', muniId);
+    const fetchOne = async (sc, rn) => {
+        const params = new URLSearchParams({ kind: sc.kind, round: rn });
+        if (sc.type === 'station') params.set('station_id', sc.id);
+        else params.set('municipality_id', sc.id);
         const res = await fetch('/api/lokalni/station-results?' + params.toString());
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            return { error: err.error || `HTTP ${res.status}`, round: rn };
+            return { error: err.error || `HTTP ${res.status}`, round: rn, kind: sc.kind };
         }
         return await res.json();
     };
-    const results = await Promise.all(roundsToFetch.map(fetchOne));
+
+    // For each target (chip or single), fetch all wanted rounds in parallel.
+    const blocks = await Promise.all(targets.map(async t => {
+        const results = await Promise.all(roundsToFetch.map(rn => fetchOne(t.scope, rn)));
+        return { target: t, results };
+    }));
     spinner.style.display = 'none';
 
     // Round toggle visibility — based on the first successful round's metadata.
     const toggle = document.getElementById('lokRoundToggle');
-    const meta = results.find(r => !r.error);
+    const meta = blocks.flatMap(b => b.results).find(r => !r.error);
     if (meta && meta.rounds_available && meta.rounds_available.length > 1) {
         toggle.classList.remove('d-none');
         updateLokRoundButtons();
@@ -5297,17 +5472,32 @@ async function loadLokResults() {
         toggle.classList.add('d-none');
     }
 
-    area.innerHTML = results.map(d => d.error
-        ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
-        : renderLokResultCard(d)
-    ).join('');
+    // Render: one block per target. In compare mode, prefix each block with a
+    // labelled header (so the user knows which chip's card is which).
+    const compareMode = targets.length > 1 || (targets[0] && targets[0].prefix);
+    area.innerHTML = blocks.map(b => {
+        const cardsHtml = b.results.map(d => d.error
+            ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
+            : renderLokResultCard(Object.assign(d, { _chartPrefix: b.target.prefix }))
+        ).join('');
+        if (!compareMode) return cardsHtml;
+        const sc = b.target.scope;
+        const kindLabel = sc.kind === 'vijece' ? 'Vijeće' : 'Načelnik';
+        const headerLabel = sc.muniLabel ? `${sc.label} (${sc.muniLabel})` : sc.label;
+        const header = `<div class="card p-2 mb-2" style="background:#eef2f7; border-left:4px solid #0d6efd;">
+            <i class="bi bi-geo-alt me-1"></i><strong>${escapeHtml(headerLabel || '')}</strong>
+            <span class="badge bg-info text-dark ms-2" style="font-size:0.65rem;">${kindLabel}</span>
+        </div>`;
+        return header + cardsHtml;
+    }).join('');
     area.style.display = '';
 }
 
 function renderLokResultCard(data) {
     // Reuse the global predsjednicki/sabor bar-chart renderer so we get
     // drag-to-merge and the "Poništi" reset button for free.
-    const chartId = `lok_r${data.round}`;
+    const prefix = data._chartPrefix || '';
+    const chartId = `lok_${prefix}r${data.round}`;
     const palette = [
         '#0f3460', '#dc3545', '#198754', '#fd7e14', '#6f42c1',
         '#0dcaf0', '#ca8a04', '#db2777', '#4f46e5', '#059669',
