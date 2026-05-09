@@ -885,6 +885,26 @@
         <!-- National results module -->
         <div id="module-results-predsjednicki" class="module-panel" data-category="predsjednicki">
             <div class="card search-card p-4 mb-4">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Županija</label>
+                        <select id="predSelCounty" class="form-select pred-scope">
+                            <option value="">Republika Hrvatska (sve)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Grad / Općina</label>
+                        <select id="predSelMuni" class="form-select pred-scope" disabled>
+                            <option value="">Sva mjesta u županiji</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Biračko mjesto</label>
+                        <select id="predSelStation" class="form-select pred-scope" disabled>
+                            <option value="">Sva biračka mjesta u općini</option>
+                        </select>
+                    </div>
+                </div>
                 <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
                 <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
             </div>
@@ -2384,6 +2404,9 @@ const nationalIcons = {
 let _nationalData = null; // store for re-rendering
 
 const _resultsModuleInitialized = {};
+// Per-category active year + selected scope (county/muni/station). Used so
+// changing the dropdowns refetches the same year with the new scope.
+const _resultsState = {};
 
 async function initResultsModule(category) {
     if (_resultsModuleInitialized[category]) return;
@@ -2407,9 +2430,80 @@ async function initResultsModule(category) {
         btn.addEventListener('click', () => {
             picker.querySelectorAll('.results-year-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            loadNationalResults(category, parseInt(btn.dataset.year, 10));
+            const yr = parseInt(btn.dataset.year, 10);
+            if (!_resultsState[category]) _resultsState[category] = {};
+            _resultsState[category].year = yr;
+            loadNationalResults(category, yr);
         });
     });
+
+    // Wire scope dropdowns for predsjednicki (others stay national-only for now).
+    if (category === 'predsjednicki') {
+        await initPredsjednickiScope();
+    }
+}
+
+async function initPredsjednickiScope() {
+    const selC = document.getElementById('predSelCounty');
+    const selM = document.getElementById('predSelMuni');
+    const selS = document.getElementById('predSelStation');
+    if (!selC || selC._wired) return;
+    selC._wired = true;
+
+    try {
+        const res = await fetch('/api/counties');
+        if (res.ok) {
+            const counties = await res.json();
+            counties.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                selC.appendChild(opt);
+            });
+        }
+    } catch (e) { console.warn('counties load failed', e); }
+
+    selC.addEventListener('change', async () => {
+        selM.innerHTML = '<option value="">Sva mjesta u županiji</option>';
+        selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+        selM.disabled = true;
+        selS.disabled = true;
+        if (selC.value) {
+            const r = await fetch(`/api/municipalities/${selC.value}`);
+            if (r.ok) {
+                (await r.json()).forEach(m => {
+                    const o = document.createElement('option');
+                    o.value = m.id; o.textContent = m.name;
+                    selM.appendChild(o);
+                });
+                selM.disabled = false;
+            }
+        }
+        refetchPredsjednickiWithScope();
+    });
+    selM.addEventListener('change', async () => {
+        selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+        selS.disabled = true;
+        if (selM.value) {
+            const r = await fetch(`/api/polling-stations/${selM.value}`);
+            if (r.ok) {
+                (await r.json()).forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.id; o.textContent = s.name;
+                    selS.appendChild(o);
+                });
+                selS.disabled = false;
+            }
+        }
+        refetchPredsjednickiWithScope();
+    });
+    selS.addEventListener('change', refetchPredsjednickiWithScope);
+}
+
+function refetchPredsjednickiWithScope() {
+    const st = _resultsState['predsjednicki'];
+    if (!st || !st.year) return; // user hasn't picked a year yet
+    loadNationalResults('predsjednicki', st.year);
 }
 
 async function loadNationalResults(category, year) {
@@ -2421,7 +2515,19 @@ async function loadNationalResults(category, year) {
     resultsArea.style.display = 'none';
     spinner.classList.add('show');
 
-    const res = await fetch(`/api/national/results/${category}/${year}`);
+    // Build scope query params for predsjednicki dropdowns
+    const params = new URLSearchParams();
+    if (category === 'predsjednicki') {
+        const sId = document.getElementById('predSelStation')?.value;
+        const mId = document.getElementById('predSelMuni')?.value;
+        const cId = document.getElementById('predSelCounty')?.value;
+        if (sId) params.set('station_id', sId);
+        else if (mId) params.set('municipality_id', mId);
+        else if (cId) params.set('county_id', cId);
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
+
+    const res = await fetch(`/api/national/results/${category}/${year}${qs}`);
     const data = await res.json();
     data._panel = panel;
 

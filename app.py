@@ -744,7 +744,14 @@ def national_election_types():
 
 @app.route('/api/national/results/<category>/<int:year>')
 def national_results(category, year):
-    """Return national-level aggregated results for a category and year."""
+    """Return aggregated results for a category and year.
+
+    Optional scope query params:
+      - station_id: narrow to a single polling station
+      - municipality_id: narrow to all stations in this muni
+      - county_id: narrow to all stations in this county
+    With no scope params, returns Croatia-wide totals (the default).
+    """
     type_map = {
         'predsjednicki': ['Predsjednički izbori'],
         'eu': ['Izbori za Europski parlament'],
@@ -761,7 +768,37 @@ def national_results(category, year):
     if not type_names:
         return jsonify({'error': 'Unknown category'}), 400
 
-    # Find election rounds
+    station_id = request.args.get('station_id', type=int)
+    muni_id = request.args.get('municipality_id', type=int)
+    county_id = request.args.get('county_id', type=int)
+
+    # Build a station-id subquery for the chosen scope (or None for national).
+    scope_station_ids = None
+    scope_label = 'Republika Hrvatska'
+    if station_id:
+        scope_station_ids = db.session.query(PollingStation.id).filter(
+            PollingStation.id == station_id
+        )
+        ps = PollingStation.query.get(station_id)
+        if ps:
+            scope_label = f'{ps.number} — {ps.location or ps.name or ""}'.strip(' —')
+    elif muni_id:
+        scope_station_ids = db.session.query(PollingStation.id).filter(
+            PollingStation.municipality_id == muni_id
+        )
+        m = Municipality.query.get(muni_id)
+        if m:
+            scope_label = m.name
+    elif county_id:
+        scope_station_ids = (
+            db.session.query(PollingStation.id)
+            .join(Municipality, Municipality.id == PollingStation.municipality_id)
+            .filter(Municipality.county_id == county_id)
+        )
+        c = County.query.get(county_id)
+        if c:
+            scope_label = c.name
+
     rounds = (
         db.session.query(ElectionRound)
         .join(Election, ElectionRound.election_id == Election.id)
@@ -776,34 +813,34 @@ def national_results(category, year):
         election = er.election
         etype = election.election_type
 
-        # Aggregate turnout nationally
-        turnout = db.session.query(
+        turnout_q = db.session.query(
             db.func.sum(TurnoutData.registered_voters),
             db.func.sum(TurnoutData.ballots_cast),
             db.func.sum(TurnoutData.valid_ballots),
             db.func.sum(TurnoutData.invalid_ballots),
-        ).filter(TurnoutData.election_round_id == er.id).first()
+        ).filter(TurnoutData.election_round_id == er.id)
+        if scope_station_ids is not None:
+            turnout_q = turnout_q.filter(TurnoutData.polling_station_id.in_(scope_station_ids))
+        turnout = turnout_q.first()
 
         registered = turnout[0] or 0
         ballots = turnout[1] or 0
         valid = turnout[2] or 0
         invalid = turnout[3] or 0
 
-        # Top lists (all, no limit for national view)
-        top_lists = (
+        lists_q = (
             db.session.query(
                 ElectoralList.name,
                 db.func.sum(ListResult.votes).label('total_votes'),
             )
             .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
             .filter(ElectoralList.election_round_id == er.id)
-            .group_by(ElectoralList.name)
-            .order_by(db.func.sum(ListResult.votes).desc())
-            .all()
         )
+        if scope_station_ids is not None:
+            lists_q = lists_q.filter(ListResult.polling_station_id.in_(scope_station_ids))
+        top_lists = lists_q.group_by(ElectoralList.name).order_by(db.func.sum(ListResult.votes).desc()).all()
 
-        # Top candidates
-        top_candidates = (
+        cands_q = (
             db.session.query(
                 Person.first_name,
                 Person.last_name,
@@ -814,7 +851,11 @@ def national_results(category, year):
             .join(Person, Candidacy.person_id == Person.id)
             .join(ElectoralList, Candidacy.electoral_list_id == ElectoralList.id)
             .filter(ElectoralList.election_round_id == er.id)
-            .group_by(Person.first_name, Person.last_name, ElectoralList.name)
+        )
+        if scope_station_ids is not None:
+            cands_q = cands_q.filter(CandidateResult.polling_station_id.in_(scope_station_ids))
+        top_candidates = (
+            cands_q.group_by(Person.first_name, Person.last_name, ElectoralList.name)
             .order_by(db.func.sum(CandidateResult.votes).desc())
             .all()
         )
@@ -846,6 +887,8 @@ def national_results(category, year):
     return jsonify({
         'category': category,
         'year': year,
+        'scope_label': scope_label,
+        'scope': 'station' if station_id else ('municipality' if muni_id else ('county' if county_id else 'national')),
         'elections': elections,
     })
 
