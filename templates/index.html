@@ -600,8 +600,8 @@
             border: 0; background: transparent; padding: 0; font-size: 0.95rem;
         }
         .izl-compare-chip .chip-x:hover { opacity: 1; }
-        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
-        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path {
+        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg, #eusCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
+        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path, #eusCroatiaMapWrap svg path {
             fill: #ececec;
             stroke: #b0b0b0;
             stroke-width: 0.8;
@@ -609,9 +609,9 @@
             cursor: pointer;
             transition: fill 0.15s;
         }
-        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
-        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected { fill: #e8942e; }
-        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
+        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover, #eusCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
+        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected, #eusCroatiaMapWrap svg path.selected { fill: #e8942e; }
+        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover, #eusCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -938,8 +938,48 @@
 
         <div id="module-results-eu" class="module-panel" data-category="eu">
             <div class="card search-card p-4 mb-4">
-                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
-                <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
+                <div class="row g-4 align-items-start">
+                    <div class="col-md-3">
+                        <div id="eusCroatiaMapWrap"></div>
+                        <div id="eusMapCountyLabel" class="text-center mt-1" style="font-size:0.8rem; color:#666; font-weight:500;"></div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Županija</label>
+                                <select id="eusSelCounty" class="form-select">
+                                    <option value="">Republika Hrvatska (sve)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Grad / Općina</label>
+                                <select id="eusSelMuni" class="form-select" disabled>
+                                    <option value="">Sva mjesta u županiji</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Biračko mjesto</label>
+                                <select id="eusSelStation" class="form-select" disabled>
+                                    <option value="">Sva biračka mjesta u općini</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex gap-2 flex-wrap">
+                                <button id="eusAddCompareBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="bi bi-plus-circle me-1"></i>Dodaj na usporedbu
+                                </button>
+                                <button id="eusClearScopeBtn" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Resetiraj
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <div id="eusCompareChips" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                        <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
+                    </div>
+                </div>
             </div>
             <div class="spinner-wrapper mt-4 results-spinner">
                 <div class="spinner-border text-primary" role="status">
@@ -2457,9 +2497,11 @@ async function initResultsModule(category) {
         });
     });
 
-    // Wire scope dropdowns for predsjednicki (others stay national-only for now).
+    // Wire scope dropdowns
     if (category === 'predsjednicki') {
         await initPredsjednickiScope();
+    } else if (category === 'eu') {
+        await initEuScope();
     }
 }
 
@@ -2653,6 +2695,192 @@ function refetchPredsjednickiWithScope() {
     loadNationalResults('predsjednicki', st.year);
 }
 
+// === EU scope: same widgets as predsjednicki, but on the EU page (eus* IDs)
+const _eus = { mapPaths: [], compareScopes: [] };
+
+async function initEuScope() {
+    const selC = document.getElementById('eusSelCounty');
+    const selM = document.getElementById('eusSelMuni');
+    const selS = document.getElementById('eusSelStation');
+    if (!selC || selC._wired) return;
+    selC._wired = true;
+
+    try {
+        const res = await fetch('/api/counties');
+        if (res.ok) {
+            (await res.json()).forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id; opt.textContent = c.name;
+                selC.appendChild(opt);
+            });
+        }
+    } catch (e) { console.warn('counties load failed', e); }
+
+    loadEusCroatiaMap().catch(e => console.warn('eus map load failed', e));
+
+    selC.addEventListener('change', async () => {
+        selM.innerHTML = '<option value="">Sva mjesta u županiji</option>';
+        selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+        selM.disabled = true; selS.disabled = true;
+        const txt = selC.value ? selC.options[selC.selectedIndex].textContent : '';
+        eusHighlightMapCounty(txt || null);
+        if (selC.value) {
+            const r = await fetch(`/api/municipalities/${selC.value}`);
+            if (r.ok) {
+                (await r.json()).forEach(m => {
+                    const o = document.createElement('option');
+                    o.value = m.id; o.textContent = m.name;
+                    selM.appendChild(o);
+                });
+                selM.disabled = false;
+            }
+        }
+        eusUpdateAddBtn();
+        refetchEuWithScope();
+    });
+    selM.addEventListener('change', async () => {
+        selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+        selS.disabled = true;
+        if (selM.value) {
+            const r = await fetch(`/api/polling-stations/${selM.value}`);
+            if (r.ok) {
+                (await r.json()).forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.id; o.textContent = s.name;
+                    selS.appendChild(o);
+                });
+                selS.disabled = false;
+            }
+        }
+        eusUpdateAddBtn();
+        refetchEuWithScope();
+    });
+    selS.addEventListener('change', () => {
+        eusUpdateAddBtn();
+        refetchEuWithScope();
+    });
+
+    document.getElementById('eusAddCompareBtn').addEventListener('click', onEusAddCompare);
+    document.getElementById('eusClearScopeBtn').addEventListener('click', onEusClearScope);
+}
+
+async function loadEusCroatiaMap() {
+    const wrap = document.getElementById('eusCroatiaMapWrap');
+    const res = await fetch('/static/croatia_map.svg');
+    const svgText = await res.text();
+    wrap.innerHTML = svgText;
+    const embeddedStyle = wrap.querySelector('svg style');
+    if (embeddedStyle) embeddedStyle.remove();
+    const svgTitle = wrap.querySelector('svg title');
+    if (svgTitle) svgTitle.remove();
+    _eus.mapPaths = wrap.querySelectorAll('path[data-county]');
+    const label = document.getElementById('eusMapCountyLabel');
+    _eus.mapPaths.forEach(path => {
+        path.addEventListener('click', () => {
+            const sel = document.getElementById('eusSelCounty');
+            const name = path.getAttribute('data-county');
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].textContent.toUpperCase() === name.toUpperCase()) {
+                    sel.value = sel.options[i].value;
+                    sel.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        });
+        path.addEventListener('mouseenter', () => {
+            if (!path.classList.contains('selected')) label.textContent = path.getAttribute('data-county');
+        });
+        path.addEventListener('mouseleave', () => {
+            const selected = wrap.querySelector('path.selected');
+            label.textContent = selected ? selected.getAttribute('data-county') : '';
+        });
+    });
+}
+
+function eusHighlightMapCounty(name) {
+    _eus.mapPaths.forEach(p => p.classList.remove('selected'));
+    const label = document.getElementById('eusMapCountyLabel');
+    if (name) {
+        const target = document.getElementById('eusCroatiaMapWrap')
+            .querySelector(`path[data-county="${name}"]`);
+        if (target) target.classList.add('selected');
+        label.textContent = name;
+    } else if (label) {
+        label.textContent = '';
+    }
+}
+
+function eusUpdateAddBtn() {
+    const btn = document.getElementById('eusAddCompareBtn');
+    if (!btn) return;
+    btn.disabled = !document.getElementById('eusSelCounty').value;
+}
+
+function eusCurrentScopeKey() {
+    const sId = document.getElementById('eusSelStation').value;
+    const mId = document.getElementById('eusSelMuni').value;
+    const cId = document.getElementById('eusSelCounty').value;
+    const sel = document.getElementById('eusSelStation');
+    const selM = document.getElementById('eusSelMuni');
+    const selC = document.getElementById('eusSelCounty');
+    if (sId) return { type: 'station', id: parseInt(sId, 10), label: sel.options[sel.selectedIndex].textContent };
+    if (mId) return { type: 'municipality', id: parseInt(mId, 10), label: selM.options[selM.selectedIndex].textContent };
+    if (cId) return { type: 'county', id: parseInt(cId, 10), label: selC.options[selC.selectedIndex].textContent };
+    return null;
+}
+
+function onEusAddCompare() {
+    const sc = eusCurrentScopeKey();
+    if (!sc) return;
+    if (_eus.compareScopes.find(x => x.type === sc.type && x.id === sc.id)) return;
+    if (_eus.compareScopes.length >= 8) return;
+    _eus.compareScopes.push(sc);
+    renderEusCompareChips();
+    refetchEuWithScope();
+}
+
+function onEusRemoveCompare(type, id) {
+    _eus.compareScopes = _eus.compareScopes.filter(x => !(x.type === type && x.id === id));
+    renderEusCompareChips();
+    refetchEuWithScope();
+}
+
+function onEusClearScope() {
+    document.getElementById('eusSelCounty').value = '';
+    document.getElementById('eusSelMuni').innerHTML = '<option value="">Sva mjesta u županiji</option>';
+    document.getElementById('eusSelStation').innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+    document.getElementById('eusSelMuni').disabled = true;
+    document.getElementById('eusSelStation').disabled = true;
+    _eus.compareScopes = [];
+    eusHighlightMapCounty(null);
+    eusUpdateAddBtn();
+    renderEusCompareChips();
+    refetchEuWithScope();
+}
+
+function renderEusCompareChips() {
+    const wrap = document.getElementById('eusCompareChips');
+    if (!wrap) return;
+    if (_eus.compareScopes.length === 0) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = _eus.compareScopes.map(s => {
+        const typeLabel = s.type === 'station' ? 'BM' : s.type === 'municipality' ? 'Gr/Op' : 'Žup';
+        return `<span class="izl-compare-chip">
+            <span class="badge bg-secondary me-1" style="font-size:0.6rem;">${typeLabel}</span>
+            ${escapeHtml(s.label)}
+            <button type="button" class="chip-x" data-type="${s.type}" data-id="${s.id}" aria-label="Ukloni">×</button>
+        </span>`;
+    }).join('');
+    wrap.querySelectorAll('.chip-x').forEach(btn => {
+        btn.addEventListener('click', () => onEusRemoveCompare(btn.dataset.type, parseInt(btn.dataset.id, 10)));
+    });
+}
+
+function refetchEuWithScope() {
+    const st = _resultsState['eu'];
+    if (!st || !st.year) return;
+    loadNationalResults('eu', st.year);
+}
+
 async function loadNationalResults(category, year) {
     const panel = document.getElementById(`module-results-${category}`);
     if (!panel) return;
@@ -2662,20 +2890,32 @@ async function loadNationalResults(category, year) {
     resultsArea.style.display = 'none';
     spinner.classList.add('show');
 
-    // Predsjednički compare mode: one fetch per chip, render N cards stacked.
-    if (category === 'predsjednicki' && _pred.compareScopes.length > 0) {
+    // Helper: build URLSearchParams from a scope chip
+    const scopeToParams = sc => {
+        const p = new URLSearchParams();
+        if (!sc) return p;
+        if (sc.type === 'station') p.set('station_id', sc.id);
+        else if (sc.type === 'municipality') p.set('municipality_id', sc.id);
+        else if (sc.type === 'county') p.set('county_id', sc.id);
+        return p;
+    };
+
+    // Compare mode: one fetch per chip, render N cards stacked.
+    const compareScopes = category === 'predsjednicki' ? _pred.compareScopes
+                       : category === 'eu' ? _eus.compareScopes
+                       : [];
+    if (compareScopes.length > 0) {
         const fetchScope = async sc => {
-            const p = new URLSearchParams();
-            if (sc.type === 'station') p.set('station_id', sc.id);
-            else if (sc.type === 'municipality') p.set('municipality_id', sc.id);
-            else if (sc.type === 'county') p.set('county_id', sc.id);
+            const p = scopeToParams(sc);
             const r = await fetch(`/api/national/results/${category}/${year}?${p.toString()}`);
-            return r.ok ? await r.json() : { error: `HTTP ${r.status}`, scope_label: sc.label };
+            const data = r.ok ? await r.json() : { error: `HTTP ${r.status}`, scope_label: sc.label };
+            // Stash the scope-params querystring so renderEuSeats can forward it
+            data._scopeQs = p.toString();
+            return data;
         };
-        const results = await Promise.all(_pred.compareScopes.map(fetchScope));
+        const results = await Promise.all(compareScopes.map(fetchScope));
         spinner.classList.remove('show');
         resultsArea.style.display = 'block';
-        // Render each as its own renderNationalResults pass into the same container
         results.forEach((d, i) => { d._panel = panel; d._compareIndex = i; });
         renderNationalResultsMulti(results);
         return;
@@ -2690,12 +2930,20 @@ async function loadNationalResults(category, year) {
         if (sId) params.set('station_id', sId);
         else if (mId) params.set('municipality_id', mId);
         else if (cId) params.set('county_id', cId);
+    } else if (category === 'eu') {
+        const sId = document.getElementById('eusSelStation')?.value;
+        const mId = document.getElementById('eusSelMuni')?.value;
+        const cId = document.getElementById('eusSelCounty')?.value;
+        if (sId) params.set('station_id', sId);
+        else if (mId) params.set('municipality_id', mId);
+        else if (cId) params.set('county_id', cId);
     }
     const qs = params.toString() ? `?${params.toString()}` : '';
 
     const res = await fetch(`/api/national/results/${category}/${year}${qs}`);
     const data = await res.json();
     data._panel = panel;
+    data._scopeQs = params.toString();
 
     spinner.classList.remove('show');
     resultsArea.style.display = 'block';
@@ -2812,13 +3060,15 @@ function renderNationalResults(data) {
 
     // EU only: fetch + render D'Hondt seat allocation under each year card.
     // Use scoped lookup inside the panel — slot IDs are now namespaced by
-    // category, but querying within the panel guarantees we never grab a
-    // slot from another module even if IDs ever collide again.
+    // category AND compare-index prefix, so multiple compared scopes don't
+    // collide.
     if (data.category === 'eu') {
+        const scopeQs = data._scopeQs ? `?${data._scopeQs}` : '';
         elections.forEach((el, idx) => {
-            const slot = panel.querySelector(`#euSeatsSlot_eu_nat_${idx}`);
+            const cid = `${idPrefix}nat_${idx}`;
+            const slot = panel.querySelector(`#euSeatsSlot_eu_${cid}`);
             if (!slot) return;
-            fetch(`/api/national/eu-seats/${el.year}`)
+            fetch(`/api/national/eu-seats/${el.year}${scopeQs}`)
                 .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
                 .then(seatsData => renderEuSeats(slot, seatsData))
                 .catch(err => { console.warn(`EU seats fetch failed for ${el.year}:`, err); });

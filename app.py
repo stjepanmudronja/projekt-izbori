@@ -1185,7 +1185,33 @@ def eu_seats(year):
 
     n_seats = EU_SEATS_BY_YEAR.get(year, 12)
 
-    list_rows = (
+    # Optional scope filters — narrow list/candidate counts to a single area.
+    station_id = request.args.get('station_id', type=int)
+    muni_id = request.args.get('municipality_id', type=int)
+    county_id = request.args.get('county_id', type=int)
+    scope_station_ids = None
+    scope_label = 'Republika Hrvatska'
+    if station_id:
+        scope_station_ids = db.session.query(PollingStation.id).filter(PollingStation.id == station_id)
+        ps = PollingStation.query.get(station_id)
+        if ps:
+            scope_label = f'{ps.number} — {ps.location or ps.name or ""}'.strip(' —')
+    elif muni_id:
+        scope_station_ids = db.session.query(PollingStation.id).filter(PollingStation.municipality_id == muni_id)
+        m = Municipality.query.get(muni_id)
+        if m:
+            scope_label = m.name
+    elif county_id:
+        scope_station_ids = (
+            db.session.query(PollingStation.id)
+            .join(Municipality, Municipality.id == PollingStation.municipality_id)
+            .filter(Municipality.county_id == county_id)
+        )
+        c = County.query.get(county_id)
+        if c:
+            scope_label = c.name
+
+    list_q = (
         db.session.query(
             ElectoralList.id,
             ElectoralList.name,
@@ -1193,7 +1219,11 @@ def eu_seats(year):
         )
         .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
         .filter(ElectoralList.election_round_id == er.id)
-        .group_by(ElectoralList.id, ElectoralList.name)
+    )
+    if scope_station_ids is not None:
+        list_q = list_q.filter(ListResult.polling_station_id.in_(scope_station_ids))
+    list_rows = (
+        list_q.group_by(ElectoralList.id, ElectoralList.name)
         .order_by(db.func.sum(ListResult.votes).desc())
         .all()
     )
@@ -1248,8 +1278,9 @@ def eu_seats(year):
         g['eligible'] = g['eligible'] or p['eligible']
     party_list = sorted(grouped.values(), key=lambda x: (-x['seats'], -x['votes']))
 
-    # Pull every candidacy's personal preferential vote total across all lists.
-    cand_rows = (
+    # Pull every candidacy's personal preferential vote total across all lists,
+    # narrowed to the chosen scope when one is set.
+    cand_q = (
         db.session.query(
             Candidacy.id,
             Person.first_name,
@@ -1261,10 +1292,15 @@ def eu_seats(year):
         )
         .join(Person, Person.id == Candidacy.person_id)
         .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
-        .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+        .outerjoin(CandidateResult, db.and_(
+            CandidateResult.candidacy_id == Candidacy.id,
+            *([CandidateResult.polling_station_id.in_(scope_station_ids)] if scope_station_ids is not None else []),
+        ))
         .filter(ElectoralList.election_round_id == er.id)
-        .group_by(Candidacy.id, Person.first_name, Person.last_name,
-                  Candidacy.position_on_list, ElectoralList.id, ElectoralList.name)
+    )
+    cand_rows = (
+        cand_q.group_by(Candidacy.id, Person.first_name, Person.last_name,
+                        Candidacy.position_on_list, ElectoralList.id, ElectoralList.name)
         .all()
     )
 
@@ -1331,6 +1367,8 @@ def eu_seats(year):
         'threshold_votes': int(round(threshold_votes)),
         'parties': party_list,
         'candidates': candidates,
+        'scope': 'station' if station_id else ('municipality' if muni_id else ('county' if county_id else 'national')),
+        'scope_label': scope_label,
     })
 
 
