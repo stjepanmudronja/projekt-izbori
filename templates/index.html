@@ -2996,6 +2996,14 @@ function renderNationalResults(data) {
     }
 
     const idPrefix = data._compareIdxPrefix || '';
+    // For EU we only show the hemicycle + Zastupnici list at the national
+    // scope. When the user narrows to a county/muni/station, the seat-
+    // allocation visualisation isn't meaningful — fall back to the same
+    // bar-chart layout that other categories use.
+    const scope = data.scope || 'national';
+    const isEuNational = data.category === 'eu' && scope === 'national';
+    const useBarChart = data.category !== 'eu' || !isEuNational;
+
     const electionCards = elections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
             ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
@@ -3019,27 +3027,31 @@ function renderNationalResults(data) {
                 <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
                 <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
             </div>
-            ${data.category === 'eu' ? `<div class="eu-seats-slot mb-3" id="euSeatsSlot_${data.category}_${chartId}" data-year="${el.year}"></div>` : ''}
-            ${data.category === 'eu' ? '' : `
+            ${isEuNational ? `<div class="eu-seats-slot mb-3" id="euSeatsSlot_${data.category}_${chartId}" data-year="${el.year}"></div>` : ''}
+            ${useBarChart ? `
             <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
             <div class="d-flex justify-content-between align-items-center mt-1">
                 <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac na drugi za spajanje rezultata</div>
                 <button class="btn btn-outline-secondary bar-reset-btn" onclick="resetBarChart('${chartId}')" style="display:none;" id="resetBtn_${chartId}">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
                 </button>
-            </div>`}
+            </div>` : ''}
         </div>`;
     }).join('');
 
     container.innerHTML = electionCards;
 
-    // Build bar charts (skip EU — its hemicycle + Zastupnici list is the primary view)
-    if (data.category !== 'eu') {
+    // Build the bar chart whenever it's rendered. Use idPrefix so compare-mode
+    // keys are unique per scope card.
+    if (useBarChart) {
         elections.forEach((el, idx) => {
-            const chartId = `nat_${idx}`;
-            const hasCandidates = el.top_candidates && el.top_candidates.length > 0;
+            const chartId = `${idPrefix}nat_${idx}`;
+            // For EU non-national scope, use top_lists (party vote totals) since
+            // there are no per-candidate votes recorded outside the national level.
+            // For other categories, prefer top_candidates if present.
+            const hasCandidates = el.top_candidates && el.top_candidates.length > 0 && data.category !== 'eu';
             const items = hasCandidates ? el.top_candidates : el.top_lists;
-            if (items.length === 0) return;
+            if (!items || items.length === 0) return;
 
             const originalItems = items.map((it, i) => ({
                 name: it.name,
@@ -3058,11 +3070,9 @@ function renderNationalResults(data) {
         });
     }
 
-    // EU only: fetch + render D'Hondt seat allocation under each year card.
-    // Use scoped lookup inside the panel — slot IDs are now namespaced by
-    // category AND compare-index prefix, so multiple compared scopes don't
-    // collide.
-    if (data.category === 'eu') {
+    // EU national only: fetch + render D'Hondt seat allocation. Skipped when
+    // a county/muni/station scope is active (bar chart above is shown instead).
+    if (isEuNational) {
         const scopeQs = data._scopeQs ? `?${data._scopeQs}` : '';
         elections.forEach((el, idx) => {
             const cid = `${idPrefix}nat_${idx}`;
