@@ -600,8 +600,8 @@
             border: 0; background: transparent; padding: 0; font-size: 0.95rem;
         }
         .izl-compare-chip .chip-x:hover { opacity: 1; }
-        #izlCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
-        #izlCroatiaMapWrap svg path {
+        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
+        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path {
             fill: #ececec;
             stroke: #b0b0b0;
             stroke-width: 0.8;
@@ -609,9 +609,9 @@
             cursor: pointer;
             transition: fill 0.15s;
         }
-        #izlCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
-        #izlCroatiaMapWrap svg path.selected { fill: #e8942e; }
-        #izlCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
+        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
+        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected { fill: #e8942e; }
+        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -885,28 +885,48 @@
         <!-- National results module -->
         <div id="module-results-predsjednicki" class="module-panel" data-category="predsjednicki">
             <div class="card search-card p-4 mb-4">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">Županija</label>
-                        <select id="predSelCounty" class="form-select pred-scope">
-                            <option value="">Republika Hrvatska (sve)</option>
-                        </select>
+                <div class="row g-4 align-items-start">
+                    <div class="col-md-3">
+                        <div id="predCroatiaMapWrap"></div>
+                        <div id="predMapCountyLabel" class="text-center mt-1" style="font-size:0.8rem; color:#666; font-weight:500;"></div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">Grad / Općina</label>
-                        <select id="predSelMuni" class="form-select pred-scope" disabled>
-                            <option value="">Sva mjesta u županiji</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">Biračko mjesto</label>
-                        <select id="predSelStation" class="form-select pred-scope" disabled>
-                            <option value="">Sva biračka mjesta u općini</option>
-                        </select>
+                    <div class="col-md-9">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Županija</label>
+                                <select id="predSelCounty" class="form-select pred-scope">
+                                    <option value="">Republika Hrvatska (sve)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Grad / Općina</label>
+                                <select id="predSelMuni" class="form-select pred-scope" disabled>
+                                    <option value="">Sva mjesta u županiji</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Biračko mjesto</label>
+                                <select id="predSelStation" class="form-select pred-scope" disabled>
+                                    <option value="">Sva biračka mjesta u općini</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex gap-2 flex-wrap">
+                                <button id="predAddCompareBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="bi bi-plus-circle me-1"></i>Dodaj na usporedbu
+                                </button>
+                                <button id="predClearScopeBtn" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Resetiraj
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <div id="predCompareChips" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                        <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
                     </div>
                 </div>
-                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
-                <div class="results-year-picker d-flex gap-2 flex-wrap"></div>
             </div>
             <div class="spinner-wrapper mt-4 results-spinner">
                 <div class="spinner-border text-primary" role="status">
@@ -2443,6 +2463,8 @@ async function initResultsModule(category) {
     }
 }
 
+const _pred = { mapPaths: [], compareScopes: [] };
+
 async function initPredsjednickiScope() {
     const selC = document.getElementById('predSelCounty');
     const selM = document.getElementById('predSelMuni');
@@ -2463,11 +2485,14 @@ async function initPredsjednickiScope() {
         }
     } catch (e) { console.warn('counties load failed', e); }
 
+    loadPredCroatiaMap().catch(e => console.warn('pred map load failed', e));
+
     selC.addEventListener('change', async () => {
         selM.innerHTML = '<option value="">Sva mjesta u županiji</option>';
         selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
-        selM.disabled = true;
-        selS.disabled = true;
+        selM.disabled = true; selS.disabled = true;
+        const txt = selC.value ? selC.options[selC.selectedIndex].textContent : '';
+        predHighlightMapCounty(txt || null);
         if (selC.value) {
             const r = await fetch(`/api/municipalities/${selC.value}`);
             if (r.ok) {
@@ -2479,6 +2504,7 @@ async function initPredsjednickiScope() {
                 selM.disabled = false;
             }
         }
+        predUpdateAddBtn();
         refetchPredsjednickiWithScope();
     });
     selM.addEventListener('change', async () => {
@@ -2495,9 +2521,130 @@ async function initPredsjednickiScope() {
                 selS.disabled = false;
             }
         }
+        predUpdateAddBtn();
         refetchPredsjednickiWithScope();
     });
-    selS.addEventListener('change', refetchPredsjednickiWithScope);
+    selS.addEventListener('change', () => {
+        predUpdateAddBtn();
+        refetchPredsjednickiWithScope();
+    });
+
+    document.getElementById('predAddCompareBtn').addEventListener('click', onPredAddCompare);
+    document.getElementById('predClearScopeBtn').addEventListener('click', onPredClearScope);
+}
+
+async function loadPredCroatiaMap() {
+    const wrap = document.getElementById('predCroatiaMapWrap');
+    const res = await fetch('/static/croatia_map.svg');
+    const svgText = await res.text();
+    wrap.innerHTML = svgText;
+    const embeddedStyle = wrap.querySelector('svg style');
+    if (embeddedStyle) embeddedStyle.remove();
+    const svgTitle = wrap.querySelector('svg title');
+    if (svgTitle) svgTitle.remove();
+    _pred.mapPaths = wrap.querySelectorAll('path[data-county]');
+    const label = document.getElementById('predMapCountyLabel');
+    _pred.mapPaths.forEach(path => {
+        path.addEventListener('click', () => {
+            const sel = document.getElementById('predSelCounty');
+            const countyName = path.getAttribute('data-county');
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].textContent.toUpperCase() === countyName.toUpperCase()) {
+                    sel.value = sel.options[i].value;
+                    sel.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        });
+        path.addEventListener('mouseenter', () => {
+            if (!path.classList.contains('selected')) label.textContent = path.getAttribute('data-county');
+        });
+        path.addEventListener('mouseleave', () => {
+            const selected = wrap.querySelector('path.selected');
+            label.textContent = selected ? selected.getAttribute('data-county') : '';
+        });
+    });
+}
+
+function predHighlightMapCounty(countyName) {
+    _pred.mapPaths.forEach(p => p.classList.remove('selected'));
+    const label = document.getElementById('predMapCountyLabel');
+    if (countyName) {
+        const target = document.getElementById('predCroatiaMapWrap')
+            .querySelector(`path[data-county="${countyName}"]`);
+        if (target) target.classList.add('selected');
+        label.textContent = countyName;
+    } else {
+        if (label) label.textContent = '';
+    }
+}
+
+function predUpdateAddBtn() {
+    const btn = document.getElementById('predAddCompareBtn');
+    if (!btn) return;
+    // Enable when any scope is selected (county / muni / station)
+    const cId = document.getElementById('predSelCounty').value;
+    btn.disabled = !cId;
+}
+
+function predCurrentScopeKey() {
+    const sId = document.getElementById('predSelStation').value;
+    const mId = document.getElementById('predSelMuni').value;
+    const cId = document.getElementById('predSelCounty').value;
+    const sel = document.getElementById('predSelStation');
+    const selM = document.getElementById('predSelMuni');
+    const selC = document.getElementById('predSelCounty');
+    if (sId) return { type: 'station', id: parseInt(sId, 10), label: sel.options[sel.selectedIndex].textContent };
+    if (mId) return { type: 'municipality', id: parseInt(mId, 10), label: selM.options[selM.selectedIndex].textContent };
+    if (cId) return { type: 'county', id: parseInt(cId, 10), label: selC.options[selC.selectedIndex].textContent };
+    return null;
+}
+
+function onPredAddCompare() {
+    const sc = predCurrentScopeKey();
+    if (!sc) return;
+    const dupe = _pred.compareScopes.find(x => x.type === sc.type && x.id === sc.id);
+    if (dupe) return;
+    if (_pred.compareScopes.length >= 8) return; // sane upper bound
+    _pred.compareScopes.push(sc);
+    renderPredCompareChips();
+    refetchPredsjednickiWithScope();
+}
+
+function onPredRemoveCompare(type, id) {
+    _pred.compareScopes = _pred.compareScopes.filter(x => !(x.type === type && x.id === id));
+    renderPredCompareChips();
+    refetchPredsjednickiWithScope();
+}
+
+function onPredClearScope() {
+    document.getElementById('predSelCounty').value = '';
+    document.getElementById('predSelMuni').innerHTML = '<option value="">Sva mjesta u županiji</option>';
+    document.getElementById('predSelStation').innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+    document.getElementById('predSelMuni').disabled = true;
+    document.getElementById('predSelStation').disabled = true;
+    _pred.compareScopes = [];
+    predHighlightMapCounty(null);
+    predUpdateAddBtn();
+    renderPredCompareChips();
+    refetchPredsjednickiWithScope();
+}
+
+function renderPredCompareChips() {
+    const wrap = document.getElementById('predCompareChips');
+    if (!wrap) return;
+    if (_pred.compareScopes.length === 0) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = _pred.compareScopes.map(s => {
+        const typeLabel = s.type === 'station' ? 'BM' : s.type === 'municipality' ? 'Gr/Op' : 'Žup';
+        return `<span class="izl-compare-chip">
+            <span class="badge bg-secondary me-1" style="font-size:0.6rem;">${typeLabel}</span>
+            ${escapeHtml(s.label)}
+            <button type="button" class="chip-x" data-type="${s.type}" data-id="${s.id}" aria-label="Ukloni">×</button>
+        </span>`;
+    }).join('');
+    wrap.querySelectorAll('.chip-x').forEach(btn => {
+        btn.addEventListener('click', () => onPredRemoveCompare(btn.dataset.type, parseInt(btn.dataset.id, 10)));
+    });
 }
 
 function refetchPredsjednickiWithScope() {
@@ -2515,7 +2662,26 @@ async function loadNationalResults(category, year) {
     resultsArea.style.display = 'none';
     spinner.classList.add('show');
 
-    // Build scope query params for predsjednicki dropdowns
+    // Predsjednički compare mode: one fetch per chip, render N cards stacked.
+    if (category === 'predsjednicki' && _pred.compareScopes.length > 0) {
+        const fetchScope = async sc => {
+            const p = new URLSearchParams();
+            if (sc.type === 'station') p.set('station_id', sc.id);
+            else if (sc.type === 'municipality') p.set('municipality_id', sc.id);
+            else if (sc.type === 'county') p.set('county_id', sc.id);
+            const r = await fetch(`/api/national/results/${category}/${year}?${p.toString()}`);
+            return r.ok ? await r.json() : { error: `HTTP ${r.status}`, scope_label: sc.label };
+        };
+        const results = await Promise.all(_pred.compareScopes.map(fetchScope));
+        spinner.classList.remove('show');
+        resultsArea.style.display = 'block';
+        // Render each as its own renderNationalResults pass into the same container
+        results.forEach((d, i) => { d._panel = panel; d._compareIndex = i; });
+        renderNationalResultsMulti(results);
+        return;
+    }
+
+    // Single-scope path (default): use the current dropdowns as the scope.
     const params = new URLSearchParams();
     if (category === 'predsjednicki') {
         const sId = document.getElementById('predSelStation')?.value;
@@ -2538,6 +2704,38 @@ async function loadNationalResults(category, year) {
     renderNationalResults(data);
 }
 
+function renderNationalResultsMulti(results) {
+    // Render N scopes stacked with their labels. We reuse renderNationalResults
+    // by writing each scope into a child wrapper that mimics .results-area, so
+    // chart-ids stay unique via the compare-index prefix on chartId.
+    const panel = results[0] && results[0]._panel;
+    const container = panel ? panel.querySelector('.results-area') : null;
+    if (!container) return;
+    container.innerHTML = '';
+    results.forEach((d, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'results-area pred-compare-block';
+        wrap.style.marginBottom = '1rem';
+        const header = document.createElement('div');
+        header.className = 'card p-2 mb-2';
+        header.style.background = '#eef2f7';
+        header.style.borderLeft = '4px solid #0d6efd';
+        if (d.error) {
+            header.innerHTML = `<strong style="color:#dc3545;">${escapeHtml(d.scope_label || '')}:</strong> <span class="text-muted">${escapeHtml(d.error)}</span>`;
+            container.appendChild(header);
+            return;
+        }
+        header.innerHTML = `<i class="bi bi-geo-alt me-1"></i><strong>${escapeHtml(d.scope_label || '')}</strong>`;
+        container.appendChild(header);
+        container.appendChild(wrap);
+        // Trick renderNationalResults into using this child container by
+        // pointing its panel.querySelector('.results-area') at it.
+        const fakePanel = { querySelector: sel => sel === '.results-area' ? wrap : panel.querySelector(sel) };
+        const dataCopy = Object.assign({}, d, { _panel: fakePanel, _compareIdxPrefix: `cmp${i}_` });
+        renderNationalResults(dataCopy);
+    });
+}
+
 function renderNationalResults(data) {
     const panel = data._panel || document.getElementById(`module-results-${data.category}`);
     const container = panel ? panel.querySelector('.results-area') : null;
@@ -2549,10 +2747,11 @@ function renderNationalResults(data) {
         return;
     }
 
+    const idPrefix = data._compareIdxPrefix || '';
     const electionCards = elections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
             ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
-        const chartId = `nat_${idx}`;
+        const chartId = `${idPrefix}nat_${idx}`;
 
         return `
         <div class="card result-card mb-3 p-3">
