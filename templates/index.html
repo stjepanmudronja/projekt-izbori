@@ -600,8 +600,8 @@
             border: 0; background: transparent; padding: 0; font-size: 0.95rem;
         }
         .izl-compare-chip .chip-x:hover { opacity: 1; }
-        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg, #eusCroatiaMapWrap svg, #lokCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
-        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path, #eusCroatiaMapWrap svg path, #lokCroatiaMapWrap svg path {
+        #izlCroatiaMapWrap svg, #predCroatiaMapWrap svg, #eusCroatiaMapWrap svg, #lokCroatiaMapWrap svg, #saborCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
+        #izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path, #eusCroatiaMapWrap svg path, #lokCroatiaMapWrap svg path, #saborCroatiaMapWrap svg path {
             fill: #ececec;
             stroke: #b0b0b0;
             stroke-width: 0.8;
@@ -609,9 +609,9 @@
             cursor: pointer;
             transition: fill 0.15s;
         }
-        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover, #eusCroatiaMapWrap svg path:hover, #lokCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
-        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected, #eusCroatiaMapWrap svg path.selected, #lokCroatiaMapWrap svg path.selected { fill: #e8942e; }
-        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover, #eusCroatiaMapWrap svg path.selected:hover, #lokCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
+        #izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover, #eusCroatiaMapWrap svg path:hover, #lokCroatiaMapWrap svg path:hover, #saborCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
+        #izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected, #eusCroatiaMapWrap svg path.selected, #lokCroatiaMapWrap svg path.selected, #saborCroatiaMapWrap svg path.selected { fill: #e8942e; }
+        #izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover, #eusCroatiaMapWrap svg path.selected:hover, #lokCroatiaMapWrap svg path.selected:hover, #saborCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -1059,9 +1059,53 @@
 
         <div id="module-sabor-analysis" class="module-panel">
             <div class="card search-card p-4 mb-4">
-                <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
-                <div id="saborAnalysisYears" class="d-flex gap-2 flex-wrap"></div>
+                <div class="row g-4 align-items-start">
+                    <div class="col-md-3">
+                        <div id="saborCroatiaMapWrap"></div>
+                        <div id="saborMapCountyLabel" class="text-center mt-1" style="font-size:0.8rem; color:#666; font-weight:500;"></div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Županija</label>
+                                <select id="saborSelCounty" class="form-select">
+                                    <option value="">Republika Hrvatska (sve)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Grad / Općina</label>
+                                <select id="saborSelMuni" class="form-select" disabled>
+                                    <option value="">Sva mjesta u županiji</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Biračko mjesto</label>
+                                <select id="saborSelStation" class="form-select" disabled>
+                                    <option value="">Sva biračka mjesta u općini</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex gap-2 flex-wrap">
+                                <button id="saborAddCompareBtn" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="bi bi-plus-circle me-1"></i>Dodaj na usporedbu
+                                </button>
+                                <button id="saborClearScopeBtn" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Resetiraj
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <div id="saborCompareChips" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <small class="text-muted d-block mb-2">
+                            <i class="bi bi-info-circle me-1"></i>Konačni rezultati i koalicijska simulacija uvijek prikazuju cijelu Hrvatsku. Odabir županije, grada/općine ili biračkog mjesta dodaje stupčasti graf glasova za stranke u toj zoni.
+                        </small>
+                        <label class="form-label fw-semibold mb-2">Odaberi godinu izbora</label>
+                        <div id="saborAnalysisYears" class="d-flex gap-2 flex-wrap"></div>
+                    </div>
+                </div>
             </div>
+            <div id="saborScopeArea"></div>
             <div class="spinner-wrapper mt-4" id="saborAnalysisSpinner">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Učitavanje...</span>
@@ -4042,6 +4086,284 @@ async function initSaborAnalysis() {
     container.innerHTML = sabor.years.map(y =>
         `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}" onclick="loadSaborAnalysis(${y})">${y}.</button>`
     ).join('');
+    await initSaborScope();
+}
+
+// === Sabor scope dropdowns + map + compare chips
+const _sabor = { initialized: false, mapPaths: [], compareScopes: [], year: null };
+
+async function initSaborScope() {
+    const selC = document.getElementById('saborSelCounty');
+    const selM = document.getElementById('saborSelMuni');
+    const selS = document.getElementById('saborSelStation');
+    if (!selC || _sabor.initialized) return;
+    _sabor.initialized = true;
+
+    try {
+        const res = await fetch('/api/counties');
+        if (res.ok) {
+            (await res.json()).forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id; opt.textContent = c.name;
+                selC.appendChild(opt);
+            });
+        }
+    } catch (e) { console.warn('counties load failed', e); }
+
+    loadSaborCroatiaMap().catch(e => console.warn('sabor map load failed', e));
+
+    selC.addEventListener('change', async () => {
+        selM.innerHTML = '<option value="">Sva mjesta u županiji</option>';
+        selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+        selM.disabled = true; selS.disabled = true;
+        const txt = selC.value ? selC.options[selC.selectedIndex].textContent : '';
+        saborHighlightMapCounty(txt || null);
+        if (selC.value) {
+            const r = await fetch(`/api/municipalities/${selC.value}`);
+            if (r.ok) {
+                (await r.json()).forEach(m => {
+                    const o = document.createElement('option');
+                    o.value = m.id; o.textContent = m.name;
+                    selM.appendChild(o);
+                });
+                selM.disabled = false;
+            }
+        }
+        saborUpdateAddBtn();
+        refreshSaborScopeArea();
+    });
+    selM.addEventListener('change', async () => {
+        selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+        selS.disabled = true;
+        if (selM.value) {
+            const r = await fetch(`/api/polling-stations/${selM.value}`);
+            if (r.ok) {
+                (await r.json()).forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.id; o.textContent = s.name;
+                    selS.appendChild(o);
+                });
+                selS.disabled = false;
+            }
+        }
+        saborUpdateAddBtn();
+        refreshSaborScopeArea();
+    });
+    selS.addEventListener('change', () => {
+        saborUpdateAddBtn();
+        refreshSaborScopeArea();
+    });
+
+    document.getElementById('saborAddCompareBtn').addEventListener('click', onSaborAddCompare);
+    document.getElementById('saborClearScopeBtn').addEventListener('click', onSaborClearScope);
+}
+
+async function loadSaborCroatiaMap() {
+    const wrap = document.getElementById('saborCroatiaMapWrap');
+    const res = await fetch('/static/croatia_map.svg');
+    const svgText = await res.text();
+    wrap.innerHTML = svgText;
+    const embeddedStyle = wrap.querySelector('svg style');
+    if (embeddedStyle) embeddedStyle.remove();
+    const svgTitle = wrap.querySelector('svg title');
+    if (svgTitle) svgTitle.remove();
+    _sabor.mapPaths = wrap.querySelectorAll('path[data-county]');
+    const label = document.getElementById('saborMapCountyLabel');
+    _sabor.mapPaths.forEach(path => {
+        path.addEventListener('click', () => {
+            const sel = document.getElementById('saborSelCounty');
+            const name = path.getAttribute('data-county');
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].textContent.toUpperCase() === name.toUpperCase()) {
+                    sel.value = sel.options[i].value;
+                    sel.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        });
+        path.addEventListener('mouseenter', () => {
+            if (!path.classList.contains('selected')) label.textContent = path.getAttribute('data-county');
+        });
+        path.addEventListener('mouseleave', () => {
+            const selected = wrap.querySelector('path.selected');
+            label.textContent = selected ? selected.getAttribute('data-county') : '';
+        });
+    });
+}
+
+function saborHighlightMapCounty(name) {
+    _sabor.mapPaths.forEach(p => p.classList.remove('selected'));
+    const label = document.getElementById('saborMapCountyLabel');
+    if (name) {
+        const target = document.getElementById('saborCroatiaMapWrap')
+            .querySelector(`path[data-county="${name}"]`);
+        if (target) target.classList.add('selected');
+        label.textContent = name;
+    } else if (label) {
+        label.textContent = '';
+    }
+}
+
+function saborUpdateAddBtn() {
+    const btn = document.getElementById('saborAddCompareBtn');
+    if (!btn) return;
+    btn.disabled = !document.getElementById('saborSelCounty').value;
+}
+
+function saborCurrentScopeKey() {
+    const sId = document.getElementById('saborSelStation').value;
+    const mId = document.getElementById('saborSelMuni').value;
+    const cId = document.getElementById('saborSelCounty').value;
+    const sel = document.getElementById('saborSelStation');
+    const selM = document.getElementById('saborSelMuni');
+    const selC = document.getElementById('saborSelCounty');
+    if (sId) return { type: 'station', id: parseInt(sId, 10), label: sel.options[sel.selectedIndex].textContent };
+    if (mId) return { type: 'municipality', id: parseInt(mId, 10), label: selM.options[selM.selectedIndex].textContent };
+    if (cId) return { type: 'county', id: parseInt(cId, 10), label: selC.options[selC.selectedIndex].textContent };
+    return null;
+}
+
+function onSaborAddCompare() {
+    const sc = saborCurrentScopeKey();
+    if (!sc) return;
+    if (_sabor.compareScopes.find(x => x.type === sc.type && x.id === sc.id)) return;
+    if (_sabor.compareScopes.length >= 6) return;
+    _sabor.compareScopes.push(sc);
+    renderSaborCompareChips();
+    refreshSaborScopeArea();
+}
+
+function onSaborRemoveCompare(type, id) {
+    _sabor.compareScopes = _sabor.compareScopes.filter(x => !(x.type === type && x.id === id));
+    renderSaborCompareChips();
+    refreshSaborScopeArea();
+}
+
+function onSaborClearScope() {
+    document.getElementById('saborSelCounty').value = '';
+    document.getElementById('saborSelMuni').innerHTML = '<option value="">Sva mjesta u županiji</option>';
+    document.getElementById('saborSelStation').innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
+    document.getElementById('saborSelMuni').disabled = true;
+    document.getElementById('saborSelStation').disabled = true;
+    _sabor.compareScopes = [];
+    saborHighlightMapCounty(null);
+    saborUpdateAddBtn();
+    renderSaborCompareChips();
+    refreshSaborScopeArea();
+}
+
+function renderSaborCompareChips() {
+    const wrap = document.getElementById('saborCompareChips');
+    if (!wrap) return;
+    if (_sabor.compareScopes.length === 0) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = _sabor.compareScopes.map(s => {
+        const typeLabel = s.type === 'station' ? 'BM' : s.type === 'municipality' ? 'Gr/Op' : 'Žup';
+        return `<span class="izl-compare-chip">
+            <span class="badge bg-secondary me-1" style="font-size:0.6rem;">${typeLabel}</span>
+            ${escapeHtml(s.label)}
+            <button type="button" class="chip-x" data-type="${s.type}" data-id="${s.id}" aria-label="Ukloni">×</button>
+        </span>`;
+    }).join('');
+    wrap.querySelectorAll('.chip-x').forEach(btn => {
+        btn.addEventListener('click', () => onSaborRemoveCompare(btn.dataset.type, parseInt(btn.dataset.id, 10)));
+    });
+}
+
+async function refreshSaborScopeArea() {
+    const area = document.getElementById('saborScopeArea');
+    if (!area) return;
+    if (!_sabor.year) { area.innerHTML = ''; return; }
+
+    // Pick scope: chips OR current dropdowns. National (no scope) → no scope card.
+    const scopes = _sabor.compareScopes.length > 0
+        ? _sabor.compareScopes.slice()
+        : (saborCurrentScopeKey() ? [saborCurrentScopeKey()] : []);
+    if (scopes.length === 0) { area.innerHTML = ''; return; }
+
+    area.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Učitavam podatke za odabir...</div>';
+
+    const results = await Promise.all(scopes.map(async (sc, i) => {
+        const p = new URLSearchParams();
+        if (sc.type === 'station') p.set('station_id', sc.id);
+        else if (sc.type === 'municipality') p.set('municipality_id', sc.id);
+        else if (sc.type === 'county') p.set('county_id', sc.id);
+        const r = await fetch(`/api/national/results/sabor/${_sabor.year}?${p.toString()}`);
+        const data = r.ok ? await r.json() : { error: `HTTP ${r.status}`, scope_label: sc.label };
+        data._chartPrefix = `sabsc${i}_`;
+        data._scope = sc;
+        return data;
+    }));
+    renderSaborScopeBlocks(results);
+}
+
+function renderSaborScopeBlocks(results) {
+    const area = document.getElementById('saborScopeArea');
+    if (!area) return;
+    if (!window._electionBarData) window._electionBarData = {};
+
+    const heading = `<h5 class="fw-bold mt-2 mb-2" style="color:#0f3460;">
+        <i class="bi bi-bar-chart me-2"></i>Glasovi po listama u odabranim zonama
+    </h5>`;
+
+    area.innerHTML = heading + results.map(d => {
+        if (d.error) {
+            return `<div class="alert alert-warning">${escapeHtml(d.scope_label || '')}: ${escapeHtml(d.error)}</div>`;
+        }
+        // For sabor, lists vary per district; the endpoint sums vote totals per
+        // list-name across the chosen scope and returns the top_lists in
+        // elections[0].top_lists. (Round 1 only.)
+        const el = (d.elections || [])[0];
+        const items = el && el.top_lists ? el.top_lists.filter(x => x.votes > 0).slice(0, 30) : [];
+        const turnoutPct = el && el.registered_voters > 0 ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
+        const chartId = `sabsc_${d._chartPrefix}r1`;
+        return `<div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    <h6 class="fw-bold mb-1"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(d.scope_label || '')}</h6>
+                    <div class="text-muted" style="font-size:0.82rem;">Parlamentarni izbori ${d.year}.</div>
+                </div>
+                ${el ? `<div class="text-end"><span class="vote-number">${turnoutPct}%</span><br><small class="text-muted">izlaznost</small></div>` : ''}
+            </div>
+            ${el ? `<div class="d-flex gap-3 flex-wrap mb-2">
+                <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${formatNumber(el.registered_voters)}</strong></small>
+                <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
+                <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
+            </div>` : ''}
+            <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+                <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac na drugi za spajanje rezultata</div>
+                <button class="btn btn-outline-secondary bar-reset-btn" onclick="resetBarChart('${chartId}')" style="display:none;" id="resetBtn_${chartId}">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Now populate the bar charts via the shared helper
+    results.forEach(d => {
+        if (d.error) return;
+        const el = (d.elections || [])[0];
+        if (!el || !el.top_lists) return;
+        const items = el.top_lists.filter(x => x.votes > 0).slice(0, 30);
+        if (items.length === 0) return;
+        const chartId = `sabsc_${d._chartPrefix}r1`;
+        const palette = [
+            '#0f3460', '#dc3545', '#198754', '#fd7e14', '#6f42c1',
+            '#0dcaf0', '#ca8a04', '#db2777', '#4f46e5', '#059669',
+            '#d97706', '#7c3aed', '#0d9488', '#e11d48', '#6366f1',
+            '#65a30d', '#c026d3', '#0284c7', '#b91c1c', '#047857',
+        ];
+        const original = items.map((it, i) => ({
+            name: it.name, votes: it.votes,
+            color: palette[i % palette.length], origNames: [it.name],
+        }));
+        window._electionBarData[chartId] = {
+            original: JSON.parse(JSON.stringify(original)),
+            current: original,
+            validBallots: el.valid_ballots,
+        };
+        buildBarChart(chartId);
+    });
 }
 
 function renderActualSaborResults(seatsData) {
@@ -4138,6 +4460,8 @@ async function loadSaborAnalysis(year) {
 
     _saState.rawData = data;
     _saState.year = year;
+    _sabor.year = year; // mirror so the scope card knows the active year
+    refreshSaborScopeArea();
     _saState.merges = {};
     _saState.initialGroups = {};  // listName -> original primary_party label (for "A + B" merge display)
     _saState.excluded = new Set();
