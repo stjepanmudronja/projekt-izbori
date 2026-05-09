@@ -1067,15 +1067,15 @@
                     <div class="col-md-9">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold">Županija</label>
-                                <select id="saborSelCounty" class="form-select">
+                                <label class="form-label fw-semibold">Izborna jedinica</label>
+                                <select id="saborSelDistrict" class="form-select">
                                     <option value="">Republika Hrvatska (sve)</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Grad / Općina</label>
                                 <select id="saborSelMuni" class="form-select" disabled>
-                                    <option value="">Sva mjesta u županiji</option>
+                                    <option value="">Sva mjesta u izbornoj jedinici</option>
                                 </select>
                             </div>
                             <div class="col-12">
@@ -4093,37 +4093,34 @@ async function initSaborAnalysis() {
 const _sabor = { initialized: false, mapPaths: [], compareScopes: [], year: null };
 
 async function initSaborScope() {
-    const selC = document.getElementById('saborSelCounty');
+    const selD = document.getElementById('saborSelDistrict');
     const selM = document.getElementById('saborSelMuni');
     const selS = document.getElementById('saborSelStation');
-    if (!selC || _sabor.initialized) return;
+    if (!selD || _sabor.initialized) return;
     _sabor.initialized = true;
 
-    try {
-        const res = await fetch('/api/counties');
-        if (res.ok) {
-            (await res.json()).forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id; opt.textContent = c.name;
-                selC.appendChild(opt);
-            });
-        }
-    } catch (e) { console.warn('counties load failed', e); }
+    // Districts depend on the chosen year. Fetch once we know a year — at
+    // module-init time we use the most recent year (grabbed from the buttons).
+    const yearBtn = document.querySelector('#saborAnalysisYears .sa-year-btn');
+    const initYear = yearBtn ? parseInt(yearBtn.dataset.year, 10) : null;
+    if (initYear) await loadSaborDistrictOptions(initYear);
 
-    loadSaborCroatiaMap().catch(e => console.warn('sabor map load failed', e));
+    loadSaborDistrictsMap().catch(e => console.warn('sabor districts map load failed', e));
 
-    selC.addEventListener('change', async () => {
-        selM.innerHTML = '<option value="">Sva mjesta u županiji</option>';
+    selD.addEventListener('change', async () => {
+        selM.innerHTML = '<option value="">Sva mjesta u izbornoj jedinici</option>';
         selS.innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
         selM.disabled = true; selS.disabled = true;
-        const txt = selC.value ? selC.options[selC.selectedIndex].textContent : '';
-        saborHighlightMapCounty(txt || null);
-        if (selC.value) {
-            const r = await fetch(`/api/municipalities/${selC.value}`);
+        const num = selD.value ? selD.options[selD.selectedIndex].dataset.number : '';
+        saborHighlightMapDistrict(num || null);
+        if (selD.value) {
+            const yearForFetch = _sabor.year || initYear;
+            const r = await fetch(`/api/sabor/district-municipalities/${selD.value}?year=${yearForFetch}`);
             if (r.ok) {
                 (await r.json()).forEach(m => {
                     const o = document.createElement('option');
-                    o.value = m.id; o.textContent = m.name;
+                    o.value = m.id;
+                    o.textContent = `${m.name} (${m.votes.toLocaleString('hr-HR')})`;
                     selM.appendChild(o);
                 });
                 selM.disabled = false;
@@ -4158,23 +4155,46 @@ async function initSaborScope() {
     document.getElementById('saborClearScopeBtn').addEventListener('click', onSaborClearScope);
 }
 
-async function loadSaborCroatiaMap() {
+async function loadSaborDistrictOptions(year) {
+    const sel = document.getElementById('saborSelDistrict');
+    if (!sel) return;
+    // Wipe everything except the placeholder
+    while (sel.options.length > 1) sel.remove(1);
+    try {
+        const r = await fetch(`/api/sabor/districts/${year}`);
+        if (r.ok) {
+            (await r.json()).forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = d.name;
+                opt.dataset.number = d.number;
+                sel.appendChild(opt);
+            });
+        }
+    } catch (e) { console.warn('districts load failed', e); }
+}
+
+async function loadSaborDistrictsMap() {
     const wrap = document.getElementById('saborCroatiaMapWrap');
-    const res = await fetch('/static/croatia_map.svg');
+    const res = await fetch('/static/croatia_districts.svg');
     const svgText = await res.text();
     wrap.innerHTML = svgText;
     const embeddedStyle = wrap.querySelector('svg style');
     if (embeddedStyle) embeddedStyle.remove();
     const svgTitle = wrap.querySelector('svg title');
     if (svgTitle) svgTitle.remove();
-    _sabor.mapPaths = wrap.querySelectorAll('path[data-county]');
+    // The districts SVG groups paths by <g data-district="I">. Click any path
+    // inside a group to pick that district.
+    _sabor.mapPaths = wrap.querySelectorAll('path[data-district]');
     const label = document.getElementById('saborMapCountyLabel');
+    const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
     _sabor.mapPaths.forEach(path => {
         path.addEventListener('click', () => {
-            const sel = document.getElementById('saborSelCounty');
-            const name = path.getAttribute('data-county');
+            const sel = document.getElementById('saborSelDistrict');
+            const roman = path.getAttribute('data-district');
+            const num = ROMAN.indexOf(roman) + 1;
             for (let i = 0; i < sel.options.length; i++) {
-                if (sel.options[i].textContent.toUpperCase() === name.toUpperCase()) {
+                if (parseInt(sel.options[i].dataset.number || '0', 10) === num) {
                     sel.value = sel.options[i].value;
                     sel.dispatchEvent(new Event('change'));
                     break;
@@ -4182,44 +4202,44 @@ async function loadSaborCroatiaMap() {
             }
         });
         path.addEventListener('mouseenter', () => {
-            if (!path.classList.contains('selected')) label.textContent = path.getAttribute('data-county');
+            label.textContent = `${path.getAttribute('data-district')}. izborna jedinica`;
         });
         path.addEventListener('mouseleave', () => {
             const selected = wrap.querySelector('path.selected');
-            label.textContent = selected ? selected.getAttribute('data-county') : '';
+            label.textContent = selected ? `${selected.getAttribute('data-district')}. izborna jedinica` : '';
         });
     });
 }
 
-function saborHighlightMapCounty(name) {
+function saborHighlightMapDistrict(number) {
     _sabor.mapPaths.forEach(p => p.classList.remove('selected'));
     const label = document.getElementById('saborMapCountyLabel');
-    if (name) {
-        const target = document.getElementById('saborCroatiaMapWrap')
-            .querySelector(`path[data-county="${name}"]`);
-        if (target) target.classList.add('selected');
-        label.textContent = name;
-    } else if (label) {
-        label.textContent = '';
-    }
+    if (!number) { if (label) label.textContent = ''; return; }
+    const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
+    const roman = ROMAN[parseInt(number, 10) - 1];
+    if (!roman) return;
+    document.getElementById('saborCroatiaMapWrap')
+        .querySelectorAll(`path[data-district="${roman}"]`)
+        .forEach(p => p.classList.add('selected'));
+    label.textContent = `${roman}. izborna jedinica`;
 }
 
 function saborUpdateAddBtn() {
     const btn = document.getElementById('saborAddCompareBtn');
     if (!btn) return;
-    btn.disabled = !document.getElementById('saborSelCounty').value;
+    btn.disabled = !document.getElementById('saborSelDistrict').value;
 }
 
 function saborCurrentScopeKey() {
     const sId = document.getElementById('saborSelStation').value;
     const mId = document.getElementById('saborSelMuni').value;
-    const cId = document.getElementById('saborSelCounty').value;
+    const dId = document.getElementById('saborSelDistrict').value;
     const sel = document.getElementById('saborSelStation');
     const selM = document.getElementById('saborSelMuni');
-    const selC = document.getElementById('saborSelCounty');
+    const selD = document.getElementById('saborSelDistrict');
     if (sId) return { type: 'station', id: parseInt(sId, 10), label: sel.options[sel.selectedIndex].textContent };
     if (mId) return { type: 'municipality', id: parseInt(mId, 10), label: selM.options[selM.selectedIndex].textContent };
-    if (cId) return { type: 'county', id: parseInt(cId, 10), label: selC.options[selC.selectedIndex].textContent };
+    if (dId) return { type: 'district', id: parseInt(dId, 10), label: selD.options[selD.selectedIndex].textContent };
     return null;
 }
 
@@ -4240,13 +4260,13 @@ function onSaborRemoveCompare(type, id) {
 }
 
 function onSaborClearScope() {
-    document.getElementById('saborSelCounty').value = '';
-    document.getElementById('saborSelMuni').innerHTML = '<option value="">Sva mjesta u županiji</option>';
+    document.getElementById('saborSelDistrict').value = '';
+    document.getElementById('saborSelMuni').innerHTML = '<option value="">Sva mjesta u izbornoj jedinici</option>';
     document.getElementById('saborSelStation').innerHTML = '<option value="">Sva biračka mjesta u općini</option>';
     document.getElementById('saborSelMuni').disabled = true;
     document.getElementById('saborSelStation').disabled = true;
     _sabor.compareScopes = [];
-    saborHighlightMapCounty(null);
+    saborHighlightMapDistrict(null);
     saborUpdateAddBtn();
     renderSaborCompareChips();
     refreshSaborScopeArea();
@@ -4257,7 +4277,7 @@ function renderSaborCompareChips() {
     if (!wrap) return;
     if (_sabor.compareScopes.length === 0) { wrap.innerHTML = ''; return; }
     wrap.innerHTML = _sabor.compareScopes.map(s => {
-        const typeLabel = s.type === 'station' ? 'BM' : s.type === 'municipality' ? 'Gr/Op' : 'Žup';
+        const typeLabel = s.type === 'station' ? 'BM' : s.type === 'municipality' ? 'Gr/Op' : 'IJ';
         return `<span class="izl-compare-chip">
             <span class="badge bg-secondary me-1" style="font-size:0.6rem;">${typeLabel}</span>
             ${escapeHtml(s.label)}
@@ -4286,7 +4306,7 @@ async function refreshSaborScopeArea() {
         const p = new URLSearchParams();
         if (sc.type === 'station') p.set('station_id', sc.id);
         else if (sc.type === 'municipality') p.set('municipality_id', sc.id);
-        else if (sc.type === 'county') p.set('county_id', sc.id);
+        else if (sc.type === 'district') p.set('district_id', sc.id);
         const r = await fetch(`/api/national/results/sabor/${_sabor.year}?${p.toString()}`);
         const data = r.ok ? await r.json() : { error: `HTTP ${r.status}`, scope_label: sc.label };
         data._chartPrefix = `sabsc${i}_`;
@@ -4461,6 +4481,12 @@ async function loadSaborAnalysis(year) {
     _saState.rawData = data;
     _saState.year = year;
     _sabor.year = year; // mirror so the scope card knows the active year
+    // District ids vary per year; reload the dropdown for the freshly picked year
+    // and clear any stale chips/selection from a different year.
+    _sabor.compareScopes = [];
+    renderSaborCompareChips();
+    onSaborClearScope();
+    loadSaborDistrictOptions(year);
     refreshSaborScopeArea();
     _saState.merges = {};
     _saState.initialGroups = {};  // listName -> original primary_party label (for "A + B" merge display)

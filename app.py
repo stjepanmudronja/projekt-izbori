@@ -771,6 +771,7 @@ def national_results(category, year):
     station_id = request.args.get('station_id', type=int)
     muni_id = request.args.get('municipality_id', type=int)
     county_id = request.args.get('county_id', type=int)
+    district_id = request.args.get('district_id', type=int)  # sabor only
 
     # Build a station-id subquery for the chosen scope (or None for national).
     scope_station_ids = None
@@ -798,6 +799,17 @@ def national_results(category, year):
         c = County.query.get(county_id)
         if c:
             scope_label = c.name
+    elif district_id and category == 'sabor':
+        # Sabor scope = polling stations whose ListResults reference lists in this district
+        scope_station_ids = (
+            db.session.query(ListResult.polling_station_id)
+            .join(ElectoralList, ElectoralList.id == ListResult.electoral_list_id)
+            .filter(ElectoralList.district_id == district_id)
+            .distinct()
+        )
+        d = ElectoralDistrict.query.get(district_id)
+        if d:
+            scope_label = d.name
 
     rounds = (
         db.session.query(ElectionRound)
@@ -1370,6 +1382,68 @@ def eu_seats(year):
         'scope': 'station' if station_id else ('municipality' if muni_id else ('county' if county_id else 'national')),
         'scope_label': scope_label,
     })
+
+
+# --- Sabor: izborne jedinice & per-district scope ---
+
+@app.route('/api/sabor/districts/<int:year>')
+def sabor_districts(year):
+    """List Sabor electoral districts that have results for this year.
+    Returns id, number, name. Skips minority sub-districts (121-126) — they're
+    handled separately in the seat-allocation logic and aren't useful as a
+    geographic filter for the bar-chart view."""
+    rows = (
+        db.session.query(ElectoralDistrict.id, ElectoralDistrict.number, ElectoralDistrict.name)
+        .join(ElectoralList, ElectoralList.district_id == ElectoralDistrict.id)
+        .join(ElectionRound, ElectionRound.id == ElectoralList.election_round_id)
+        .join(Election, Election.id == ElectionRound.election_id)
+        .join(ElectionType, ElectionType.id == Election.election_type_id)
+        .filter(ElectionType.name == 'Parlamentarni izbori', Election.year == year,
+                ElectoralDistrict.number < 121)
+        .distinct()
+        .order_by(ElectoralDistrict.number)
+        .all()
+    )
+    return jsonify([{'id': r.id, 'number': r.number, 'name': r.name} for r in rows])
+
+
+@app.route('/api/sabor/district-municipalities/<int:district_id>')
+def sabor_district_municipalities(district_id):
+    """Municipalities with meaningful polling results in this Sabor district.
+
+    Diaspora pseudo-munis (e.g. ALBANIJA, ARGENTINA) typically have 1–9 votes
+    in every district, so we threshold at >= 50 votes in this district to keep
+    the dropdown focused. Sorted by vote count descending so biggest first.
+    """
+    year = request.args.get('year', type=int)
+    MIN_VOTES = 50
+    q = (
+        db.session.query(
+            Municipality.id, Municipality.name, County.name.label('county_name'),
+            db.func.sum(ListResult.votes).label('total_votes'),
+        )
+        .join(PollingStation, PollingStation.municipality_id == Municipality.id)
+        .join(ListResult, ListResult.polling_station_id == PollingStation.id)
+        .join(ElectoralList, ElectoralList.id == ListResult.electoral_list_id)
+        .join(ElectionRound, ElectionRound.id == ElectoralList.election_round_id)
+        .join(Election, Election.id == ElectionRound.election_id)
+        .join(ElectionType, ElectionType.id == Election.election_type_id)
+        .outerjoin(County, County.id == Municipality.county_id)
+        .filter(ElectionType.name == 'Parlamentarni izbori',
+                ElectoralList.district_id == district_id)
+    )
+    if year:
+        q = q.filter(Election.year == year)
+    rows = (
+        q.group_by(Municipality.id, Municipality.name, County.name)
+        .having(db.func.sum(ListResult.votes) >= MIN_VOTES)
+        .order_by(db.func.sum(ListResult.votes).desc())
+        .all()
+    )
+    return jsonify([
+        {'id': r.id, 'name': r.name, 'county': r.county_name, 'votes': int(r.total_votes or 0)}
+        for r in rows
+    ])
 
 
 # --- Lokalni: per-station list/candidate results ---
