@@ -473,9 +473,16 @@ def list_counties():
 
 @app.route('/api/municipalities/<int:county_id>')
 def list_municipalities(county_id):
+    """Munis in this county, excluding the Sabor-only "ZAGREB - N. IZBORNA
+    JEDINICA" pseudo-munis (those exist solely so the parliamentary import
+    can split Zagreb across multiple electoral districts; for every other
+    election GRAD ZAGREB is the meaningful unit). Sabor's own scope picker
+    uses /api/sabor/district-municipalities instead and isn't affected.
+    """
     munis = (
         Municipality.query
-        .filter_by(county_id=county_id)
+        .filter(Municipality.county_id == county_id)
+        .filter(~Municipality.name.like('%IZBORNA JEDINICA%'))
         .order_by(Municipality.name)
         .all()
     )
