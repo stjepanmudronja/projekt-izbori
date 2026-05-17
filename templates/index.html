@@ -401,6 +401,22 @@
             flex: 1;
             min-width: 0;
         }
+        /* Used by the analitika pages (pred / eu / lokalni / sabor) to render
+           up to 3 compared scopes side-by-side, wrapping on narrow viewports. */
+        .scope-compare-grid {
+            flex-wrap: wrap;
+        }
+        .scope-compare-grid > .compare-card {
+            flex: 1 1 280px;
+            max-width: 100%;
+        }
+        .scope-compare-grid .result-card,
+        .scope-compare-grid .card {
+            margin-bottom: 0.75rem !important;
+        }
+        .scope-compare-grid .bar-label {
+            max-width: 110px;
+        }
 
         /* Sidebar sub-items */
         .sidebar-subnav {
@@ -2746,7 +2762,7 @@ function onPredAddCompare() {
     if (!sc) return;
     const dupe = _pred.compareScopes.find(x => x.type === sc.type && x.id === sc.id);
     if (dupe) return;
-    if (_pred.compareScopes.length >= 8) return; // sane upper bound
+    if (_pred.compareScopes.length >= 3) return; // side-by-side cap, mirrors Usporedi module
     _pred.compareScopes.push(sc);
     renderPredCompareChips();
     refetchPredsjednickiWithScope();
@@ -2932,7 +2948,7 @@ function onEusAddCompare() {
     const sc = eusCurrentScopeKey();
     if (!sc) return;
     if (_eus.compareScopes.find(x => x.type === sc.type && x.id === sc.id)) return;
-    if (_eus.compareScopes.length >= 8) return;
+    if (_eus.compareScopes.length >= 3) return; // side-by-side cap
     _eus.compareScopes.push(sc);
     renderEusCompareChips();
     refetchEuWithScope();
@@ -3052,31 +3068,33 @@ async function loadNationalResults(category, year) {
 }
 
 function renderNationalResultsMulti(results) {
-    // Render N scopes stacked with their labels. We reuse renderNationalResults
-    // by writing each scope into a child wrapper that mimics .results-area, so
-    // chart-ids stay unique via the compare-index prefix on chartId.
+    // Render N scopes side-by-side (max 3) — same .compare-grid layout used by
+    // the "Usporedi" feature in Prema lokaciji. Each column gets its own
+    // results-area wrapper and a compare-index prefix so chart-ids stay unique.
     const panel = results[0] && results[0]._panel;
     const container = panel ? panel.querySelector('.results-area') : null;
     if (!container) return;
     container.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'compare-grid scope-compare-grid';
+    container.appendChild(grid);
+
     results.forEach((d, i) => {
+        const col = document.createElement('div');
+        col.className = 'compare-card';
+        const headerHtml = d.error
+            ? `<div class="compare-card-header"><h6>${escapeHtml(d.scope_label || '')}</h6></div>
+               <div class="compare-card-body"><div class="alert alert-warning mb-0">${escapeHtml(d.error)}</div></div>`
+            : `<div class="compare-card-header"><h6><i class="bi bi-geo-alt me-1"></i>${escapeHtml(d.scope_label || '')}</h6></div>`;
+        col.innerHTML = headerHtml;
+        grid.appendChild(col);
+        if (d.error) return;
+        const body = document.createElement('div');
+        body.className = 'compare-card-body';
         const wrap = document.createElement('div');
-        wrap.className = 'results-area pred-compare-block';
-        wrap.style.marginBottom = '1rem';
-        const header = document.createElement('div');
-        header.className = 'card p-2 mb-2';
-        header.style.background = '#eef2f7';
-        header.style.borderLeft = '4px solid #0d6efd';
-        if (d.error) {
-            header.innerHTML = `<strong style="color:#dc3545;">${escapeHtml(d.scope_label || '')}:</strong> <span class="text-muted">${escapeHtml(d.error)}</span>`;
-            container.appendChild(header);
-            return;
-        }
-        header.innerHTML = `<i class="bi bi-geo-alt me-1"></i><strong>${escapeHtml(d.scope_label || '')}</strong>`;
-        container.appendChild(header);
-        container.appendChild(wrap);
-        // Trick renderNationalResults into using this child container by
-        // pointing its panel.querySelector('.results-area') at it.
+        wrap.className = 'results-area';
+        body.appendChild(wrap);
+        col.appendChild(body);
         const fakePanel = { querySelector: sel => sel === '.results-area' ? wrap : panel.querySelector(sel) };
         const dataCopy = Object.assign({}, d, { _panel: fakePanel, _compareIdxPrefix: `cmp${i}_` });
         renderNationalResults(dataCopy);
@@ -4283,7 +4301,7 @@ function onSaborAddCompare() {
     const sc = saborCurrentScopeKey();
     if (!sc) return;
     if (_sabor.compareScopes.find(x => x.type === sc.type && x.id === sc.id)) return;
-    if (_sabor.compareScopes.length >= 6) return;
+    if (_sabor.compareScopes.length >= 3) return; // side-by-side cap
     _sabor.compareScopes.push(sc);
     renderSaborCompareChips();
     refreshSaborScopeArea();
@@ -4361,39 +4379,36 @@ function renderSaborScopeBlocks(results) {
         <i class="bi bi-bar-chart me-2"></i>Glasovi po listama u odabranim zonama
     </h5>`;
 
-    area.innerHTML = heading + results.map(d => {
+    const cards = results.map(d => {
         if (d.error) {
-            return `<div class="alert alert-warning">${escapeHtml(d.scope_label || '')}: ${escapeHtml(d.error)}</div>`;
+            return `<div class="compare-card"><div class="compare-card-header"><h6>${escapeHtml(d.scope_label || '')}</h6></div>
+                    <div class="compare-card-body"><div class="alert alert-warning mb-0">${escapeHtml(d.error)}</div></div></div>`;
         }
-        // For sabor, lists vary per district; the endpoint sums vote totals per
-        // list-name across the chosen scope and returns the top_lists in
-        // elections[0].top_lists. (Round 1 only.)
         const el = (d.elections || [])[0];
-        const items = el && el.top_lists ? el.top_lists.filter(x => x.votes > 0).slice(0, 30) : [];
         const turnoutPct = el && el.registered_voters > 0 ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
         const chartId = `sabsc_${d._chartPrefix}r1`;
-        return `<div class="card result-card mb-3 p-3">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
-                <div>
-                    <h6 class="fw-bold mb-1"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(d.scope_label || '')}</h6>
-                    <div class="text-muted" style="font-size:0.82rem;">Parlamentarni izbori ${d.year}.</div>
-                </div>
-                ${el ? `<div class="text-end"><span class="vote-number">${turnoutPct}%</span><br><small class="text-muted">izlaznost</small></div>` : ''}
+        return `<div class="compare-card">
+            <div class="compare-card-header">
+                <h6><i class="bi bi-geo-alt me-1"></i>${escapeHtml(d.scope_label || '')}</h6>
+                ${el ? `<span style="font-size:0.78rem;">${turnoutPct}% izlaznost</span>` : ''}
             </div>
-            ${el ? `<div class="d-flex gap-3 flex-wrap mb-2">
-                <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${formatNumber(el.registered_voters)}</strong></small>
-                <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
-                <small class="text-muted"><i class="bi bi-check-lg me-1"></i>Važeći: <strong>${formatNumber(el.valid_ballots)}</strong></small>
-            </div>` : ''}
-            <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
-            <div class="d-flex justify-content-between align-items-center mt-1">
-                <div class="bar-drag-hint"><i class="bi bi-arrows-move me-1"></i>Povuci stupac na drugi za spajanje rezultata</div>
-                <button class="btn btn-outline-secondary bar-reset-btn" onclick="resetBarChart('${chartId}')" style="display:none;" id="resetBtn_${chartId}">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
-                </button>
+            <div class="compare-card-body">
+                <div class="text-muted" style="font-size:0.78rem; margin-bottom:0.4rem;">Parlamentarni izbori ${d.year}.</div>
+                ${el ? `<div class="d-flex gap-2 flex-wrap mb-2" style="font-size:0.78rem;">
+                    <small class="text-muted"><i class="bi bi-people me-1"></i>Upisani: <strong>${formatNumber(el.registered_voters)}</strong></small>
+                    <small class="text-muted"><i class="bi bi-check2-circle me-1"></i>Glasali: <strong>${formatNumber(el.ballots_cast)}</strong></small>
+                </div>` : ''}
+                <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <div class="bar-drag-hint" style="font-size:0.7rem;"><i class="bi bi-arrows-move me-1"></i>Spoji stupce</div>
+                    <button class="btn btn-outline-secondary bar-reset-btn btn-sm" onclick="resetBarChart('${chartId}')" style="display:none;" id="resetBtn_${chartId}">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
+                    </button>
+                </div>
             </div>
         </div>`;
     }).join('');
+    area.innerHTML = heading + `<div class="compare-grid scope-compare-grid">${cards}</div>`;
 
     // Now populate the bar charts via the shared helper
     results.forEach(d => {
@@ -5685,7 +5700,7 @@ function onLokAddCompare() {
     const sc = lokCurrentScopeKey();
     if (!sc) return;
     if (lok.compareScopes.find(x => x.type === sc.type && x.id === sc.id && x.kind === sc.kind)) return;
-    if (lok.compareScopes.length >= 6) return;
+    if (lok.compareScopes.length >= 3) return; // side-by-side cap
     lok.compareScopes.push(sc);
     renderLokCompareChips();
     loadLokResults();
@@ -5858,24 +5873,35 @@ async function loadLokResults() {
         toggle.classList.add('d-none');
     }
 
-    // Render: one block per target. In compare mode, prefix each block with a
-    // labelled header (so the user knows which chip's card is which).
-    const compareMode = targets.length > 1 || (targets[0] && targets[0].prefix);
-    area.innerHTML = blocks.map(b => {
+    // Single mode (no chips): just stack the round cards as before.
+    const compareMode = lok.compareScopes.length > 0;
+    if (!compareMode) {
+        area.innerHTML = blocks[0].results.map(d => d.error
+            ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
+            : renderLokResultCard(Object.assign(d, { _chartPrefix: blocks[0].target.prefix }))
+        ).join('');
+        area.style.display = '';
+        return;
+    }
+
+    // Compare mode: one column per chip, side-by-side (max 3 by chip cap).
+    const cols = blocks.map(b => {
+        const sc = b.target.scope;
+        const kindLabel = sc.kind === 'vijece' ? 'Vijeće' : 'Načelnik';
+        const headerLabel = sc.muniLabel ? `${sc.label} (${sc.muniLabel})` : sc.label;
         const cardsHtml = b.results.map(d => d.error
             ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
             : renderLokResultCard(Object.assign(d, { _chartPrefix: b.target.prefix }))
         ).join('');
-        if (!compareMode) return cardsHtml;
-        const sc = b.target.scope;
-        const kindLabel = sc.kind === 'vijece' ? 'Vijeće' : 'Načelnik';
-        const headerLabel = sc.muniLabel ? `${sc.label} (${sc.muniLabel})` : sc.label;
-        const header = `<div class="card p-2 mb-2" style="background:#eef2f7; border-left:4px solid #0d6efd;">
-            <i class="bi bi-geo-alt me-1"></i><strong>${escapeHtml(headerLabel || '')}</strong>
-            <span class="badge bg-info text-dark ms-2" style="font-size:0.65rem;">${kindLabel}</span>
+        return `<div class="compare-card">
+            <div class="compare-card-header">
+                <h6><i class="bi bi-geo-alt me-1"></i>${escapeHtml(headerLabel || '')}</h6>
+                <span class="badge bg-info text-dark" style="font-size:0.65rem;">${kindLabel}</span>
+            </div>
+            <div class="compare-card-body">${cardsHtml}</div>
         </div>`;
-        return header + cardsHtml;
     }).join('');
+    area.innerHTML = `<div class="compare-grid scope-compare-grid">${cols}</div>`;
     area.style.display = '';
 }
 
