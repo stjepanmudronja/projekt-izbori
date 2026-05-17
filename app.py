@@ -141,6 +141,23 @@ def index():
     return render_template('index.html')
 
 
+# Pretty URLs per sidebar tab — the SPA reads window.location to switch tabs.
+# Restricted to a known whitelist so we don't accidentally swallow /api/...
+# or static asset paths.
+SPA_ROUTES = {
+    'politicar', 'stranka', 'prema-lokaciji', 'usporedba',
+    'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
+    'rezultati-koalicije-sabor', 'izlaznost', 'karta',
+}
+
+
+@app.route('/<slug>')
+def spa_route(slug):
+    if slug in SPA_ROUTES:
+        return render_template('index.html')
+    return ('Not Found', 404)
+
+
 @app.route('/api/search')
 def search():
     q = request.args.get('q', '').strip()

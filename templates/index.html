@@ -1276,44 +1276,80 @@ const moduleTitles = {
 
 const stationSubnav = document.getElementById('stationSubnav');
 
-sidebarLinks.forEach(link => {
-    link.addEventListener('click', e => {
-        e.preventDefault();
-        const mod = link.dataset.module;
-        if (link.classList.contains('disabled')) return;
+// Bidirectional map between module IDs (used internally for DOM lookup) and
+// pretty URL slugs (used in the address bar). Keep in sync with SPA_ROUTES in
+// app.py — if a module isn't here, the URL falls back to "/".
+const MODULE_SLUGS = {
+    'person': 'politicar',
+    'party': 'stranka',
+    'station': 'prema-lokaciji',
+    'compare': 'usporedba',
+    'results-predsjednicki': 'predsjednicki-izbori',
+    'results-eu': 'eu-parlamentarni-izbori',
+    'results-lokalni': 'lokalni-izbori',
+    'sabor-analysis': 'rezultati-koalicije-sabor',
+    'analytics-turnout': 'izlaznost',
+    'analytics-map': 'karta',
+};
+const SLUG_TO_MODULE = Object.fromEntries(Object.entries(MODULE_SLUGS).map(([k, v]) => [v, k]));
 
-        // Update sidebar active state
-        sidebarLinks.forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
+function activateModule(mod, opts) {
+    opts = opts || {};
+    const link = document.querySelector(`.sidebar-nav a[data-module="${mod}"]`);
+    if (!link || link.classList.contains('disabled')) return false;
 
-        // Show correct module panel
-        modulePanels.forEach(p => p.classList.remove('active'));
-        const panel = document.getElementById(`module-${mod}`);
-        if (panel) {
-            panel.classList.add('active');
+    sidebarLinks.forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+
+    modulePanels.forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById(`module-${mod}`);
+    if (panel) {
+        panel.classList.add('active');
+        if (opts.focusInput !== false) {
             const input = panel.querySelector('.search-input') || panel.querySelector('#compareSearchInput');
             if (input) input.focus();
         }
+    }
 
-        // Keep station subnav open for both station and compare
-        if (mod === 'station' || mod === 'compare') {
-            stationSubnav.classList.add('open');
-        } else {
-            stationSubnav.classList.remove('open');
-        }
+    if (mod === 'station' || mod === 'compare') stationSubnav.classList.add('open');
+    else stationSubnav.classList.remove('open');
 
-        // Update top bar title
-        if (moduleTitles[mod]) {
-            moduleTitle.innerHTML = moduleTitles[mod];
-        }
+    if (moduleTitles[mod]) moduleTitle.innerHTML = moduleTitles[mod];
 
-        if (mod === 'analytics-turnout') initIzlaznost();
-        if (mod === 'results-lokalni') initLokalniModule();
-        else if (mod && mod.startsWith('results-')) {
-            initResultsModule(mod.substring('results-'.length));
+    if (mod === 'analytics-turnout') initIzlaznost();
+    if (mod === 'results-lokalni') initLokalniModule();
+    else if (mod && mod.startsWith('results-')) {
+        initResultsModule(mod.substring('results-'.length));
+    }
+
+    if (opts.pushState) {
+        const slug = MODULE_SLUGS[mod];
+        const path = slug ? `/${slug}` : '/';
+        if (window.location.pathname !== path) {
+            history.pushState({ mod }, '', path);
         }
+    }
+    return true;
+}
+
+sidebarLinks.forEach(link => {
+    link.addEventListener('click', e => {
+        e.preventDefault();
+        activateModule(link.dataset.module, { pushState: true });
     });
 });
+
+// Restore the active tab from the URL on first paint and on back/forward.
+function activateModuleFromUrl() {
+    const slug = (window.location.pathname || '/').replace(/^\//, '').replace(/\/$/, '');
+    const mod = SLUG_TO_MODULE[slug] || 'person';
+    activateModule(mod, { pushState: false, focusInput: false });
+}
+window.addEventListener('popstate', activateModuleFromUrl);
+document.addEventListener('DOMContentLoaded', activateModuleFromUrl);
+// In case DOMContentLoaded already fired (script runs at bottom of body),
+// also try to activate immediately.
+activateModuleFromUrl();
 
 // Per-module chart instances
 const moduleCharts = {};
