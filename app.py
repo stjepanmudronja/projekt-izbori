@@ -1526,9 +1526,16 @@ def sabor_district_municipalities(district_id):
 
 # --- Lokalni: per-station list/candidate results ---
 
+# Muni-level kinds map to the ElectionType chosen by the muni's type
+# ('grad' → Grad*, 'općina' → Općin*). The two county-level kinds always map
+# to a single ElectionType regardless of any muni-type lookup.
 LOKALNI_KIND_TO_TYPE = {
     'vijece': {'grad': 'Gradsko vijeće', 'općina': 'Općinsko vijeće'},
     'nacelnik': {'grad': 'Gradonačelnik', 'općina': 'Načelnik'},
+}
+LOKALNI_COUNTY_KIND_TO_TYPE = {
+    'zupan': 'Župan',
+    'zup_skupstina': 'Županijska skupština',
 }
 
 
@@ -1545,29 +1552,42 @@ def lokalni_station_results():
     """
     station_id = request.args.get('station_id', type=int)
     muni_id = request.args.get('municipality_id', type=int)
+    county_id = request.args.get('county_id', type=int)
     kind = (request.args.get('kind') or '').strip()
     year = request.args.get('year', type=int)
     round_num = request.args.get('round', default=1, type=int)
 
-    if not station_id and not muni_id:
-        return jsonify({'error': 'station_id or municipality_id required'}), 400
-    if kind not in LOKALNI_KIND_TO_TYPE:
-        return jsonify({'error': f'kind must be one of {list(LOKALNI_KIND_TO_TYPE)}'}), 400
+    is_county_kind = kind in LOKALNI_COUNTY_KIND_TO_TYPE
+    if not is_county_kind and kind not in LOKALNI_KIND_TO_TYPE:
+        valid = list(LOKALNI_KIND_TO_TYPE) + list(LOKALNI_COUNTY_KIND_TO_TYPE)
+        return jsonify({'error': f'kind must be one of {valid}'}), 400
 
-    station = None
-    if station_id:
-        station = PollingStation.query.get(station_id)
-        if not station:
-            return jsonify({'error': 'station not found'}), 404
-        muni = station.municipality
+    if is_county_kind:
+        if not county_id:
+            return jsonify({'error': 'county_id required for county-level kind'}), 400
+        county = County.query.get(county_id)
+        if not county:
+            return jsonify({'error': 'county not found'}), 404
+        muni = None
+        station = None
+        type_name = LOKALNI_COUNTY_KIND_TO_TYPE[kind]
     else:
-        muni = Municipality.query.get(muni_id)
-        if not muni:
-            return jsonify({'error': 'municipality not found'}), 404
-    if not muni or muni.type not in ('grad', 'općina'):
-        return jsonify({'error': f'muni type {muni.type if muni else "?"} unsupported for kind={kind}'}), 400
-
-    type_name = LOKALNI_KIND_TO_TYPE[kind][muni.type]
+        if not station_id and not muni_id:
+            return jsonify({'error': 'station_id or municipality_id required'}), 400
+        station = None
+        if station_id:
+            station = PollingStation.query.get(station_id)
+            if not station:
+                return jsonify({'error': 'station not found'}), 404
+            muni = station.municipality
+        else:
+            muni = Municipality.query.get(muni_id)
+            if not muni:
+                return jsonify({'error': 'municipality not found'}), 404
+        if not muni or muni.type not in ('grad', 'općina'):
+            return jsonify({'error': f'muni type {muni.type if muni else "?"} unsupported for kind={kind}'}), 400
+        county = muni.county
+        type_name = LOKALNI_KIND_TO_TYPE[kind][muni.type]
     etype = ElectionType.query.filter_by(name=type_name).first()
     if not etype:
         return jsonify({'error': f'no election type "{type_name}"'}), 404
@@ -1587,42 +1607,31 @@ def lokalni_station_results():
         r.round_number for r in ElectionRound.query.filter_by(election_id=election.id).all()
     ])
 
-    # Vote totals.
-    if station_id:
-        list_rows = (
-            db.session.query(
-                ElectoralList.name,
-                db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
-            )
-            .outerjoin(ListResult, db.and_(
-                ListResult.electoral_list_id == ElectoralList.id,
-                ListResult.polling_station_id == station_id,
-            ))
-            .filter(ElectoralList.election_round_id == er.id)
-            .group_by(ElectoralList.id, ElectoralList.name)
-            .order_by(db.func.sum(ListResult.votes).desc().nullslast())
-            .all()
-        )
+    # Vote totals — filtered to whatever stations are in scope.
+    if is_county_kind:
+        scope_stations = db.session.query(PollingStation.id).join(
+            Municipality, Municipality.id == PollingStation.municipality_id
+        ).filter(Municipality.county_id == county.id)
+    elif station_id:
+        scope_stations = db.session.query(PollingStation.id).filter(PollingStation.id == station_id)
     else:
-        # Aggregate across every polling station in this muni — restrict via a
-        # subquery rather than another outer-join so the JOIN tree stays clean.
-        muni_station_ids = db.session.query(PollingStation.id).filter(
+        scope_stations = db.session.query(PollingStation.id).filter(
             PollingStation.municipality_id == muni.id
         )
-        list_rows = (
-            db.session.query(
-                ElectoralList.name,
-                db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
-            )
-            .outerjoin(ListResult, db.and_(
-                ListResult.electoral_list_id == ElectoralList.id,
-                ListResult.polling_station_id.in_(muni_station_ids),
-            ))
-            .filter(ElectoralList.election_round_id == er.id)
-            .group_by(ElectoralList.id, ElectoralList.name)
-            .order_by(db.func.sum(ListResult.votes).desc().nullslast())
-            .all()
+    list_rows = (
+        db.session.query(
+            ElectoralList.name,
+            db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
         )
+        .outerjoin(ListResult, db.and_(
+            ListResult.electoral_list_id == ElectoralList.id,
+            ListResult.polling_station_id.in_(scope_stations),
+        ))
+        .filter(ElectoralList.election_round_id == er.id)
+        .group_by(ElectoralList.id, ElectoralList.name)
+        .order_by(db.func.sum(ListResult.votes).desc().nullslast())
+        .all()
+    )
     total = sum(r.votes or 0 for r in list_rows)
     items = [{
         'name': r.name,
@@ -1630,8 +1639,8 @@ def lokalni_station_results():
         'votes_pct': (r.votes / total * 100.0) if total else 0.0,
     } for r in list_rows]
 
-    # Turnout
-    if station_id:
+    # Turnout — uses the same station-scope subquery as votes.
+    if station_id and not is_county_kind:
         turnout_row = TurnoutData.query.filter_by(
             election_round_id=er.id, polling_station_id=station_id
         ).first()
@@ -1642,7 +1651,7 @@ def lokalni_station_results():
             'invalid_ballots': turnout_row.invalid_ballots if turnout_row else 0,
         } if turnout_row else None
     else:
-        agg = (
+        agg_q = (
             db.session.query(
                 db.func.coalesce(db.func.sum(TurnoutData.registered_voters), 0),
                 db.func.coalesce(db.func.sum(TurnoutData.ballots_cast), 0),
@@ -1650,12 +1659,14 @@ def lokalni_station_results():
                 db.func.coalesce(db.func.sum(TurnoutData.invalid_ballots), 0),
             )
             .join(PollingStation, PollingStation.id == TurnoutData.polling_station_id)
-            .filter(
-                TurnoutData.election_round_id == er.id,
-                PollingStation.municipality_id == muni.id,
-            )
-            .first()
+            .filter(TurnoutData.election_round_id == er.id)
         )
+        if is_county_kind:
+            agg_q = agg_q.join(Municipality, Municipality.id == PollingStation.municipality_id) \
+                         .filter(Municipality.county_id == county.id)
+        else:
+            agg_q = agg_q.filter(PollingStation.municipality_id == muni.id)
+        agg = agg_q.first()
         turnout_data = {
             'registered_voters': int(agg[0] or 0),
             'ballots_cast': int(agg[1] or 0),
@@ -1663,11 +1674,12 @@ def lokalni_station_results():
             'invalid_ballots': int(agg[3] or 0),
         } if agg else None
 
-    # When the scope is the whole muni, return per-station turnout so the UI
-    # can show a breakdown of every biračko mjesto in this town/municipality.
+    # Per-station turnout breakdown — only for non-station scopes. For
+    # county-level kinds, list every station in the county; for muni scopes,
+    # only that muni's stations.
     stations_breakdown = None
-    if not station_id:
-        sb_rows = (
+    if is_county_kind or not station_id:
+        sb_q = (
             db.session.query(
                 PollingStation.id,
                 PollingStation.number,
@@ -1683,10 +1695,13 @@ def lokalni_station_results():
                 TurnoutData.polling_station_id == PollingStation.id,
                 TurnoutData.election_round_id == er.id,
             ))
-            .filter(PollingStation.municipality_id == muni.id)
-            .order_by(PollingStation.number)
-            .all()
         )
+        if is_county_kind:
+            sb_q = sb_q.join(Municipality, Municipality.id == PollingStation.municipality_id) \
+                       .filter(Municipality.county_id == county.id)
+        else:
+            sb_q = sb_q.filter(PollingStation.municipality_id == muni.id)
+        sb_rows = sb_q.order_by(PollingStation.number).all()
         stations_breakdown = [{
             'id': r[0],
             'number': r[1],
@@ -1700,14 +1715,21 @@ def lokalni_station_results():
             'turnout_pct': (float(r[6]) / float(r[5]) * 100.0) if (r[5] and r[5] > 0) else 0.0,
         } for r in sb_rows]
 
+    if is_county_kind:
+        scope_kind = 'county'
+    elif station_id:
+        scope_kind = 'station'
+    else:
+        scope_kind = 'municipality'
+
     return jsonify({
-        'scope': 'station' if station_id else 'municipality',
+        'scope': scope_kind,
         'station_id': station_id,
         'station_label': f'{station.number} — {station.location or station.name or ""}'.strip(' —') if station else None,
         'station_address': (station.address if station else '') or '',
-        'municipality': muni.name,
-        'municipality_type': muni.type,
-        'county': muni.county.name if muni.county else '',
+        'municipality': muni.name if muni else None,
+        'municipality_type': muni.type if muni else None,
+        'county': county.name if county else '',
         'kind': kind,
         'election_type': type_name,
         'year': election.year,

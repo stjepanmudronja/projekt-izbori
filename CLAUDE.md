@@ -61,6 +61,7 @@ Single-page app with multiple modules, served at port 5001:
 - **Interactive Croatia map** — SVG map (`static/croatia_map.svg`) with county selection
 - **National results** — aggregated results by election type and year
 - **Multi-compare** — side-by-side comparison of candidates/lists
+- **Lokalni izbori per-station / per-muni / per-županija results** (`/api/lokalni/station-results`): one endpoint, four kinds — `vijece`, `nacelnik` (muni-level, need `municipality_id` or `station_id`) and `zupan`, `zup_skupstina` (county-level, need `county_id`). Shared `scope_stations` subquery aggregates votes/turnout, returns per-station turnout breakdown for any non-single-station scope. See `docs/lokalni_county_level_kinds.md`.
 - **Sabor analysis** (`/api/national/sabor-seats/<year>`, `/api/national/sabor-raw/<year>`):
   - **Konačni rezultati**: D'Hondt seat allocation with hemicycle visualization and candidate list
   - **Složi svoju koaliciju — simulacija**: Client-side D'Hondt with drag-to-merge coalitions, 5% threshold toggle, and "Aktiviraj skakače" (manual seat transfers between parties)

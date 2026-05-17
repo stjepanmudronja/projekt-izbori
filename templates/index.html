@@ -1036,8 +1036,14 @@
                                 <label class="form-label fw-semibold">Vrsta izbora</label>
                                 <select id="lokSelKind" class="form-select" disabled>
                                     <option value="">Odaberi vrstu...</option>
-                                    <option value="vijece">Gradsko / Općinsko vijeće</option>
-                                    <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
+                                    <optgroup label="Županijska razina">
+                                        <option value="zupan">Župan</option>
+                                        <option value="zup_skupstina">Županijska skupština</option>
+                                    </optgroup>
+                                    <optgroup label="Gradska / općinska razina">
+                                        <option value="vijece">Gradsko / Općinsko vijeće</option>
+                                        <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div class="col-12 d-flex gap-2 flex-wrap">
@@ -5586,6 +5592,11 @@ const IZL_COMPARE_PALETTE = [
 
 // === Lokalni izbori — per-station results module ===
 const lok = { initialized: false, currentRound: 1, mapPaths: [], compareScopes: [] };
+const LOK_COUNTY_KINDS = new Set(['zupan', 'zup_skupstina']);
+const LOK_KIND_LABELS = {
+    vijece: 'Vijeće', nacelnik: 'Načelnik',
+    zupan: 'Župan', zup_skupstina: 'Žup. skupština',
+};
 
 async function initLokalniModule() {
     if (lok.initialized) return;
@@ -5672,24 +5683,34 @@ function lokHighlightMapCounty(name) {
 }
 
 function lokUpdateAddBtn() {
-    // Enable when we have at least muni + vrsta — those are needed for a meaningful card
+    // County-level kinds need just a county; muni-level kinds need a muni.
     const btn = document.getElementById('lokAddCompareBtn');
     if (!btn) return;
+    const cId = document.getElementById('lokSelCounty').value;
     const mId = document.getElementById('lokSelMuni').value;
     const k = document.getElementById('lokSelKind').value;
-    btn.disabled = !(mId && k);
+    if (!k) { btn.disabled = true; return; }
+    btn.disabled = LOK_COUNTY_KINDS.has(k) ? !cId : !mId;
 }
 
 function lokCurrentScopeKey() {
     const sId = document.getElementById('lokSelStation').value;
     const mId = document.getElementById('lokSelMuni').value;
+    const cId = document.getElementById('lokSelCounty').value;
     const k = document.getElementById('lokSelKind').value;
-    const sel = document.getElementById('lokSelStation');
+    const selS = document.getElementById('lokSelStation');
     const selM = document.getElementById('lokSelMuni');
-    if (!mId || !k) return null;
+    const selC = document.getElementById('lokSelCounty');
+    if (!k) return null;
+    if (LOK_COUNTY_KINDS.has(k)) {
+        if (!cId) return null;
+        return { type: 'county', id: parseInt(cId, 10), kind: k,
+                 label: selC.options[selC.selectedIndex].textContent };
+    }
+    if (!mId) return null;
     if (sId) {
         return { type: 'station', id: parseInt(sId, 10), kind: k,
-                 label: sel.options[sel.selectedIndex].textContent,
+                 label: selS.options[selS.selectedIndex].textContent,
                  muniLabel: selM.options[selM.selectedIndex].textContent };
     }
     return { type: 'municipality', id: parseInt(mId, 10), kind: k,
@@ -5733,8 +5754,8 @@ function renderLokCompareChips() {
     if (!wrap) return;
     if (lok.compareScopes.length === 0) { wrap.innerHTML = ''; return; }
     wrap.innerHTML = lok.compareScopes.map(s => {
-        const typeLabel = s.type === 'station' ? 'BM' : 'Gr/Op';
-        const kindLabel = s.kind === 'vijece' ? 'Vijeće' : 'Načelnik';
+        const typeLabel = s.type === 'station' ? 'BM' : (s.type === 'county' ? 'Žup' : 'Gr/Op');
+        const kindLabel = LOK_KIND_LABELS[s.kind] || s.kind;
         const sub = s.muniLabel ? ` <span style="color:#888">· ${escapeHtml(s.muniLabel)}</span>` : '';
         return `<span class="izl-compare-chip">
             <span class="badge bg-secondary me-1" style="font-size:0.6rem;">${typeLabel}</span>
@@ -5765,7 +5786,7 @@ async function onLokCountyChange() {
     const selK = document.getElementById('lokSelKind');
     selM.innerHTML = '<option value="">Odaberi grad/općinu...</option>';
     selS.innerHTML = '<option value="">Sva biračka mjesta (cijela općina/grad)</option>';
-    selM.disabled = true; selS.disabled = true; selK.disabled = true;
+    selM.disabled = true; selS.disabled = true;
     const txt = selC.value ? selC.options[selC.selectedIndex].textContent : '';
     lokHighlightMapCounty(txt || null);
     if (lok.compareScopes.length === 0) {
@@ -5773,7 +5794,7 @@ async function onLokCountyChange() {
         document.getElementById('lokEmpty').style.display = '';
     }
     lokUpdateAddBtn();
-    if (!selC.value) return;
+    if (!selC.value) { selK.disabled = true; return; }
     const res = await fetch(`/api/municipalities/${selC.value}`);
     const data = await res.json();
     data.forEach(m => {
@@ -5782,6 +5803,8 @@ async function onLokCountyChange() {
         selM.appendChild(opt);
     });
     selM.disabled = false;
+    selK.disabled = false;
+    if (selK.value && LOK_COUNTY_KINDS.has(selK.value)) loadLokResults();
 }
 
 async function onLokMuniChange() {
@@ -5790,8 +5813,7 @@ async function onLokMuniChange() {
     const selK = document.getElementById('lokSelKind');
     selS.innerHTML = '<option value="">Sva biračka mjesta (cijela općina/grad)</option>';
     selS.disabled = true;
-    selK.disabled = !selM.value;
-    if (lok.compareScopes.length === 0) {
+    if (lok.compareScopes.length === 0 && (!selK.value || !LOK_COUNTY_KINDS.has(selK.value))) {
         document.getElementById('lokResultsArea').style.display = 'none';
         document.getElementById('lokEmpty').style.display = '';
     }
@@ -5805,8 +5827,7 @@ async function onLokMuniChange() {
         selS.appendChild(opt);
     });
     selS.disabled = false;
-    // Re-fetch if vrsta is already chosen — switches to muni-wide aggregation
-    if (selK.value) loadLokResults();
+    if (selK.value && !LOK_COUNTY_KINDS.has(selK.value)) loadLokResults();
 }
 
 function onLokStationChange() {
@@ -5829,13 +5850,21 @@ async function loadLokResults() {
             targets.push({ scope: sc, prefix: `cmp${i}_` });
         });
     } else {
+        const countyId = document.getElementById('lokSelCounty').value;
         const muniId = document.getElementById('lokSelMuni').value;
         const stationId = document.getElementById('lokSelStation').value;
         const kind = document.getElementById('lokSelKind').value;
-        if (!kind || (!stationId && !muniId)) return;
-        const sc = stationId
-            ? { type: 'station', id: parseInt(stationId, 10), kind }
-            : { type: 'municipality', id: parseInt(muniId, 10), kind };
+        if (!kind) return;
+        let sc;
+        if (LOK_COUNTY_KINDS.has(kind)) {
+            if (!countyId) return;
+            sc = { type: 'county', id: parseInt(countyId, 10), kind };
+        } else {
+            if (!stationId && !muniId) return;
+            sc = stationId
+                ? { type: 'station', id: parseInt(stationId, 10), kind }
+                : { type: 'municipality', id: parseInt(muniId, 10), kind };
+        }
         targets.push({ scope: sc, prefix: '' });
     }
 
@@ -5847,6 +5876,7 @@ async function loadLokResults() {
     const fetchOne = async (sc, rn) => {
         const params = new URLSearchParams({ kind: sc.kind, round: rn });
         if (sc.type === 'station') params.set('station_id', sc.id);
+        else if (sc.type === 'county') params.set('county_id', sc.id);
         else params.set('municipality_id', sc.id);
         const res = await fetch('/api/lokalni/station-results?' + params.toString());
         if (!res.ok) {
@@ -5887,7 +5917,7 @@ async function loadLokResults() {
     // Compare mode: one column per chip, side-by-side (max 3 by chip cap).
     const cols = blocks.map(b => {
         const sc = b.target.scope;
-        const kindLabel = sc.kind === 'vijece' ? 'Vijeće' : 'Načelnik';
+        const kindLabel = LOK_KIND_LABELS[sc.kind] || sc.kind;
         const headerLabel = sc.muniLabel ? `${sc.label} (${sc.muniLabel})` : sc.label;
         const cardsHtml = b.results.map(d => d.error
             ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
