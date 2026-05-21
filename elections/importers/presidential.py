@@ -6,10 +6,10 @@ from .base import BaseImporter
 class PresidentialImporter(BaseImporter):
     """Import presidential election results from CSV files.
 
-    File format: UTF-8 BOM, semicolon-delimited.
-    Row 1: title row (skip).
-    Row 2: header with geography + candidate columns (name, %).
-    Row 3+: data rows.
+    File format: semicolon-delimited.
+    Optional title row(s) followed by a header row with geography + candidate
+    columns. Round 1 typically has interleaved ``(%)`` columns; round 2 does
+    not.
 
     Geography columns (0-12):
         0: Rbr.županije, 1: Županija, 2: Oznaka Gr/Op/Dr,
@@ -18,40 +18,61 @@ class PresidentialImporter(BaseImporter):
         9: Glasovalo birača, 10: Glasovalo birača (po listićima),
         11: Važeći listići, 12: Nevažeći listići
 
-    Then pairs: candidate_name, (%) repeated for each candidate.
+    Then pairs/singles per candidate. Each year may differ in encoding and
+    whether a title row precedes the header — see ``YEARS``.
     """
 
-    DATA_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_predsjednicki_izbori_2024')
-    FILES = {
-        1: 'rezultati_1krug.csv',
-        2: 'rezultati_2krug.csv',
+    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_predsjednicki_izbori_2024')
+
+    YEARS = {
+        2024: {
+            'dir': BASE_DIR,
+            'encoding': 'utf-8-sig',
+            'title_rows': 1,
+            'name': 'Predsjednički izbori 2024',
+            'files': {1: 'rezultati_1krug.csv', 2: 'rezultati_2krug.csv'},
+        },
+        2019: {
+            'dir': BASE_DIR / '2019',
+            'encoding': 'windows-1250',
+            'title_rows': 0,
+            'name': 'Predsjednički izbori 2019',
+            'files': {1: 'rezultati_bm(1).csv', 2: 'rezultati_bm(2).csv'},
+        },
     }
+
+    def __init__(self, stdout=None, years=None):
+        super().__init__(stdout=stdout)
+        self.years = years if years else list(self.YEARS.keys())
 
     def run(self):
         election_type = self.get_or_create_election_type('presidential', 'Predsjednički izbori')
-        election = self.get_or_create_election(election_type, 2024, 'Predsjednički izbori 2024')
 
-        for round_num, filename in self.FILES.items():
-            filepath = self.DATA_DIR / filename
-            if not filepath.exists():
-                self.log(f"File not found: {filepath}, skipping round {round_num}")
+        for year in self.years:
+            cfg = self.YEARS.get(year)
+            if not cfg:
+                self.log(f"Unknown year {year}, skipping (configured: {list(self.YEARS)})")
                 continue
-            self.log(f"Importing presidential round {round_num} from {filename}...")
-            self._import_round(election, round_num, filepath)
+            election = self.get_or_create_election(election_type, year, cfg['name'])
+            for round_num, filename in cfg['files'].items():
+                filepath = cfg['dir'] / filename
+                if not filepath.exists():
+                    self.log(f"File not found: {filepath}, skipping {year} round {round_num}")
+                    continue
+                self.log(f"Importing presidential {year} round {round_num} from {filename}...")
+                self._import_round(election, round_num, filepath, cfg['encoding'], cfg['title_rows'])
+
         self.flush_all()
 
-    def _import_round(self, election, round_num, filepath):
+    def _import_round(self, election, round_num, filepath, encoding, title_rows):
         election_round = self.get_or_create_round(election, round_num)
 
-        with open(filepath, encoding='utf-8-sig') as f:
+        with open(filepath, encoding=encoding) as f:
             reader = csv.reader(f, delimiter=';')
-            # Row 1: title row — skip
-            next(reader)
-            # Row 2: header row
+            for _ in range(title_rows):
+                next(reader)
             header = next(reader)
 
-        # Parse candidate names from header (columns 13 onwards).
-        # Round 1 has (name, %) pairs; round 2 has just name columns.
         candidate_names = []
         has_pct_cols = '(%)' in [h.strip() for h in header[13:]]
         col = 13
@@ -63,7 +84,6 @@ class PresidentialImporter(BaseImporter):
 
         self.log(f"  Found {len(candidate_names)} candidates: {[n for _, n in candidate_names]}")
 
-        # Create electoral lists and candidacies for each candidate
         lists_and_candidacies = []
         for position, (col_idx, name) in enumerate(candidate_names, 1):
             el_list = self.get_or_create_electoral_list(election_round, name)
@@ -71,11 +91,10 @@ class PresidentialImporter(BaseImporter):
             candidacy = self.get_or_create_candidacy(person, el_list, 1)
             lists_and_candidacies.append((col_idx, el_list, candidacy))
 
-        # Now process data rows
-        with open(filepath, encoding='utf-8-sig') as f:
+        with open(filepath, encoding=encoding) as f:
             reader = csv.reader(f, delimiter=';')
-            next(reader)  # skip title
-            next(reader)  # skip header
+            for _ in range(title_rows + 1):
+                next(reader)
 
             row_count = 0
             for row in reader:
