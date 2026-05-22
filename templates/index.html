@@ -507,6 +507,11 @@
         .module-panel { display: none; }
         .module-panel.active { display: block; }
 
+        /* Clickable election-type/year badge group on result cards */
+        .result-badges-link { cursor: pointer; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; transition: background 0.12s; }
+        .result-badges-link:hover { background: rgba(15, 52, 96, 0.07); }
+        .result-badges-link:focus-visible { outline: 2px solid rgba(15, 52, 96, 0.4); outline-offset: 2px; }
+
         /* Izlaznost analytics */
         .izl-card-strip-wrap { position: relative; }
         .izl-card-strip {
@@ -2079,10 +2084,14 @@ function renderPersonResultsHTML(results) {
     if (results.length === 0) return '<p class="text-muted">Nema izbornih podataka.</p>';
     return results.map(r => {
         const showListName = r.list_name && r.list_name.toUpperCase() !== (r._personFullName || '').toUpperCase();
+        const cat = electionTypeToCategory(r.election_type);
+        const linkAttrs = cat
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            : `class="result-badges"`;
         return `
         <div class="card result-card mb-3 p-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                <div>
+                <div ${linkAttrs}>
                     <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
                     <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
@@ -2109,24 +2118,29 @@ function renderPersonResultsHTML(results) {
 
 function renderPartyResultsHTML(results) {
     if (results.length === 0) return '<p class="text-muted">Nema izbornih podataka.</p>';
-    return results.map(r => `
-        <div class="card result-card mb-3 p-3">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                <div>
-                    <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
-                    <span class="badge bg-dark badge-election">${r.year}</span>
-                    ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+    return results.map(r => {
+        const cat = electionTypeToCategory(r.election_type);
+        const linkAttrs = cat
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            : `class="result-badges"`;
+        return `
+            <div class="card result-card mb-3 p-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div ${linkAttrs}>
+                        <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
+                        <span class="badge bg-dark badge-election">${r.year}</span>
+                        ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                    </div>
+                    <div class="text-end">
+                        ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                    </div>
                 </div>
-                <div class="text-end">
-                    ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                <div class="mt-2">
+                    <div class="fw-semibold">${r.list_name}</div>
+                    ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
                 </div>
-            </div>
-            <div class="mt-2">
-                <div class="fw-semibold">${r.list_name}</div>
-                ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
-            </div>
-        </div>
-    `).join('');
+            </div>`;
+    }).join('');
 }
 
 function electionBadgeColor(type) {
@@ -2140,6 +2154,20 @@ function electionBadgeColor(type) {
         if (type.toLowerCase().includes(key.toLowerCase().split(' ')[0])) return cls;
     }
     return 'bg-secondary';
+}
+
+// Map an election_type string (as stored in the DB / returned by the API) to
+// the category key used by izlNavigateTo() and the results-* modules.
+function electionTypeToCategory(type) {
+    const t = (type || '').toLowerCase();
+    if (t.includes('predsjednič')) return 'predsjednicki';
+    if (t.includes('europski') || t.includes('eu parlament')) return 'eu';
+    if (t.includes('parlamentarni') || t === 'sabor') return 'sabor';
+    if (
+        t.includes('župan') || t.includes('načelnik') || t.includes('gradonačelnik') ||
+        t.includes('vijeće') || t.includes('skupština') || t.includes('lokal')
+    ) return 'lokalni';
+    return null;
 }
 
 function formatNumber(n) {
@@ -2162,10 +2190,14 @@ function renderPersonResults(container, results) {
 
     container.innerHTML = results.map(r => {
         const showListName = r.list_name && r.list_name.toUpperCase() !== (r._personFullName || '').toUpperCase();
+        const cat = electionTypeToCategory(r.election_type);
+        const linkAttrs = cat
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            : `class="result-badges"`;
         return `
         <div class="card result-card mb-3 p-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                <div>
+                <div ${linkAttrs}>
                     <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
                     <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
@@ -2197,24 +2229,29 @@ function renderPartyResults(container, results) {
         return;
     }
 
-    container.innerHTML = results.map(r => `
-        <div class="card result-card mb-3 p-3">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                <div>
-                    <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
-                    <span class="badge bg-dark badge-election">${r.year}</span>
-                    ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+    container.innerHTML = results.map(r => {
+        const cat = electionTypeToCategory(r.election_type);
+        const linkAttrs = cat
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            : `class="result-badges"`;
+        return `
+            <div class="card result-card mb-3 p-3">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div ${linkAttrs}>
+                        <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
+                        <span class="badge bg-dark badge-election">${r.year}</span>
+                        ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                    </div>
+                    <div class="text-end">
+                        ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                    </div>
                 </div>
-                <div class="text-end">
-                    ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
+                <div class="mt-2">
+                    <div class="fw-semibold">${r.list_name}</div>
+                    ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
                 </div>
-            </div>
-            <div class="mt-2">
-                <div class="fw-semibold">${r.list_name}</div>
-                ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
-            </div>
-        </div>
-    `).join('');
+            </div>`;
+    }).join('');
 }
 
 // Station winner chart
@@ -6648,6 +6685,26 @@ function renderIzlaznostChart(data) {
         `;
     }
 }
+
+// Delegated handler: clicking the election-type/year badge group on any
+// politician/party result card jumps to that election's results tab with the
+// matching year preselected. Reuses izlNavigateTo().
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('.result-badges-link');
+    if (!link) return;
+    const cat = link.dataset.cat;
+    const year = parseInt(link.dataset.year, 10);
+    if (cat && year) izlNavigateTo(cat, year);
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const link = e.target.closest && e.target.closest('.result-badges-link');
+    if (!link) return;
+    e.preventDefault();
+    const cat = link.dataset.cat;
+    const year = parseInt(link.dataset.year, 10);
+    if (cat && year) izlNavigateTo(cat, year);
+});
 
 function izlNavigateTo(category, year) {
     if (category === 'sabor') {
