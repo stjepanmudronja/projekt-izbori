@@ -290,7 +290,7 @@ def person_detail(person_id):
             TurnoutData.polling_station_id.in_(db.session.query(station_ids))
         ).scalar() or 0
 
-        vote_share = round((total_votes / total_valid_ballots) * 100) if total_valid_ballots > 0 else 0
+        vote_share = round((total_votes / total_valid_ballots) * 100, 1) if total_valid_ballots > 0 else 0
 
         results.append({
             'election': election.name or f'{etype.name} {election.year}',

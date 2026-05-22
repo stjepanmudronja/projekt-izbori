@@ -1931,7 +1931,7 @@ function renderVotesChart(panel, results, type) {
                     beginAtZero: true,
                     max: Math.min(Math.max(...shareValues) * 1.4, 100),
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    ticks: { callback: v => formatPct(v, 0), font: { size: 12 } },
                     title: { display: true, text: 'Udio glasova (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' }
                 },
                 x: {
@@ -2061,7 +2061,7 @@ function renderMultiLineChart(panel, type) {
                     beginAtZero: true,
                     max: Math.min(maxVal * 1.4, 100),
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    ticks: { callback: v => formatPct(v, 0), font: { size: 12 } },
                     title: { display: true, text: 'Udio glasova (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' }
                 },
                 x: {
@@ -2088,7 +2088,7 @@ function renderPersonResultsHTML(results) {
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
                 </div>
                 <div class="text-end">
-                    ${r.vote_share ? `<div class="vote-number">${r.vote_share}%</div><small class="text-muted">udio glasova</small>` : ''}
+                    ${r.vote_share ? `<div class="vote-number">${formatPct(r.vote_share)}</div><small class="text-muted">udio glasova</small>` : ''}
                 </div>
             </div>
             <div class="mt-2">
@@ -2146,6 +2146,14 @@ function formatNumber(n) {
     return n.toLocaleString('hr-HR');
 }
 
+function formatPct(n, decimals = 1) {
+    if (n === null || n === undefined || isNaN(n)) return '';
+    return Number(n).toLocaleString('hr-HR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    }) + '%';
+}
+
 function renderPersonResults(container, results) {
     if (results.length === 0) {
         container.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
@@ -2163,7 +2171,7 @@ function renderPersonResults(container, results) {
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
                 </div>
                 <div class="text-end">
-                    ${r.vote_share ? `<div class="vote-number">${r.vote_share}%</div><small class="text-muted">udio glasova</small>` : ''}
+                    ${r.vote_share ? `<div class="vote-number">${formatPct(r.vote_share)}</div><small class="text-muted">udio glasova</small>` : ''}
                 </div>
             </div>
             <div class="mt-2">
@@ -2233,7 +2241,7 @@ function renderStationWinnerChart(elections) {
         if (items.length === 0) return null;
 
         const winner = items[0]; // already sorted desc by votes from API
-        const votePct = el.valid_ballots > 0 ? Math.round((winner.votes / el.valid_ballots) * 100) : 0;
+        const votePct = el.valid_ballots > 0 ? (winner.votes / el.valid_ballots) * 100 : 0;
 
         // Date first, then election type
         let datePart = el.date
@@ -2314,7 +2322,7 @@ function renderStationWinnerChart(elections) {
                             const i = ctx.dataIndex;
                             return [
                                 `Pobjednik: ${winnerNames[i]}`,
-                                `Udio: ${pctValues[i]}%`,
+                                `Udio: ${formatPct(pctValues[i])}`,
                                 `Glasovi: ${winnerVotes[i].toLocaleString('hr-HR')}`,
                             ];
                         }
@@ -2326,7 +2334,7 @@ function renderStationWinnerChart(elections) {
                     beginAtZero: true,
                     max: Math.min(Math.max(...pctValues) * 1.4, 100),
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    ticks: { callback: v => formatPct(v, 0), font: { size: 12 } },
                     title: { display: true, text: 'Udio glasova pobjednika (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' }
                 },
                 x: {
@@ -2393,7 +2401,7 @@ function renderStationResults(container, elections) {
 
     container.innerHTML = elections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
-            ? Math.round((el.ballots_cast / el.registered_voters) * 100)
+            ? (el.ballots_cast / el.registered_voters) * 100
             : 0;
 
         return `
@@ -2405,7 +2413,7 @@ function renderStationResults(container, elections) {
                     ${el.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${el.round}. krug</span>` : ''}
                 </div>
                 <div class="text-end">
-                    <span class="vote-number">${turnoutPct}%</span>
+                    <span class="vote-number">${formatPct(turnoutPct)}</span>
                     <br><small class="text-muted">izlaznost</small>
                 </div>
             </div>
@@ -2462,16 +2470,16 @@ function buildBarChart(idx) {
 
     chartArea.innerHTML = items.map((it, i) => {
         const pct = maxVotes > 0 ? (it.votes / maxVotes) * 100 : 0;
-        const votePct = data.validBallots > 0 ? Math.round((it.votes / data.validBallots) * 100) : 0;
+        const votePct = data.validBallots > 0 ? (it.votes / data.validBallots) * 100 : 0;
         const displayName = it.name.length > 40 ? it.name.substring(0, 37) + '...' : it.name;
 
         return `
         <div class="bar-row" draggable="true" data-chart="${idx}" data-bar="${i}"
-             title="${it.name}: ${formatNumber(it.votes)} glasova (${votePct}%)">
+             title="${it.name}: ${formatNumber(it.votes)} glasova (${formatPct(votePct)})">
             <div class="bar-label">${displayName}</div>
             <div class="bar-track">
                 <div class="bar-fill" style="width: ${Math.max(pct, 12)}%; background: ${it.color};">
-                    <span class="bar-value">${formatNumber(it.votes)} (${votePct}%)</span>
+                    <span class="bar-value">${formatNumber(it.votes)} (${formatPct(votePct)})</span>
                 </div>
             </div>
         </div>`;
@@ -3129,7 +3137,7 @@ function renderNationalResults(data) {
 
     const electionCards = elections.map((el, idx) => {
         const turnoutPct = el.registered_voters > 0
-            ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
+            ? (el.ballots_cast / el.registered_voters) * 100 : 0;
         const chartId = `${idPrefix}nat_${idx}`;
 
         return `
@@ -3141,7 +3149,7 @@ function renderNationalResults(data) {
                     ${el.round > 1 ? '<span class="badge bg-warning text-dark badge-election">' + el.round + '. krug</span>' : ''}
                 </div>
                 <div class="text-end">
-                    <span class="vote-number">${turnoutPct}%</span>
+                    <span class="vote-number">${formatPct(turnoutPct)}</span>
                     <br><small class="text-muted">izlaznost</small>
                 </div>
             </div>
@@ -3583,7 +3591,7 @@ function renderEuView(slot) {
              title="${escapeHtml(fullLabel)}">
             ${swatch}
             <span class="fw-semibold flex-grow-1">${escapeHtml(shortName)}</span>
-            <span class="text-muted small">${p.votes.toLocaleString('hr-HR')} (${p.votes_pct.toFixed(2)}%)</span>
+            <span class="text-muted small">${p.votes.toLocaleString('hr-HR')} (${formatPct(p.votes_pct, 2)})</span>
             <span class="text-muted" style="min-width:28px; text-align:right;"><strong>${p.seats}</strong></span>
             ${thresholdNote}
         </div>`;
@@ -3612,7 +3620,7 @@ function renderEuView(slot) {
             <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${escapeHtml(c.name)}${winnerBadge}</td>
             <td class="text-muted" style="font-size:0.85rem;">${escapeHtml(partyShort)}</td>
             <td class="text-end" style="white-space:nowrap;"><strong>${c.personal_votes.toLocaleString('hr-HR')}</strong></td>
-            <td class="text-end text-muted" style="white-space:nowrap;">${c.personal_pct.toFixed(2)}%</td>
+            <td class="text-end text-muted" style="white-space:nowrap;">${formatPct(c.personal_pct, 2)}</td>
         </tr>`;
     };
 
@@ -4391,12 +4399,12 @@ function renderSaborScopeBlocks(results) {
                     <div class="compare-card-body"><div class="alert alert-warning mb-0">${escapeHtml(d.error)}</div></div></div>`;
         }
         const el = (d.elections || [])[0];
-        const turnoutPct = el && el.registered_voters > 0 ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
+        const turnoutPct = el && el.registered_voters > 0 ? (el.ballots_cast / el.registered_voters) * 100 : 0;
         const chartId = `sabsc_${d._chartPrefix}r1`;
         return `<div class="compare-card">
             <div class="compare-card-header">
                 <h6><i class="bi bi-geo-alt me-1"></i>${escapeHtml(d.scope_label || '')}</h6>
-                ${el ? `<span style="font-size:0.78rem;">${turnoutPct}% izlaznost</span>` : ''}
+                ${el ? `<span style="font-size:0.78rem;">${formatPct(turnoutPct)} izlaznost</span>` : ''}
             </div>
             <div class="compare-card-body">
                 <div class="text-muted" style="font-size:0.78rem; margin-bottom:0.4rem;">Parlamentarni izbori ${d.year}.</div>
@@ -5232,8 +5240,8 @@ function renderSADistricts(districtResults) {
         const sortedGroups = Object.entries(groups).sort((a, b) => b[1].votes - a[1].votes);
 
         const rows = sortedGroups.map(([groupName, g]) => {
-            const rawPct = dist.totalVotes > 0 ? (g.votes / dist.totalVotes * 100).toFixed(1) : '0.0';
-            const effPct = dist.eligibleVotes > 0 ? (g.votes / dist.eligibleVotes * 100).toFixed(1) : '0.0';
+            const rawPct = dist.totalVotes > 0 ? (g.votes / dist.totalVotes * 100) : 0;
+            const effPct = dist.eligibleVotes > 0 ? (g.votes / dist.eligibleVotes * 100) : 0;
             const seats = dist.distSeats[groupName] || 0;
             const isBelowThreshold = dist.belowThreshold.has(groupName);
             const isForced = forceInclude.has(groupName);
@@ -5299,8 +5307,8 @@ function renderSADistricts(districtResults) {
             // For eligible parties: show effective %, for below-threshold: show raw %
             const isEligible = !isExcl && (!isBelowThreshold || isForced);
             const pctDisplay = isEligible
-                ? `<strong>${effPct}%</strong><br><small class="text-muted" style="font-size:0.7rem;">${rawPct}% ukupno</small>`
-                : `<span class="text-muted">${rawPct}%</span>`;
+                ? `<strong>${formatPct(effPct)}</strong><br><small class="text-muted" style="font-size:0.7rem;">${formatPct(rawPct)} ukupno</small>`
+                : `<span class="text-muted">${formatPct(rawPct)}</span>`;
 
             return `<tr draggable="true" data-group="${groupName}" data-district="${di}"
                         class="${rowClass}" style="${rowStyle}">
@@ -5315,10 +5323,10 @@ function renderSADistricts(districtResults) {
         const allocatedSeats = Object.values(dist.distSeats).reduce((s, v) => s + v, 0);
         const belowCount = dist.belowThreshold.size;
         const wastedVotes = dist.totalVotes - dist.eligibleVotes;
-        const wastedPct = dist.totalVotes > 0 ? (wastedVotes / dist.totalVotes * 100).toFixed(1) : '0.0';
+        const wastedPct = dist.totalVotes > 0 ? (wastedVotes / dist.totalVotes * 100) : 0;
         const thresholdInfo = dist.thresholdPct > 0
             ? `<span class="badge bg-warning text-dark ms-1" title="Prag: ${formatNumber(Math.round(dist.thresholdVotes))} glasova">${belowCount} ispod ${dist.thresholdPct}%</span>
-               <span class="badge bg-secondary ms-1" title="Glasovi koji ne sudjeluju u raspodjeli">${wastedPct}% propalo (${formatNumber(wastedVotes)})</span>`
+               <span class="badge bg-secondary ms-1" title="Glasovi koji ne sudjeluju u raspodjeli">${formatPct(wastedPct)} propalo (${formatNumber(wastedVotes)})</span>`
             : '';
 
         // Extract district number from name (e.g., "I. IZBORNA JEDINICA" -> 1)
@@ -5498,7 +5506,7 @@ function renderComparisons() {
 
         const electionCards = elections.map((el, idx) => {
             const turnoutPct = el.registered_voters > 0
-                ? Math.round((el.ballots_cast / el.registered_voters) * 100) : 0;
+                ? (el.ballots_cast / el.registered_voters) * 100 : 0;
             const chartId = `cmp_${station.id}_${idx}`;
 
             return `
@@ -5506,7 +5514,7 @@ function renderComparisons() {
                 <span class="badge ${electionBadgeColor(el.election_type)} badge-election me-1" style="font-size:0.65rem;">${el.election_type}</span>
                 <span class="badge bg-dark badge-election" style="font-size:0.65rem;">${el.date ? new Date(el.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : el.year}</span>
                 ${el.round > 1 ? `<span class="badge bg-warning text-dark badge-election" style="font-size:0.65rem;">${el.round}. krug</span>` : ''}
-                <span class="text-muted ms-2" style="font-size:0.7rem;">Izlaznost: <strong>${turnoutPct}%</strong></span>
+                <span class="text-muted ms-2" style="font-size:0.7rem;">Izlaznost: <strong>${formatPct(turnoutPct)}</strong></span>
             </div>
             <div class="bar-chart-area" id="barChart_${chartId}" data-election-idx="${chartId}"></div>
             <div class="d-flex justify-content-between align-items-center mt-1 mb-2">
@@ -5964,7 +5972,7 @@ function renderLokResultCard(data) {
 
     const t = data.turnout;
     const turnoutPct = t && t.registered_voters > 0
-        ? Math.round((t.ballots_cast / t.registered_voters) * 100) : 0;
+        ? (t.ballots_cast / t.registered_voters) * 100 : 0;
 
     // Bar chart placeholder — populated by buildBarChart(chartId) after insertion.
     const bars = `
@@ -6000,7 +6008,7 @@ function renderLokResultCard(data) {
                         <div style="width:${barWidth}%; background:${barColor}; height:100%; border-radius:4px;"></div>
                     </div>
                 </td>
-                <td class="text-end fw-bold" style="white-space:nowrap; color:#0f3460;">${pct.toFixed(1)}%</td>
+                <td class="text-end fw-bold" style="white-space:nowrap; color:#0f3460;">${formatPct(pct)}</td>
             </tr>`;
         };
         const tableBody = data.stations.map(stationRow).join('');
@@ -6046,7 +6054,7 @@ function renderLokResultCard(data) {
                     </div>
                 </div>
                 ${t ? `<div class="text-end">
-                    <span class="vote-number">${turnoutPct}%</span>
+                    <span class="vote-number">${formatPct(turnoutPct)}</span>
                     <br><small class="text-muted">izlaznost</small>
                 </div>` : ''}
             </div>
@@ -6468,7 +6476,7 @@ function renderIzlaznostChart(data) {
         tableRows = points.map(p => ({
             label: p.label, category: p.category, year: p.year,
             registered: p.registered, cast: p.cast, valid: p.valid,
-            turnoutStr: p.turnout === null ? '—' : `${p.turnout.toFixed(1)}%`,
+            turnoutStr: p.turnout === null ? '—' : formatPct(p.turnout),
             colorDot: IZL_CATEGORY_COLORS[p.category] || '#6c757d',
         }));
     } else {
@@ -6511,7 +6519,7 @@ function renderIzlaznostChart(data) {
             colorDot: IZL_CATEGORY_COLORS[g.category] || '#6c757d',
             cells: datasets.map(ds => {
                 const p = ds._points[gi];
-                return p.turnout === null ? '—' : `${p.turnout.toFixed(1)}%`;
+                return p.turnout === null ? '—' : formatPct(p.turnout);
             }),
         }));
     }
@@ -6545,7 +6553,7 @@ function renderIzlaznostChart(data) {
                             const ds = c.dataset;
                             const p = ds._points[c.dataIndex];
                             if (!p || p.turnout === null) return `${ds.label}: nema podataka`;
-                            const head = multi ? `${ds.label}: ${p.turnout.toFixed(1)}%` : `Izlaznost: ${p.turnout.toFixed(1)}%`;
+                            const head = multi ? `${ds.label}: ${formatPct(p.turnout)}` : `Izlaznost: ${formatPct(p.turnout)}`;
                             return [
                                 head,
                                 `Glasovalo: ${p.cast.toLocaleString('hr-HR')}`,
@@ -6560,7 +6568,7 @@ function renderIzlaznostChart(data) {
                     beginAtZero: true,
                     max: 100,
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { callback: v => v + '%', font: { size: 12 } },
+                    ticks: { callback: v => formatPct(v, 0), font: { size: 12 } },
                     title: { display: true, text: 'Izlaznost (%)', font: { size: 12, weight: 'bold' }, color: '#6c757d' },
                 },
                 x: {
