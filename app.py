@@ -1,6 +1,8 @@
 from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 
+from elections.importers.name_utils import normalize_person_name
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql:///projekt_izbori'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -167,8 +169,10 @@ def search():
         return jsonify([])
 
     if search_type == 'person':
-        # Search by normalized name (uppercase, no diacritics) for better matching
-        normalized_q = q.upper()
+        # Person.normalized_name is stored diacritic-stripped + uppercase;
+        # apply the same normalization to the query so that "Milanović" and
+        # "Milanovic" both match.
+        normalized_q = normalize_person_name(q)
         persons = (
             Person.query
             .filter(Person.normalized_name.ilike(f'%{normalized_q}%'))
