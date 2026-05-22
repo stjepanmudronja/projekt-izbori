@@ -512,6 +512,10 @@
         .result-badges-link:hover { background: rgba(15, 52, 96, 0.07); }
         .result-badges-link:focus-visible { outline: 2px solid rgba(15, 52, 96, 0.4); outline-offset: 2px; }
 
+        /* Clickable candidate names in bar charts (predsjednicki, etc.) */
+        .bar-label-link { cursor: pointer; transition: color 0.12s; }
+        .bar-label-link:hover { color: #0f3460; text-decoration: underline; }
+
         /* Izlaznost analytics */
         .izl-card-strip-wrap { position: relative; }
         .izl-card-strip {
@@ -2510,10 +2514,17 @@ function buildBarChart(idx) {
         const votePct = data.validBallots > 0 ? (it.votes / data.validBallots) * 100 : 0;
         const displayName = it.name.length > 40 ? it.name.substring(0, 37) + '...' : it.name;
 
+        // Make the label a clickable jump to the politician page when this
+        // bar represents a single (unmerged) person.
+        const isClickablePerson = data.kind === 'person' && it.origNames && it.origNames.length === 1;
+        const labelHtml = isClickablePerson
+            ? `<div class="bar-label bar-label-link" data-person-name="${it.name.replace(/"/g, '&quot;')}" title="Otvori stranicu političara: ${it.name.replace(/"/g, '&quot;')}">${displayName}</div>`
+            : `<div class="bar-label">${displayName}</div>`;
+
         return `
         <div class="bar-row" draggable="true" data-chart="${idx}" data-bar="${i}"
              title="${it.name}: ${formatNumber(it.votes)} glasova (${formatPct(votePct)})">
-            <div class="bar-label">${displayName}</div>
+            ${labelHtml}
             <div class="bar-track">
                 <div class="bar-fill" style="width: ${Math.max(pct, 12)}%; background: ${it.color};">
                     <span class="bar-value">${formatNumber(it.votes)} (${formatPct(votePct)})</span>
@@ -3232,6 +3243,7 @@ function renderNationalResults(data) {
                 original: JSON.parse(JSON.stringify(originalItems)),
                 current: originalItems,
                 validBallots: el.valid_ballots,
+                kind: hasCandidates ? 'person' : 'list',
             };
 
             buildBarChart(chartId);
@@ -6696,6 +6708,34 @@ document.addEventListener('click', (e) => {
     const year = parseInt(link.dataset.year, 10);
     if (cat && year) izlNavigateTo(cat, year);
 });
+
+// Delegated handler: clicking a candidate name in a bar chart opens that
+// politician's page (same view you'd see by searching for them).
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('.bar-label-link');
+    if (!link) return;
+    const name = link.dataset.personName;
+    if (name) navigateToPerson(name);
+});
+
+async function navigateToPerson(name) {
+    if (!activateModule('person', { pushState: true, focusInput: false })) return;
+    try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(name)}&type=person`);
+        const list = await res.json();
+        if (!Array.isArray(list) || list.length === 0) return;
+        // Prefer exact match on diacritics-stripped uppercase form.
+        const norm = (s) => (s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/Đ/g, 'D');
+        const target = norm(name);
+        const pick = list.find(p => norm(p.name) === target) || list[0];
+        // Reset the person compare list so we land on a clean single-person view.
+        _compareItems.person = [];
+        renderCompareTags('person');
+        await loadDetail('person', pick.id);
+    } catch (err) {
+        console.warn('navigateToPerson failed', err);
+    }
+}
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const link = e.target.closest && e.target.closest('.result-badges-link');
