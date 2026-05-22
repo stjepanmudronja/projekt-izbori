@@ -1,6 +1,7 @@
 import csv
 from pathlib import Path
 from .base import BaseImporter
+from .name_utils import clean_candidate_name
 
 
 class PresidentialImporter(BaseImporter):
@@ -38,6 +39,16 @@ class PresidentialImporter(BaseImporter):
             'title_rows': 0,
             'name': 'Predsjednički izbori 2019',
             'files': {1: 'rezultati_bm(1).csv', 2: 'rezultati_bm(2).csv'},
+        },
+        2014: {
+            'dir': BASE_DIR / '2014',
+            'encoding': 'windows-1250',
+            'title_rows': 0,
+            'name': 'Predsjednički izbori 2014',
+            'files': {
+                1: '1_krug/2014_Predsjednik_1_krug_rezultati_po_birackim_mjestima_rezultati.csv',
+                2: '2_krug/2014_Predsjednik_2_krug_rezultati_po_birackim_mjestima_rezultati.csv',
+            },
         },
     }
 
@@ -77,7 +88,7 @@ class PresidentialImporter(BaseImporter):
         has_pct_cols = '(%)' in [h.strip() for h in header[13:]]
         col = 13
         while col < len(header):
-            name = header[col].strip()
+            name = clean_candidate_name(header[col])
             if name and name != '(%)':
                 candidate_names.append((col, name))
             col += 2 if has_pct_cols else 1

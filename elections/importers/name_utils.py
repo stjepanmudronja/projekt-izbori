@@ -1,4 +1,28 @@
+import re
 import unicodedata
+
+
+# Croatian DIP CSVs occasionally split candidate names across "tokens" with a
+# stray comma (e.g. "KOLINDA GRABAR-, KITAROVIĆ") and prefix or suffix academic
+# titles ("prof.dr.sc. MILAN , KUJUNDŽIĆ", "IVAN SINČIĆ, , univ.bacc.ing.el.").
+# Strip both so the same person hashes to the same normalized_name across
+# election years.
+_TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing)'
+
+
+def clean_candidate_name(raw):
+    """Strip academic titles and stray commas from a CSV candidate column."""
+    s = (raw or '').strip()
+    # Leading academic prefix (e.g. "prof.dr.sc. MILAN")
+    s = re.sub(r'^(prof\.dr\.sc\.|doc\.dr\.sc\.|dr\.sc\.|mr\.sc\.|prof\.|doc\.|dr\.|mr\.|mag\.\w*\.?|dipl\.\w*\.?)\s+',
+               '', s, flags=re.IGNORECASE)
+    # Trailing academic tail after a comma (e.g. ", univ.bacc.ing.el.")
+    s = re.sub(r',\s*' + _TITLE_TOKENS + r'\b.*$', '', s, flags=re.IGNORECASE)
+    # Collapse stray ", " into a single space; drop any remaining bare commas.
+    s = s.replace(', ', ' ').replace(',', '')
+    # Fix hyphenated surnames split with a space (e.g. "GRABAR- KITAROVIĆ").
+    s = re.sub(r'-\s+', '-', s)
+    return ' '.join(s.split())
 
 
 def strip_diacritics(text):
