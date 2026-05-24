@@ -264,6 +264,39 @@ def person_detail(person_id):
         .all()
     )
 
+    # Pre-compute finish rank per (election_round, district) so we can flag
+    # winners / runners-up. Limited to election types where this grouping
+    # actually represents head-to-head competition (presidential — every
+    # candidate runs nation-wide for the same office). For Sabor/EU/Lokalni,
+    # candidates within a round don't all compete with each other, so we
+    # leave rank unset.
+    RANK_ELIGIBLE_TYPES = {'Predsjednički izbori'}
+    rank_scope_keys = set()
+    for c in candidacies:
+        if c.electoral_list.election_round.election.election_type.name in RANK_ELIGIBLE_TYPES:
+            rank_scope_keys.add((c.electoral_list.election_round_id, c.electoral_list.district_id))
+    rank_lookup = {}  # candidacy_id -> (rank, total_candidates)
+    for rid, did in rank_scope_keys:
+        q = (
+            db.session.query(
+                Candidacy.id,
+                db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('v'),
+            )
+            .select_from(Candidacy)
+            .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+            .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+            .filter(ElectoralList.election_round_id == rid)
+        )
+        if did is None:
+            q = q.filter(ElectoralList.district_id.is_(None))
+        else:
+            q = q.filter(ElectoralList.district_id == did)
+        rows = q.group_by(Candidacy.id).all()
+        rows.sort(key=lambda r: -int(r.v or 0))
+        total = len(rows)
+        for i, row in enumerate(rows, 1):
+            rank_lookup[row.id] = (i, total)
+
     results = []
     for c in candidacies:
         el = c.electoral_list
@@ -296,6 +329,7 @@ def person_detail(person_id):
 
         vote_share = round((total_votes / total_valid_ballots) * 100, 1) if total_valid_ballots > 0 else 0
 
+        rank, total_cands = rank_lookup.get(c.id, (None, None))
         results.append({
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
@@ -309,6 +343,8 @@ def person_detail(person_id):
             'list_votes': total_list_votes,
             'total_valid_ballots': total_valid_ballots,
             'vote_share': vote_share,
+            'rank': rank,
+            'total_candidates_in_round': total_cands,
         })
 
     return jsonify({

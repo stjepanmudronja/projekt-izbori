@@ -516,6 +516,11 @@
         .bar-label-link { cursor: pointer; transition: color 0.12s; }
         .bar-label-link:hover { color: #0f3460; text-decoration: underline; }
 
+        /* Winner / runner-up badge on politician result cards */
+        .rank-badge { font-size: 0.7rem; padding: 0.25em 0.55em; margin-left: 0.25rem; font-weight: 600; }
+        .rank-badge.rank-winner { background: linear-gradient(135deg, #FFD700, #DAA520); color: #4A3700; border: 1px solid #B8860B; }
+        .rank-badge.rank-runner-up { background: linear-gradient(135deg, #E5E5E5, #B0B0B0); color: #333; border: 1px solid #808080; }
+
         /* Izlaznost analytics */
         .izl-card-strip-wrap { position: relative; }
         .izl-card-strip {
@@ -2016,12 +2021,20 @@ function renderMultiLineChart(panel, type) {
 
         // Map results to unified label positions
         const resultMap = {};
+        const rankMap = {};
         filtered.forEach(r => {
             const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
             resultMap[key] = r.vote_share || 0;
+            if (r.rank) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round };
         });
 
         const data = labelKeys.map(k => resultMap[k] ?? null);
+        const ranks = labelKeys.map(k => rankMap[k] || null);
+
+        // Per-point styling: gold for winner (rank=1), silver for runner-up (rank=2).
+        const pointBg = ranks.map(r => r ? (r.rank === 1 ? '#FFD700' : r.rank === 2 ? '#C0C0C0' : color) : color);
+        const pointBorder = ranks.map(r => r ? (r.rank === 1 ? '#B8860B' : r.rank === 2 ? '#808080' : '#fff') : '#fff');
+        const pointRadii = ranks.map(r => r ? (r.rank === 1 ? 9 : r.rank === 2 ? 7 : 5) : 5);
 
         return {
             label: item.name,
@@ -2031,12 +2044,13 @@ function renderMultiLineChart(panel, type) {
             fill: false,
             tension: 0.3,
             borderWidth: 2.5,
-            pointBackgroundColor: color,
-            pointBorderColor: '#fff',
+            pointBackgroundColor: pointBg,
+            pointBorderColor: pointBorder,
             pointBorderWidth: 2,
-            pointRadius: 5,
-            pointHoverRadius: 8,
+            pointRadius: pointRadii,
+            pointHoverRadius: pointRadii.map(r => r + 3),
             spanGaps: true,
+            _ranks: ranks,
         };
     });
 
@@ -2063,6 +2077,15 @@ function renderMultiLineChart(panel, type) {
                     bodyFont: { size: 13 },
                     padding: 14,
                     cornerRadius: 8,
+                    callbacks: {
+                        afterLabel: function(ctx) {
+                            const r = ctx.dataset._ranks && ctx.dataset._ranks[ctx.dataIndex];
+                            if (!r) return '';
+                            if (r.rank === 1) return `🥇 Pobjednik (1. od ${r.total})`;
+                            if (r.rank === 2) return `🥈 Drugoplasirani (2. od ${r.total})`;
+                            return `${r.rank}. mjesto od ${r.total}`;
+                        },
+                    },
                 },
             },
             scales: {
@@ -2099,6 +2122,7 @@ function renderPersonResultsHTML(results) {
                     <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
                     <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                    ${rankBadgeHtml(r)}
                 </div>
                 <div class="text-end">
                     ${r.vote_share ? `<div class="vote-number">${formatPct(r.vote_share)}</div><small class="text-muted">udio glasova</small>` : ''}
@@ -2186,6 +2210,18 @@ function formatPct(n, decimals = 1) {
     }) + '%';
 }
 
+function rankBadgeHtml(r) {
+    if (!r || !r.rank) return '';
+    const total = r.total_candidates_in_round || '';
+    if (r.rank === 1) {
+        return `<span class="badge rank-badge rank-winner" title="Pobjednik (1. od ${total})">🥇 Pobjednik</span>`;
+    }
+    if (r.rank === 2) {
+        return `<span class="badge rank-badge rank-runner-up" title="Drugoplasirani (2. od ${total})">🥈 Drugoplasirani</span>`;
+    }
+    return '';
+}
+
 function renderPersonResults(container, results) {
     if (results.length === 0) {
         container.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
@@ -2205,6 +2241,7 @@ function renderPersonResults(container, results) {
                     <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
                     <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
+                    ${rankBadgeHtml(r)}
                 </div>
                 <div class="text-end">
                     ${r.vote_share ? `<div class="vote-number">${formatPct(r.vote_share)}</div><small class="text-muted">udio glasova</small>` : ''}
