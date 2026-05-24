@@ -668,7 +668,15 @@ def station_detail(station_id):
 
 @app.route('/api/counties')
 def list_counties():
-    counties = County.query.order_by(County.name).all()
+    # Codes >= 90 are reserved for synthetic geography (e.g. the 1997 summary
+    # PDF lives under a "REPUBLIKA HRVATSKA (sažetak)" county) — keep them
+    # out of the scope picker so users don't accidentally select them.
+    counties = (
+        County.query
+        .filter(db.or_(County.code < '90', County.code.is_(None)))
+        .order_by(County.name)
+        .all()
+    )
     return jsonify([{'id': c.id, 'name': c.name} for c in counties])
 
 
