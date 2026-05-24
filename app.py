@@ -264,33 +264,123 @@ def person_detail(person_id):
         .all()
     )
 
-    # Pre-compute finish rank per (election_round, district) so we can flag
-    # winners / runners-up. Limited to election types where this grouping
-    # actually represents head-to-head competition (presidential — every
-    # candidate runs nation-wide for the same office). For Sabor/EU/Lokalni,
-    # candidates within a round don't all compete with each other, so we
-    # leave rank unset.
-    RANK_ELIGIBLE_TYPES = {'Predsjednički izbori'}
+    # Pre-compute finish rank so we can flag winners / runners-up. Each
+    # election type ranks within the unit where candidates actually compete
+    # head-to-head:
+    #   - Predsjednički: round + district (district is null nation-wide)
+    #   - Gradonačelnik / Načelnik: round + muni
+    #   - Župan: round + county
+    # Sabor / EU and lokalni list-races (Vijeće, Skupština) are intentionally
+    # excluded — they're seat-allocation races where "vote count" doesn't
+    # cleanly map to a winner.
+    RANK_BY_DISTRICT = {'Predsjednički izbori'}
+    RANK_BY_MUNI = {'Gradonačelnik', 'Načelnik'}
+    RANK_BY_COUNTY = {'Župan'}
+    LOKALNI_EXEC = RANK_BY_MUNI | RANK_BY_COUNTY
+
+    # For lokalni execs we need the muni each candidacy ran in (and the
+    # county for Župan). Batch the lookup so we don't issue N queries.
+    lokalni_cands = [c for c in candidacies
+                     if c.electoral_list.election_round.election.election_type.name in LOKALNI_EXEC]
+    list_to_muni = {}
+    muni_to_county = {}
+    if lokalni_cands:
+        list_ids = [c.electoral_list_id for c in lokalni_cands]
+        muni_rows = (
+            db.session.query(
+                ElectoralList.id.label('list_id'),
+                PollingStation.municipality_id.label('muni_id'),
+            )
+            .select_from(ElectoralList)
+            .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
+            .join(PollingStation, PollingStation.id == ListResult.polling_station_id)
+            .filter(ElectoralList.id.in_(list_ids))
+            .distinct()
+            .all()
+        )
+        # Take the first muni seen per list (lokalni-exec lists belong to
+        # exactly one muni in practice).
+        for row in muni_rows:
+            list_to_muni.setdefault(row.list_id, row.muni_id)
+        muni_ids = list(set(list_to_muni.values()))
+        if muni_ids:
+            muni_to_county = dict(
+                db.session.query(Municipality.id, Municipality.county_id)
+                .filter(Municipality.id.in_(muni_ids))
+                .all()
+            )
+
+    # Build scope key per candidacy and the unique-scope set.
+    candidacy_scope = {}
     rank_scope_keys = set()
     for c in candidacies:
-        if c.electoral_list.election_round.election.election_type.name in RANK_ELIGIBLE_TYPES:
-            rank_scope_keys.add((c.electoral_list.election_round_id, c.electoral_list.district_id))
+        etype = c.electoral_list.election_round.election.election_type.name
+        rid = c.electoral_list.election_round_id
+        scope = None
+        if etype in RANK_BY_DISTRICT:
+            scope = ('district', rid, c.electoral_list.district_id)
+        elif etype in RANK_BY_MUNI:
+            muni_id = list_to_muni.get(c.electoral_list_id)
+            if muni_id:
+                scope = ('muni', rid, muni_id)
+        elif etype in RANK_BY_COUNTY:
+            muni_id = list_to_muni.get(c.electoral_list_id)
+            cnty_id = muni_to_county.get(muni_id) if muni_id else None
+            if cnty_id:
+                scope = ('county', rid, cnty_id)
+        if scope:
+            candidacy_scope[c.id] = scope
+            rank_scope_keys.add(scope)
+
     rank_lookup = {}  # candidacy_id -> (rank, total_candidates)
-    for rid, did in rank_scope_keys:
-        q = (
-            db.session.query(
-                Candidacy.id,
-                db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('v'),
+    for scope in rank_scope_keys:
+        scope_type, rid, sval = scope
+        if scope_type == 'district':
+            q = (
+                db.session.query(
+                    Candidacy.id,
+                    db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('v'),
+                )
+                .select_from(Candidacy)
+                .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+                .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+                .filter(ElectoralList.election_round_id == rid)
             )
-            .select_from(Candidacy)
-            .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
-            .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
-            .filter(ElectoralList.election_round_id == rid)
-        )
-        if did is None:
-            q = q.filter(ElectoralList.district_id.is_(None))
-        else:
-            q = q.filter(ElectoralList.district_id == did)
+            if sval is None:
+                q = q.filter(ElectoralList.district_id.is_(None))
+            else:
+                q = q.filter(ElectoralList.district_id == sval)
+        elif scope_type == 'muni':
+            q = (
+                db.session.query(
+                    Candidacy.id,
+                    db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('v'),
+                )
+                .select_from(Candidacy)
+                .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+                .join(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+                .join(PollingStation, PollingStation.id == CandidateResult.polling_station_id)
+                .filter(
+                    ElectoralList.election_round_id == rid,
+                    PollingStation.municipality_id == sval,
+                )
+            )
+        else:  # 'county'
+            q = (
+                db.session.query(
+                    Candidacy.id,
+                    db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('v'),
+                )
+                .select_from(Candidacy)
+                .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+                .join(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+                .join(PollingStation, PollingStation.id == CandidateResult.polling_station_id)
+                .join(Municipality, Municipality.id == PollingStation.municipality_id)
+                .filter(
+                    ElectoralList.election_round_id == rid,
+                    Municipality.county_id == sval,
+                )
+            )
         rows = q.group_by(Candidacy.id).all()
         rows.sort(key=lambda r: -int(r.v or 0))
         total = len(rows)
