@@ -82,6 +82,20 @@ class PresidentialImporter(BaseImporter):
             # to the file's code only if no name match exists.
             'county_lookup_by_name': True,
         },
+        2005: {
+            'dir': BASE_DIR / '2005' / 'CSV',
+            'encoding': 'windows-1250',
+            'title_rows': 0,
+            'name': 'Predsjednički izbori 2005',
+            'files': {
+                1: 'Rezultati_po_BM_-_1krug.csv',
+                2: 'Rezultati_po_BM_-_2krug.csv',
+            },
+            # Same 8-column geography section as 2009; the difference is that
+            # 2005 omits the `%` columns entirely (one column per candidate).
+            'layout': LAYOUT_2009,
+            'county_lookup_by_name': False,
+        },
     }
 
     def __init__(self, stdout=None, years=None):
@@ -160,7 +174,10 @@ class PresidentialImporter(BaseImporter):
         while col < len(header):
             name = clean_candidate_name(header[col])
             if name and not is_pct_header(name):
-                candidate_names.append((col, name))
+                # Uppercase to match the convention used by other years (the
+                # 2005 file is the odd one out with mixed-case names; this
+                # also keeps Person.normalized_name lookups consistent).
+                candidate_names.append((col, name.upper()))
             col += 2 if has_pct_cols else 1
 
         self.log(f"  Found {len(candidate_names)} candidates: {[n for _, n in candidate_names]}")
