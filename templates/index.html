@@ -2682,6 +2682,40 @@ const _resultsModuleInitialized = {};
 // changing the dropdowns refetches the same year with the new scope.
 const _resultsState = {};
 
+// How many compare-scope chips are currently set for this category. Used to
+// decide whether year-picker clicks toggle (multi-year mode) or just replace
+// (single-year mode, when scope chips already drive the comparison).
+function activeScopeChipCount(category) {
+    if (category === 'predsjednicki') return (_pred?.compareScopes || []).length;
+    if (category === 'eu') return (_eus?.compareScopes || []).length;
+    return 0;
+}
+
+// Apply the active-year set: update visual state, sync _resultsState, and
+// (re)load results. Used by year-picker clicks and external callers
+// (izlNavigateTo passes [year]).
+function setActiveYears(category, years) {
+    const sorted = years.slice().sort((a, b) => a - b);
+    const st = _resultsState[category] || (_resultsState[category] = {});
+    st.years = sorted;
+    st.year = sorted[sorted.length - 1]; // back-compat single-year accessor
+    const panel = document.getElementById(`module-results-${category}`);
+    if (panel) {
+        panel.querySelectorAll('.results-year-btn').forEach(b => {
+            b.classList.toggle('active', sorted.includes(parseInt(b.dataset.year, 10)));
+        });
+    }
+    // When 2+ years are active, scope-chip comparison is mutually exclusive
+    // (cross-product would explode). Disable the add button visually.
+    const addBtnId = category === 'predsjednicki' ? 'predAddCompareBtn'
+                   : category === 'eu' ? 'eusAddCompareBtn' : null;
+    if (addBtnId) {
+        const addBtn = document.getElementById(addBtnId);
+        if (addBtn && sorted.length > 1) addBtn.disabled = true;
+    }
+    loadNationalResults(category, st.year);
+}
+
 async function initResultsModule(category) {
     if (_resultsModuleInitialized[category]) return;
     _resultsModuleInitialized[category] = true;
@@ -2699,15 +2733,27 @@ async function initResultsModule(category) {
 
     picker.innerHTML = cat.years.map(y =>
         `<button class="btn btn-outline-primary btn-sm sa-year-btn results-year-btn" data-cat="${category}" data-year="${y}">${y}.</button>`
-    ).join('');
+    ).join('') + (cat.years.length > 1
+        ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
+        : '');
     picker.querySelectorAll('.results-year-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            picker.querySelectorAll('.results-year-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
             const yr = parseInt(btn.dataset.year, 10);
-            if (!_resultsState[category]) _resultsState[category] = {};
-            _resultsState[category].year = yr;
-            loadNationalResults(category, yr);
+            const st = _resultsState[category] || (_resultsState[category] = {});
+            const cur = (st.years && st.years.length ? st.years : (st.year ? [st.year] : [])).slice();
+            const scopeChipCount = activeScopeChipCount(category);
+            let next;
+            if (scopeChipCount > 0) {
+                // Scope-chip comparison is active; year picker stays single-select.
+                next = [yr];
+            } else if (cur.includes(yr)) {
+                next = cur.filter(y => y !== yr);
+                if (next.length === 0) next = [yr]; // never empty
+            } else {
+                next = cur.concat(yr);
+                if (next.length > 3) next = next.slice(-3);
+            }
+            setActiveYears(category, next);
         });
     });
 
@@ -2838,9 +2884,11 @@ function predHighlightMapCounty(countyName) {
 function predUpdateAddBtn() {
     const btn = document.getElementById('predAddCompareBtn');
     if (!btn) return;
-    // Enable when any scope is selected (county / muni / station)
+    // Enable when any scope is selected (county / muni / station). Disabled
+    // when multi-year mode is active (mutually exclusive with scope chips).
     const cId = document.getElementById('predSelCounty').value;
-    btn.disabled = !cId;
+    const multiYear = (_resultsState['predsjednicki']?.years?.length || 0) > 1;
+    btn.disabled = !cId || multiYear;
 }
 
 function predCurrentScopeKey() {
@@ -3027,7 +3075,8 @@ function eusHighlightMapCounty(name) {
 function eusUpdateAddBtn() {
     const btn = document.getElementById('eusAddCompareBtn');
     if (!btn) return;
-    btn.disabled = !document.getElementById('eusSelCounty').value;
+    const multiYear = (_resultsState['eu']?.years?.length || 0) > 1;
+    btn.disabled = !document.getElementById('eusSelCounty').value || multiYear;
 }
 
 function eusCurrentScopeKey() {
@@ -3114,6 +3163,19 @@ async function loadNationalResults(category, year) {
         return p;
     };
 
+    // Helper: build URLSearchParams from current dropdown scope (no chip).
+    const currentScopeParams = () => {
+        const params = new URLSearchParams();
+        const idPrefix = category === 'predsjednicki' ? 'pred' : 'eus';
+        const sId = document.getElementById(`${idPrefix}SelStation`)?.value;
+        const mId = document.getElementById(`${idPrefix}SelMuni`)?.value;
+        const cId = document.getElementById(`${idPrefix}SelCounty`)?.value;
+        if (sId) params.set('station_id', sId);
+        else if (mId) params.set('municipality_id', mId);
+        else if (cId) params.set('county_id', cId);
+        return params;
+    };
+
     // Compare mode: one fetch per chip, render N cards stacked.
     const compareScopes = category === 'predsjednicki' ? _pred.compareScopes
                        : category === 'eu' ? _eus.compareScopes
@@ -3128,6 +3190,38 @@ async function loadNationalResults(category, year) {
             return data;
         };
         const results = await Promise.all(compareScopes.map(fetchScope));
+        spinner.classList.remove('show');
+        resultsArea.style.display = 'block';
+        results.forEach((d, i) => { d._panel = panel; d._compareIndex = i; });
+        renderNationalResultsMulti(results);
+        return;
+    }
+
+    // Multi-year mode: 2+ years selected, no scope chips. Fetch each year at
+    // the current dropdown scope and render side-by-side.
+    const st = _resultsState[category] || {};
+    const years = (st.years && st.years.length > 1) ? st.years : null;
+    if (years && (category === 'predsjednicki' || category === 'eu')) {
+        const baseParams = currentScopeParams();
+        const scopeLabelSuffix = baseParams.toString() ? (function () {
+            // Best-effort label for the current dropdown scope.
+            const idPrefix = category === 'predsjednicki' ? 'pred' : 'eus';
+            const selS = document.getElementById(`${idPrefix}SelStation`);
+            const selM = document.getElementById(`${idPrefix}SelMuni`);
+            const selC = document.getElementById(`${idPrefix}SelCounty`);
+            if (selS?.value) return selS.options[selS.selectedIndex].textContent;
+            if (selM?.value) return selM.options[selM.selectedIndex].textContent;
+            if (selC?.value) return selC.options[selC.selectedIndex].textContent;
+            return '';
+        })() : '';
+        const fetchYear = async y => {
+            const r = await fetch(`/api/national/results/${category}/${y}?${baseParams.toString()}`);
+            const data = r.ok ? await r.json() : { error: `HTTP ${r.status}` };
+            data.scope_label = scopeLabelSuffix ? `${y}. · ${scopeLabelSuffix}` : `${y}.`;
+            data._scopeQs = baseParams.toString();
+            return data;
+        };
+        const results = await Promise.all(years.map(fetchYear));
         spinner.classList.remove('show');
         resultsArea.style.display = 'block';
         results.forEach((d, i) => { d._panel = panel; d._compareIndex = i; });
