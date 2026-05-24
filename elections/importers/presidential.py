@@ -1,26 +1,37 @@
 import csv
 from pathlib import Path
 from .base import BaseImporter
-from .name_utils import clean_candidate_name
+from .name_utils import clean_candidate_name, strip_diacritics
+
+
+# Layout used by 2014/2019/2024: 13 geography columns (0-12), candidates start at 13.
+LAYOUT_STANDARD = {
+    'county_code': 0, 'county_name': 1,
+    'muni_type': 2, 'muni_name': 3,
+    'ps_number': 4, 'ps_name': 5, 'ps_location': 6, 'ps_address': 7,
+    'registered': 8, 'cast': 9, 'valid': 11, 'invalid': 12,
+    'first_candidate': 13,
+}
+
+# Layout used by 2009: only 8 geography columns, no muni-type / station name /
+# station location / station address. Candidates start at 8.
+LAYOUT_2009 = {
+    'county_code': 0, 'county_name': 1,
+    'muni_type': None, 'muni_name': 2,
+    'ps_number': 3, 'ps_name': None, 'ps_location': None, 'ps_address': None,
+    'registered': 4, 'cast': 5, 'valid': 6, 'invalid': 7,
+    'first_candidate': 8,
+}
 
 
 class PresidentialImporter(BaseImporter):
     """Import presidential election results from CSV files.
 
-    File format: semicolon-delimited.
-    Optional title row(s) followed by a header row with geography + candidate
-    columns. Round 1 typically has interleaved ``(%)`` columns; round 2 does
-    not.
-
-    Geography columns (0-12):
-        0: Rbr.županije, 1: Županija, 2: Oznaka Gr/Op/Dr,
-        3: Grad/općina/država, 4: Rbr BM, 5: Naziv BM,
-        6: Lokacija BM, 7: Adresa BM, 8: Ukupno birača,
-        9: Glasovalo birača, 10: Glasovalo birača (po listićima),
-        11: Važeći listići, 12: Nevažeći listići
-
-    Then pairs/singles per candidate. Each year may differ in encoding and
-    whether a title row precedes the header — see ``YEARS``.
+    File format: semicolon-delimited, optionally with a leading title row.
+    Round 1 typically has interleaved ``%`` / ``(%)`` columns; round 2 may or
+    may not. Each year may differ in encoding, title-row count, and column
+    layout (the 2009 files use a stripped-down 8-column geography section,
+    everyone else uses the 13-column standard).
     """
 
     BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_predsjednicki_izbori_2024')
@@ -32,6 +43,8 @@ class PresidentialImporter(BaseImporter):
             'title_rows': 1,
             'name': 'Predsjednički izbori 2024',
             'files': {1: 'rezultati_1krug.csv', 2: 'rezultati_2krug.csv'},
+            'layout': LAYOUT_STANDARD,
+            'county_lookup_by_name': False,
         },
         2019: {
             'dir': BASE_DIR / '2019',
@@ -39,6 +52,8 @@ class PresidentialImporter(BaseImporter):
             'title_rows': 0,
             'name': 'Predsjednički izbori 2019',
             'files': {1: 'rezultati_bm(1).csv', 2: 'rezultati_bm(2).csv'},
+            'layout': LAYOUT_STANDARD,
+            'county_lookup_by_name': False,
         },
         2014: {
             'dir': BASE_DIR / '2014',
@@ -49,12 +64,31 @@ class PresidentialImporter(BaseImporter):
                 1: '1_krug/2014_Predsjednik_1_krug_rezultati_po_birackim_mjestima_rezultati.csv',
                 2: '2_krug/2014_Predsjednik_2_krug_rezultati_po_birackim_mjestima_rezultati.csv',
             },
+            'layout': LAYOUT_STANDARD,
+            'county_lookup_by_name': False,
+        },
+        2009: {
+            'dir': BASE_DIR / '2009',
+            'encoding': 'windows-1250',
+            'title_rows': 0,
+            'name': 'Predsjednički izbori 2009',
+            'files': {
+                1: '1_krug/rezultati_po_bm_1krug_RH.csv',
+                2: '2_krug/rezultati_po_bm_2krug_Rezultati.csv',
+            },
+            'layout': LAYOUT_2009,
+            # 2009's župan-codes are unreliable (e.g. some Karlovačka rows
+            # carry code 3 instead of 4). Match by county name and fall back
+            # to the file's code only if no name match exists.
+            'county_lookup_by_name': True,
         },
     }
 
     def __init__(self, stdout=None, years=None):
         super().__init__(stdout=stdout)
         self.years = years if years else list(self.YEARS.keys())
+        # Built lazily on first by-name lookup.
+        self._county_by_normalized_name = None
 
     def run(self):
         election_type = self.get_or_create_election_type('presidential', 'Predsjednički izbori')
@@ -71,12 +105,43 @@ class PresidentialImporter(BaseImporter):
                     self.log(f"File not found: {filepath}, skipping {year} round {round_num}")
                     continue
                 self.log(f"Importing presidential {year} round {round_num} from {filename}...")
-                self._import_round(election, round_num, filepath, cfg['encoding'], cfg['title_rows'])
+                self._import_round(election, round_num, filepath, cfg)
 
         self.flush_all()
 
-    def _import_round(self, election, round_num, filepath, encoding, title_rows):
+    @staticmethod
+    def _normalize_county_name(raw):
+        """Normalize a county name for cross-year lookup."""
+        s = (raw or '').strip().upper()
+        s = strip_diacritics(s)
+        # Drop the "ŽUPANIJA" suffix that some files include and others omit
+        # (e.g. "ZAGREBAČKA" vs "ZAGREBAČKA ŽUPANIJA").
+        s = s.replace('ZUPANIJA', '').strip()
+        return ' '.join(s.split())
+
+    def _resolve_county_by_name(self, name, fallback_code):
+        """Look up an existing County row by name; fall back to code-based create."""
+        from elections.models import County
+        if self._county_by_normalized_name is None:
+            self._county_by_normalized_name = {
+                self._normalize_county_name(c.name): c
+                for c in County.objects.all()
+            }
+        norm = self._normalize_county_name(name)
+        cached = self._county_by_normalized_name.get(norm)
+        if cached:
+            self._county_cache[cached.code] = cached
+            return cached
+        # Unknown name — fall back to the standard code-based path (which will
+        # create a new County row keyed on the file's code).
+        return self.get_or_create_county(fallback_code, name)
+
+    def _import_round(self, election, round_num, filepath, cfg):
         election_round = self.get_or_create_round(election, round_num)
+        encoding = cfg['encoding']
+        title_rows = cfg['title_rows']
+        layout = cfg['layout']
+        first_cand = layout['first_candidate']
 
         with open(filepath, encoding=encoding) as f:
             reader = csv.reader(f, delimiter=';')
@@ -84,12 +149,17 @@ class PresidentialImporter(BaseImporter):
                 next(reader)
             header = next(reader)
 
+        # 2009 uses "%" as the percent-column header; later years use "(%)".
+        def is_pct_header(h):
+            s = (h or '').strip()
+            return s == '%' or s == '(%)'
+
         candidate_names = []
-        has_pct_cols = '(%)' in [h.strip() for h in header[13:]]
-        col = 13
+        has_pct_cols = any(is_pct_header(h) for h in header[first_cand:])
+        col = first_cand
         while col < len(header):
             name = clean_candidate_name(header[col])
-            if name and name != '(%)':
+            if name and not is_pct_header(name):
                 candidate_names.append((col, name))
             col += 2 if has_pct_cols else 1
 
@@ -108,25 +178,33 @@ class PresidentialImporter(BaseImporter):
                 next(reader)
 
             row_count = 0
+            min_cols = first_cand
             for row in reader:
-                if len(row) < 13:
+                if len(row) < min_cols:
                     continue
 
-                county_code = row[0].strip()
-                county_name = row[1].strip()
-                muni_type = row[2].strip()
-                muni_name = row[3].strip()
-                ps_number = row[4].strip()
-                ps_name = row[5].strip()
-                ps_location = row[6].strip()
-                ps_address = row[7].strip()
+                county_code = row[layout['county_code']].strip()
+                county_name = row[layout['county_name']].strip()
+                muni_name = row[layout['muni_name']].strip()
+                ps_number = row[layout['ps_number']].strip()
+                # Skip rows without basic geography (occasional blank rows).
+                if not county_name or not muni_name or not ps_number:
+                    continue
 
-                registered = self.parse_int(row[8])
-                cast = self.parse_int(row[9])
-                valid = self.parse_int(row[11])
-                invalid = self.parse_int(row[12])
+                muni_type = row[layout['muni_type']].strip() if layout['muni_type'] is not None else ''
+                ps_name = row[layout['ps_name']].strip() if layout['ps_name'] is not None else ''
+                ps_location = row[layout['ps_location']].strip() if layout['ps_location'] is not None else ''
+                ps_address = row[layout['ps_address']].strip() if layout['ps_address'] is not None else ''
 
-                county = self.get_or_create_county(county_code, county_name)
+                registered = self.parse_int(row[layout['registered']])
+                cast = self.parse_int(row[layout['cast']])
+                valid = self.parse_int(row[layout['valid']])
+                invalid = self.parse_int(row[layout['invalid']])
+
+                if cfg.get('county_lookup_by_name'):
+                    county = self._resolve_county_by_name(county_name, county_code)
+                else:
+                    county = self.get_or_create_county(county_code, county_name)
                 municipality = self.get_or_create_municipality(county, muni_name, muni_type)
                 polling_station = self.get_or_create_polling_station(
                     municipality, ps_number, ps_name, ps_location, ps_address
