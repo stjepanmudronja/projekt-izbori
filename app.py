@@ -1220,31 +1220,68 @@ def sabor_seats(year):
             seat_key = 'NACIONALNE MANJINE' if is_minority else list_name
             total_seats[seat_key] = total_seats.get(seat_key, 0) + 1
 
+        # Map list_name -> total list votes for the preferential-vote threshold.
+        list_votes_by_name = {name: votes for name, votes in list_votes}
+
+        # Croatian Sabor uses an open-list system: any candidate whose personal
+        # preferential votes reach PREF_THRESHOLD_PCT of the list's total votes
+        # is promoted ahead of the list-position order. Remaining seats then go
+        # by list position (skipping candidates already promoted).
+        PREF_THRESHOLD_PCT = 10.0
+
         # Get candidates for lists that won seats
         for list_name, seats_won in dist_seats.items():
             list_id = list_id_map.get(list_name)
             if not list_id or seats_won == 0:
                 continue
 
-            candidates = (
-                db.session.query(Person.first_name, Person.last_name, Candidacy.position_on_list)
-                .join(Candidacy, Person.id == Candidacy.person_id)
+            cand_rows = (
+                db.session.query(
+                    Candidacy.id,
+                    Person.first_name,
+                    Person.last_name,
+                    Candidacy.position_on_list,
+                    db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('personal_votes'),
+                )
+                .join(Person, Person.id == Candidacy.person_id)
+                .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
                 .filter(Candidacy.electoral_list_id == list_id)
-                .order_by(Candidacy.position_on_list)
-                .limit(seats_won)
+                .group_by(Candidacy.id, Person.first_name, Person.last_name, Candidacy.position_on_list)
                 .all()
             )
 
+            list_total_votes = list_votes_by_name.get(list_name, 0)
+            pref_floor = list_total_votes * PREF_THRESHOLD_PCT / 100.0
+
+            promoted = sorted(
+                [c for c in cand_rows if int(c.personal_votes or 0) >= pref_floor],
+                key=lambda c: -int(c.personal_votes or 0),
+            )
+            chosen = []
+            seen = set()
+            for c in promoted:
+                if len(chosen) >= seats_won:
+                    break
+                chosen.append(c)
+                seen.add(c.id)
+            for c in sorted(cand_rows, key=lambda c: c.position_on_list):
+                if len(chosen) >= seats_won:
+                    break
+                if c.id in seen:
+                    continue
+                chosen.append(c)
+                seen.add(c.id)
+
             is_minority = dist.number in MINORITY_SEATS
             group = 'NACIONALNE MANJINE' if is_minority else primary_party(list_name)
-            for c in candidates:
+            for c in chosen:
                 all_candidates.append({
                     'name': f"{c.first_name} {c.last_name}",
                     'party': group,
                     'district': dist.name,
                 })
 
-            for i in range(seats_won - len(candidates)):
+            for i in range(seats_won - len(chosen)):
                 all_candidates.append({
                     'name': group,
                     'party': group,
