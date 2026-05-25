@@ -520,6 +520,7 @@
         .rank-badge { font-size: 0.7rem; padding: 0.25em 0.55em; margin-left: 0.25rem; font-weight: 600; }
         .rank-badge.rank-winner { background: linear-gradient(135deg, #FFD700, #DAA520); color: #4A3700; border: 1px solid #B8860B; }
         .rank-badge.rank-runner-up { background: linear-gradient(135deg, #E5E5E5, #B0B0B0); color: #333; border: 1px solid #808080; }
+        .rank-badge.rank-seat { background: linear-gradient(135deg, #28a745, #1e7e34); color: #fff; border: 1px solid #166528; }
 
         /* Izlaznost analytics */
         .izl-card-strip-wrap { position: relative; }
@@ -2025,16 +2026,17 @@ function renderMultiLineChart(panel, type) {
         filtered.forEach(r => {
             const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
             resultMap[key] = r.vote_share || 0;
-            if (r.rank) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round };
+            if (r.rank || r.won_seat) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round, won_seat: r.won_seat };
         });
 
         const data = labelKeys.map(k => resultMap[k] ?? null);
         const ranks = labelKeys.map(k => rankMap[k] || null);
 
-        // Per-point styling: gold for winner (rank=1), silver for runner-up (rank=2).
-        const pointBg = ranks.map(r => r ? (r.rank === 1 ? '#FFD700' : r.rank === 2 ? '#C0C0C0' : color) : color);
-        const pointBorder = ranks.map(r => r ? (r.rank === 1 ? '#B8860B' : r.rank === 2 ? '#808080' : '#fff') : '#fff');
-        const pointRadii = ranks.map(r => r ? (r.rank === 1 ? 9 : r.rank === 2 ? 7 : 5) : 5);
+        // Per-point styling: gold for winner (rank=1), silver for runner-up
+        // (rank=2), green for a candidate who won a Sabor seat.
+        const pointBg = ranks.map(r => !r ? color : (r.rank === 1 ? '#FFD700' : r.rank === 2 ? '#C0C0C0' : r.won_seat ? '#28a745' : color));
+        const pointBorder = ranks.map(r => !r ? '#fff' : (r.rank === 1 ? '#B8860B' : r.rank === 2 ? '#808080' : r.won_seat ? '#166528' : '#fff'));
+        const pointRadii = ranks.map(r => !r ? 5 : (r.rank === 1 ? 9 : r.rank === 2 ? 7 : r.won_seat ? 7 : 5));
 
         return {
             label: item.name,
@@ -2083,7 +2085,9 @@ function renderMultiLineChart(panel, type) {
                             if (!r) return '';
                             if (r.rank === 1) return `🥇 Pobjednik (1. od ${r.total})`;
                             if (r.rank === 2) return `🥈 Drugoplasirani (2. od ${r.total})`;
-                            return `${r.rank}. mjesto od ${r.total}`;
+                            if (r.won_seat) return `🟢 Ušao u Sabor`;
+                            if (r.rank) return `${r.rank}. mjesto od ${r.total}`;
+                            return '';
                         },
                     },
                 },
@@ -2211,7 +2215,11 @@ function formatPct(n, decimals = 1) {
 }
 
 function rankBadgeHtml(r) {
-    if (!r || !r.rank) return '';
+    if (!r) return '';
+    if (r.won_seat) {
+        return `<span class="badge rank-badge rank-seat" title="Osvojio mandat — ušao u Sabor">🟢 Ušao u Sabor</span>`;
+    }
+    if (!r.rank) return '';
     const total = r.total_candidates_in_round || '';
     if (r.rank === 1) {
         return `<span class="badge rank-badge rank-winner" title="Pobjednik (1. od ${total})">🥇 Pobjednik</span>`;

@@ -246,6 +246,126 @@ def search():
         ])
 
 
+# Cache of Sabor seat winners per election round (data is static after import).
+_SABOR_SEAT_WINNERS_CACHE = {}
+
+
+def sabor_seat_winner_candidacy_ids(er_id):
+    """Return the set of Candidacy.id that won a Sabor seat in this round.
+
+    Mirrors the D'Hondt + preferential-vote allocation in sabor_seats() but
+    tracks the chosen candidacies at the individual level so the politician
+    page can flag who actually entered the Sabor."""
+    if er_id in _SABOR_SEAT_WINNERS_CACHE:
+        return _SABOR_SEAT_WINNERS_CACHE[er_id]
+
+    MINORITY_SEATS = {121: 3, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1}
+    PREF_THRESHOLD_PCT = 10.0
+    winner_ids = set()
+
+    districts = (
+        db.session.query(ElectoralDistrict)
+        .join(ElectoralList, ElectoralList.district_id == ElectoralDistrict.id)
+        .filter(ElectoralList.election_round_id == er_id)
+        .distinct()
+        .all()
+    )
+
+    for dist in districts:
+        if dist.number in MINORITY_SEATS:
+            n_seats = MINORITY_SEATS[dist.number]
+        elif dist.number == 11:
+            n_seats = 3
+        elif dist.number == 12:
+            n_seats = 8
+        else:
+            n_seats = 14
+
+        list_rows = (
+            db.session.query(
+                ElectoralList.id,
+                ElectoralList.name,
+                db.func.sum(ListResult.votes).label('total_votes'),
+            )
+            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
+            .filter(
+                ElectoralList.election_round_id == er_id,
+                ElectoralList.district_id == dist.id,
+            )
+            .group_by(ElectoralList.id, ElectoralList.name)
+            .all()
+        )
+        if not list_rows:
+            continue
+
+        list_votes = [(r.name, r.total_votes) for r in list_rows]
+        list_id_map = {r.name: r.id for r in list_rows}
+        total_district_votes = sum(v for _, v in list_votes)
+
+        is_standard = n_seats == 14
+        if is_standard:
+            threshold = total_district_votes * 0.05
+            eligible = [(name, votes) for name, votes in list_votes if votes >= threshold]
+        else:
+            eligible = list(list_votes)
+
+        quotients = []
+        for list_name, votes in eligible:
+            for divisor in range(1, n_seats + 1):
+                quotients.append((votes / divisor, list_name))
+        quotients.sort(key=lambda x: -x[0])
+        seat_winners = quotients[:n_seats]
+
+        dist_seats = {}
+        for _, list_name in seat_winners:
+            dist_seats[list_name] = dist_seats.get(list_name, 0) + 1
+
+        list_votes_by_name = {name: votes for name, votes in list_votes}
+
+        for list_name, seats_won in dist_seats.items():
+            list_id = list_id_map.get(list_name)
+            if not list_id or seats_won == 0:
+                continue
+
+            cand_rows = (
+                db.session.query(
+                    Candidacy.id,
+                    Candidacy.position_on_list,
+                    db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('personal_votes'),
+                )
+                .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+                .filter(Candidacy.electoral_list_id == list_id)
+                .group_by(Candidacy.id, Candidacy.position_on_list)
+                .all()
+            )
+
+            list_total_votes = list_votes_by_name.get(list_name, 0)
+            pref_floor = list_total_votes * PREF_THRESHOLD_PCT / 100.0
+
+            promoted = sorted(
+                [c for c in cand_rows if int(c.personal_votes or 0) >= pref_floor],
+                key=lambda c: -int(c.personal_votes or 0),
+            )
+            chosen = []
+            seen = set()
+            for c in promoted:
+                if len(chosen) >= seats_won:
+                    break
+                chosen.append(c.id)
+                seen.add(c.id)
+            for c in sorted(cand_rows, key=lambda c: (c.position_on_list or 0)):
+                if len(chosen) >= seats_won:
+                    break
+                if c.id in seen:
+                    continue
+                chosen.append(c.id)
+                seen.add(c.id)
+            winner_ids.update(chosen)
+
+    _SABOR_SEAT_WINNERS_CACHE[er_id] = winner_ids
+    return winner_ids
+
+
 @app.route('/api/person/<int:person_id>')
 def person_detail(person_id):
     person = Person.query.get_or_404(person_id)
@@ -387,6 +507,17 @@ def person_detail(person_id):
         for i, row in enumerate(rows, 1):
             rank_lookup[row.id] = (i, total)
 
+    # Flag Sabor candidacies that actually won a seat (green dot). Compute the
+    # winner set once per distinct Sabor round this person ran in.
+    sabor_round_ids = {
+        c.electoral_list.election_round_id
+        for c in candidacies
+        if c.electoral_list.election_round.election.election_type.name == 'Parlamentarni izbori'
+    }
+    sabor_winner_ids = set()
+    for rid in sabor_round_ids:
+        sabor_winner_ids |= sabor_seat_winner_candidacy_ids(rid)
+
     results = []
     for c in candidacies:
         el = c.electoral_list
@@ -435,6 +566,7 @@ def person_detail(person_id):
             'vote_share': vote_share,
             'rank': rank,
             'total_candidates_in_round': total_cands,
+            'won_seat': c.id in sabor_winner_ids,
         })
 
     return jsonify({
