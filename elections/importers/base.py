@@ -6,7 +6,7 @@ from elections.models import (
     Person, Party, ElectoralList, Candidacy,
     TurnoutData, ListResult, CandidateResult,
 )
-from .name_utils import normalize_person_name, parse_person_name
+from .name_utils import normalize_person_name, parse_person_name, normalize_municipality_name
 
 
 BATCH_SIZE = 5000
@@ -45,7 +45,11 @@ class BaseImporter:
         return self._county_cache[key]
 
     def get_or_create_municipality(self, county, name, mtype):
-        key = (county.id, name)
+        # Match on a prefix-/hyphen-normalized key so the same place isn't split
+        # into separate rows when source files name it "DUGO SELO" in one year
+        # and "GRAD DUGO SELO" in another. See normalize_municipalities command.
+        norm = normalize_municipality_name(name)
+        key = (county.id, norm)
         if key not in self._municipality_cache:
             # Normalize type
             mtype_lower = mtype.lower().strip()
@@ -59,11 +63,17 @@ class BaseImporter:
                 'dr ava': 'država',
             }
             normalized_type = type_map.get(mtype_lower, mtype_lower)
-            obj, _ = Municipality.objects.get_or_create(
-                county=county, name=name,
-                defaults={'type': normalized_type}
+            # Reuse an existing row for this place under any name variant.
+            existing = next(
+                (m for m in Municipality.objects.filter(county=county)
+                 if normalize_municipality_name(m.name) == norm),
+                None,
             )
-            self._municipality_cache[key] = obj
+            if existing is None:
+                existing = Municipality.objects.create(
+                    county=county, name=name, type=normalized_type,
+                )
+            self._municipality_cache[key] = existing
         return self._municipality_cache[key]
 
     def get_or_create_polling_station(self, municipality, number, name, location='', address=''):

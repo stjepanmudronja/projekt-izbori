@@ -25,6 +25,21 @@ def clean_candidate_name(raw):
     return ' '.join(s.split())
 
 
+# "GRAD X" / "OPĆINA X" prefixes are administrative qualifiers some DIP files
+# include and others omit, which otherwise splits a place into two rows.
+_MUNI_PREFIX_RE = re.compile(r'^(GRAD|OP[ĆC]INA)\s+')
+
+
+def normalize_municipality_name(name):
+    """Canonical key for matching a municipality name across imports: drop the
+    GRAD/OPĆINA prefix and collapse hyphen/space variants
+    (e.g. 'ZLATAR-BISTRICA' == 'ZLATAR BISTRICA')."""
+    n = (name or '').upper().strip()
+    n = _MUNI_PREFIX_RE.sub('', n)
+    n = re.sub(r'\s*-\s*', ' ', n)
+    return re.sub(r'\s+', ' ', n).strip()
+
+
 def strip_diacritics(text):
     """Remove diacritical marks from text (e.g. Č→C, Š→S, Ž→Z, Đ→D)."""
     # Handle Đ/đ specially since NFKD doesn't decompose it
