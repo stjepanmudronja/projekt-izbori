@@ -47,6 +47,13 @@ class Candidacy(db.Model):
     electoral_list = db.relationship('ElectoralList', backref='candidacies', lazy=True)
 
 
+class ElectedMandate(db.Model):
+    __tablename__ = 'elections_electedmandate'
+    id = db.Column(db.Integer, primary_key=True)
+    candidacy_id = db.Column(db.Integer, db.ForeignKey('elections_candidacy.id'))
+    group = db.Column(db.String)
+
+
 class ElectionRound(db.Model):
     __tablename__ = 'elections_electionround'
     id = db.Column(db.Integer, primary_key=True)
@@ -518,6 +525,16 @@ def person_detail(person_id):
     for rid in sabor_round_ids:
         sabor_winner_ids |= sabor_seat_winner_candidacy_ids(rid)
 
+    # Blue dot: candidacies explicitly recorded as having taken a seat
+    # (ElectedMandate table) — used for EU MEPs, where the seated set can't be
+    # computed from votes. Maps candidacy_id -> EP political group.
+    mandate_groups = dict(
+        db.session.query(ElectedMandate.candidacy_id, ElectedMandate.group)
+        .join(Candidacy, Candidacy.id == ElectedMandate.candidacy_id)
+        .filter(Candidacy.person_id == person_id)
+        .all()
+    )
+
     results = []
     for c in candidacies:
         el = c.electoral_list
@@ -567,6 +584,8 @@ def person_detail(person_id):
             'rank': rank,
             'total_candidates_in_round': total_cands,
             'won_seat': c.id in sabor_winner_ids,
+            'eu_mep': c.id in mandate_groups and etype.name == 'Izbori za Europski parlament',
+            'eu_group': mandate_groups.get(c.id) if etype.name == 'Izbori za Europski parlament' else None,
         })
 
     return jsonify({

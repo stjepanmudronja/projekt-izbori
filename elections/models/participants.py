@@ -56,3 +56,20 @@ class Candidacy(models.Model):
 
     def __str__(self):
         return f"{self.person} - #{self.position_on_list} on {self.electoral_list}"
+
+
+class ElectedMandate(models.Model):
+    """A candidacy that actually took a seat/mandate.
+
+    Recorded explicitly for outcomes that can't be derived from vote totals —
+    e.g. EU MEPs who were seated only after higher-placed candidates ceded
+    their seat (dual office). `group` optionally holds extra context such as
+    the European Parliament political group.
+    """
+    candidacy = models.OneToOneField(
+        Candidacy, on_delete=models.CASCADE, related_name='elected_mandate'
+    )
+    group = models.CharField(max_length=120, blank=True)
+
+    def __str__(self):
+        return f"Mandate: {self.candidacy.person}"
