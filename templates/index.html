@@ -1890,6 +1890,11 @@ function renderVotesChart(panel, results, type) {
     const rawVotes = filtered.map(r => r[votesKey]);
     const totalBallots = filtered.map(r => r.total_valid_ballots || 0);
     const colors = filtered.map(r => getElectionColor(r.election_type));
+    // Per-point click target: open the matching election results module.
+    const pointTargets = filtered.map(r => {
+        const cat = electionTypeToCategory(r.election_type);
+        return cat ? { cat, year: r.year } : null;
+    });
 
     const ctx = canvas.getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 320);
@@ -1921,6 +1926,16 @@ function renderVotesChart(panel, results, type) {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
+            onClick: (evt, items) => {
+                if (items && items.length) {
+                    const t = pointTargets[items[0].index];
+                    if (t) izlNavigateTo(t.cat, t.year);
+                }
+            },
+            onHover: (evt, items) => {
+                const hit = items && items.length && pointTargets[items[0].index];
+                if (evt && evt.native) evt.native.target.style.cursor = hit ? 'pointer' : 'default';
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -1938,6 +1953,9 @@ function renderVotesChart(panel, results, type) {
                                 `Glasovi: ${rawVotes[i].toLocaleString('hr-HR')}`,
                                 `Ukupno glasača: ${totalBallots[i].toLocaleString('hr-HR')}`
                             ];
+                        },
+                        afterLabel: function(ctx) {
+                            return pointTargets[ctx.dataIndex] ? '\nKlikni za otvaranje rezultata.' : '';
                         }
                     }
                 },
@@ -1994,7 +2012,7 @@ function renderMultiLineChart(panel, type) {
                 }
                 if (r.round > 1) label += ` (${r.round}. krug)`;
                 if (r.district) label += `\n${r.district}`;
-                allLabelsSet.set(key, { label, date: r.date || `${r.year}`, round: r.round });
+                allLabelsSet.set(key, { label, date: r.date || `${r.year}`, round: r.round, election_type: r.election_type, year: r.year });
             }
         });
     });
@@ -2008,6 +2026,12 @@ function renderMultiLineChart(panel, type) {
     });
     const labels = sortedKeys.map(e => e[1].label);
     const labelKeys = sortedKeys.map(e => e[0]);
+    // Per-x-position click target: same labels are shared across all compared
+    // items, so clicking any circle at that x opens that election's results.
+    const pointTargets = sortedKeys.map(e => {
+        const cat = electionTypeToCategory(e[1].election_type);
+        return cat ? { cat, year: e[1].year } : null;
+    });
 
     if (labels.length === 0) {
         chartContainer.style.display = 'none';
@@ -2068,6 +2092,16 @@ function renderMultiLineChart(panel, type) {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
+            onClick: (evt, items_) => {
+                if (items_ && items_.length) {
+                    const t = pointTargets[items_[0].index];
+                    if (t) izlNavigateTo(t.cat, t.year);
+                }
+            },
+            onHover: (evt, items_) => {
+                const hit = items_ && items_.length && pointTargets[items_[0].index];
+                if (evt && evt.native) evt.native.target.style.cursor = hit ? 'pointer' : 'default';
+            },
             plugins: {
                 legend: {
                     display: items.length > 1,
