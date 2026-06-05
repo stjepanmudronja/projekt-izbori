@@ -2290,7 +2290,7 @@ function rankBadgeHtml(r) {
     if (!r) return '';
     if (r.eu_mep) {
         const grp = r.eu_group ? ` — ${r.eu_group}` : '';
-        return `<span class="badge rank-badge rank-eu" title="Zastupnik u Europskom parlamentu (saziv 2024.)${escapeHtml(grp)}">🔵 Ušao u EU parlament</span>`;
+        return `<span class="badge rank-badge rank-eu" title="Zastupnik u Europskom parlamentu (saziv ${r.year}.)${escapeHtml(grp)}">🔵 Ušao u EU parlament</span>`;
     }
     if (r.won_seat) {
         return `<span class="badge rank-badge rank-seat" title="Osvojio mandat — ušao u Sabor">🟢 Ušao u Sabor</span>`;
