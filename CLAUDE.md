@@ -22,7 +22,8 @@ source venv/bin/activate
 
 # Run imports
 python manage.py import_presidential
-python manage.py import_eu_parliament
+python manage.py import_eu_parliament                 # defaults to --year 2024
+python manage.py import_eu_parliament --year 2019     # other years live in {year}/CSV/
 python manage.py import_sabor                         # all districts
 python manage.py import_sabor --district 12 --wipe-district  # re-import single district
 python manage.py import_local
@@ -52,7 +53,7 @@ Models split into 4 modules under `elections/models/`:
 - **base.py** — BaseImporter with geography/person caches and bulk result insertion (batch size 5000). `get_or_create_municipality()` matches on a **prefix-/hyphen-normalized name** (`normalize_municipality_name` in `name_utils.py`) so the same place isn't split when one year's file says `DUGO SELO` and another says `GRAD DUGO SELO`. Legacy split rows were merged by the one-off `normalize_municipalities` command (repoints polling stations — merging by station number on collision — plus turnout/list/candidate result rows, then deletes the empty dup; guarded against merging genuine grad-vs-općina pairs). This split is why per-municipality views previously showed zeros for some election years (e.g. predsjednički 2005 in Dugo Selo). A further set of **presidential-only** name-variant splits (not prefix-based, so unreachable by the command) was merged by hand: "SVETI X" vs "SV. X" abbreviations, Istrian Croatian/Italian **bilingual** names added from 2014 on (`PULA` → `PULA - POLA`, etc.), and disambiguators (`OTOK (VINKOVCI)`, `DONJI MARTIJANEC`). For diaspora (county 22) only pure abbreviations + the Macedonia rename were merged; **`SRBIJA I CRNA GORA` (2005) is intentionally kept separate** from `SRBIJA`/`CRNA GORA` as a real historical entity. Turnout is buffered in a dict keyed on `(election_round, polling_station)` and **summed** across repeated calls, flushed via `bulk_create(update_conflicts=True)` — this handles Sabor mobile/abroad stations that appear in all 10 district files.
 - **presidential.py** — UTF-8 BOM CSV, semicolon delimited, title row + header + data
 - **sabor.py** — windows-1250 CSV. Districts 1-10: fixed 15 cols/list (1 list + 14 candidates). District 11 (diaspora): **variable-width** list groups (parties may nominate fewer than 14 candidates), parsed via `_is_list_name()` keyword heuristic in `_parse_list_groups_variable()`. District 12 (minorities): split into 6 sub-districts (121-126, one per minority group: Serbian 3 seats, others 1 each = 8 total). Supports `--district N` and `--wipe-district` flags for targeted re-import. **Station-number prefixing**: `_station_number_prefix()` adds `P` for posebna (mobile) and `I` for inozemstvo (abroad) files so that e.g. main station `006` (ČEHI) and mobile station `006` (DOM 85) in the same muni label do not collapse into one PollingStation row. See `docs/sabor_polling_station_fix.md` for full root-cause analysis. **District 12 turnout is skipped on import** — d12 CSVs report minority-only voter counts (subset of station total), so real turnout comes from districts 1-10. The `--wipe-district 12` path likewise preserves existing TurnoutData rows.
-- **eu_parliament.py** — windows-1250 CSV, 13 cols/list (1 list + 12 candidates), multiline coalition names
+- **eu_parliament.py** — windows-1250 CSV, 13 cols/list (1 list + 12 candidates), multiline coalition names. Year-aware: `EUParliamentImporter(year=YYYY)` reads from `{BASE_DIR}/{year}/CSV/rezultati_eupa.csv`. The "blue-dot" MEP badge (`ElectedMandate`) tracks **only the current saziv** (2024) — past years' MEPs aren't sitting now, so they're intentionally left unflagged.
 - **local.py** — Excel .xlsx, 2-4 sheets per file, list-level results only (no per-candidate breakdown within lists)
 
 ### Flask Analytics App (`app.py`)
@@ -87,7 +88,7 @@ Single-page app with multiple modules, served at port 5001:
 ### Data Files (not in git)
 Located in `files/` directory:
 - `Rezultati_predsjednicki_izbori_2024/` — 2 CSV files
-- `Rezultati_eu_parlamet_2024/CSV/` — 2 CSV files
+- `Rezultati_eu_parlamet_2024/{2024,2019}/CSV/` — 2 CSV files per year (the parent folder kept its original 2024-only name)
 - `rezultati_sabor_2024/CSV/` — 51 CSV files (11 districts × 3 file types + 6 district 12 files × 3)
 - `Rezultati_lokalni_izbori_2025/` — 697 Excel files across krug-1 and krug-2
 

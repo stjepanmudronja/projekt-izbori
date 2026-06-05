@@ -12,19 +12,27 @@ class EUParliamentImporter(BaseImporter):
     Geography columns (0-12): same as sabor but without district columns.
     Then groups of 13 columns per list (1 list votes + 12 candidate votes).
     Coalition names may contain literal newlines.
+
+    Per-year layout: files live under `{BASE_DIR}/{year}/CSV/rezultati_eupa.csv`.
+    The folder name `Rezultati_eu_parlamet_2024` is the original 2024 drop —
+    other election years (2019, …) were added as sibling year subdirectories.
     """
 
-    DATA_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_eu_parlamet_2024/CSV')
+    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_eu_parlamet_2024')
     CANDIDATES_PER_LIST = 12
     COLS_PER_LIST = 13  # 1 list + 12 candidates
     GEO_COLS = 13  # columns 0-12
 
+    def __init__(self, year=2024, stdout=None):
+        super().__init__(stdout=stdout)
+        self.year = year
+
     def run(self):
         election_type = self.get_or_create_election_type('eu_parliament', 'Izbori za Europski parlament')
-        election = self.get_or_create_election(election_type, 2024, 'Izbori za Europski parlament 2024')
+        election = self.get_or_create_election(election_type, self.year, f'Izbori za Europski parlament {self.year}')
         election_round = self.get_or_create_round(election, 1)
 
-        filepath = self.DATA_DIR / 'rezultati_eupa.csv'
+        filepath = self.BASE_DIR / str(self.year) / 'CSV' / 'rezultati_eupa.csv'
         if not filepath.exists():
             self.log(f"File not found: {filepath}")
             return
