@@ -404,11 +404,25 @@ def person_detail(person_id):
     RANK_BY_MUNI = {'Gradonačelnik', 'Načelnik'}
     RANK_BY_COUNTY = {'Župan'}
     LOKALNI_EXEC = RANK_BY_MUNI | RANK_BY_COUNTY
+    # Maps election_type.name → kind key used by the lokalni results module
+    # dropdown (selLokKind). Used to deep-link from a politician's badge/chart
+    # point straight into the matching scope (county / muni + kind).
+    LOKALNI_KIND_MAP = {
+        'Gradonačelnik': 'nacelnik',
+        'Načelnik': 'nacelnik',
+        'Gradsko vijeće': 'vijece',
+        'Općinsko vijeće': 'vijece',
+        'Župan': 'zupan',
+        'Županijska skupština': 'zup_skupstina',
+    }
+    ALL_LOKALNI = set(LOKALNI_KIND_MAP.keys())
 
-    # For lokalni execs we need the muni each candidacy ran in (and the
-    # county for Župan). Batch the lookup so we don't issue N queries.
+    # For lokalni we need the muni each candidacy ran in (and the
+    # county for county-level races). Batch the lookup so we don't issue
+    # N queries — covers both exec races (used for ranking) and list races
+    # (used for the deep-link payload only).
     lokalni_cands = [c for c in candidacies
-                     if c.electoral_list.election_round.election.election_type.name in LOKALNI_EXEC]
+                     if c.electoral_list.election_round.election.election_type.name in ALL_LOKALNI]
     list_to_muni = {}
     muni_to_county = {}
     if lokalni_cands:
@@ -568,6 +582,12 @@ def person_detail(person_id):
         vote_share = round((total_votes / total_valid_ballots) * 100, 1) if total_valid_ballots > 0 else 0
 
         rank, total_cands = rank_lookup.get(c.id, (None, None))
+        # Deep-link payload for the lokalni results module: kind + county +
+        # (for muni-level kinds) the muni id. Lets the frontend preselect
+        # all four dropdowns when the badge/chart point is clicked.
+        lokalni_kind = LOKALNI_KIND_MAP.get(etype.name)
+        muni_id = list_to_muni.get(el.id) if lokalni_kind else None
+        county_id = muni_to_county.get(muni_id) if muni_id else None
         results.append({
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
@@ -586,6 +606,9 @@ def person_detail(person_id):
             'won_seat': c.id in sabor_winner_ids,
             'eu_mep': c.id in mandate_groups and etype.name == 'Izbori za Europski parlament',
             'eu_group': mandate_groups.get(c.id) if etype.name == 'Izbori za Europski parlament' else None,
+            'lokalni_kind': lokalni_kind,
+            'county_id': county_id,
+            'municipality_id': muni_id,
         })
 
     return jsonify({

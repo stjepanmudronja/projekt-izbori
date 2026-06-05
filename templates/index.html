@@ -1279,7 +1279,7 @@
                 <h6 class="fw-bold mb-3" style="color:#0f3460;">
                     <i class="bi bi-graph-up me-2"></i><span id="izlChartTitle">Izlaznost — ukupno (Hrvatska)</span>
                 </h6>
-                <div style="position:relative; height:380px;">
+                <div style="position:relative;">
                     <canvas id="izlChartCanvas"></canvas>
                 </div>
                 <div id="izlChartTable" class="mt-3"></div>
@@ -1891,10 +1891,23 @@ function renderVotesChart(panel, results, type) {
     const totalBallots = filtered.map(r => r.total_valid_ballots || 0);
     const colors = filtered.map(r => getElectionColor(r.election_type));
     // Per-point click target: open the matching election results module.
+    // Lokalni results carry kind + county + muni so the dropdowns can be
+    // preselected (see izlNavigateTo / lokalniPreselect).
     const pointTargets = filtered.map(r => {
         const cat = electionTypeToCategory(r.election_type);
-        return cat ? { cat, year: r.year } : null;
+        if (!cat) return null;
+        const t = { cat, year: r.year };
+        if (cat === 'lokalni') {
+            t.kind = r.lokalni_kind || null;
+            t.countyId = r.county_id || null;
+            t.municipalityId = r.municipality_id || null;
+        }
+        return t;
     });
+
+    // Wider per-election spacing + horizontal scroll, set up before chart
+    // creation so Chart.js sizes to the (potentially wider) inner element.
+    applyChartScroll(canvas, labels.length, { height: 320 });
 
     const ctx = canvas.getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 320);
@@ -1929,7 +1942,7 @@ function renderVotesChart(panel, results, type) {
             onClick: (evt, items) => {
                 if (items && items.length) {
                     const t = pointTargets[items[0].index];
-                    if (t) izlNavigateTo(t.cat, t.year);
+                    if (t) izlNavigateTo(t.cat, t.year, t);
                 }
             },
             onHover: (evt, items) => {
@@ -2012,7 +2025,13 @@ function renderMultiLineChart(panel, type) {
                 }
                 if (r.round > 1) label += ` (${r.round}. krug)`;
                 if (r.district) label += `\n${r.district}`;
-                allLabelsSet.set(key, { label, date: r.date || `${r.year}`, round: r.round, election_type: r.election_type, year: r.year });
+                allLabelsSet.set(key, {
+                    label, date: r.date || `${r.year}`, round: r.round,
+                    election_type: r.election_type, year: r.year,
+                    lokalni_kind: r.lokalni_kind || null,
+                    county_id: r.county_id || null,
+                    municipality_id: r.municipality_id || null,
+                });
             }
         });
     });
@@ -2030,7 +2049,14 @@ function renderMultiLineChart(panel, type) {
     // items, so clicking any circle at that x opens that election's results.
     const pointTargets = sortedKeys.map(e => {
         const cat = electionTypeToCategory(e[1].election_type);
-        return cat ? { cat, year: e[1].year } : null;
+        if (!cat) return null;
+        const t = { cat, year: e[1].year };
+        if (cat === 'lokalni') {
+            t.kind = e[1].lokalni_kind || null;
+            t.countyId = e[1].county_id || null;
+            t.municipalityId = e[1].municipality_id || null;
+        }
+        return t;
     });
 
     if (labels.length === 0) {
@@ -2084,6 +2110,10 @@ function renderMultiLineChart(panel, type) {
     const allValues = datasets.flatMap(ds => ds.data.filter(v => v !== null));
     const maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
 
+    // Wider per-election spacing + horizontal scroll, set up before chart
+    // creation so Chart.js sizes to the (potentially wider) inner element.
+    applyChartScroll(canvas, labels.length, { height: 320 });
+
     const ctx = canvas.getContext('2d');
     moduleCharts[modKey] = new Chart(ctx, {
         type: 'line',
@@ -2095,7 +2125,7 @@ function renderMultiLineChart(panel, type) {
             onClick: (evt, items_) => {
                 if (items_ && items_.length) {
                     const t = pointTargets[items_[0].index];
-                    if (t) izlNavigateTo(t.cat, t.year);
+                    if (t) izlNavigateTo(t.cat, t.year, t);
                 }
             },
             onHover: (evt, items_) => {
@@ -2152,8 +2182,11 @@ function renderPersonResultsHTML(results) {
     return results.map(r => {
         const showListName = r.list_name && r.list_name.toUpperCase() !== (r._personFullName || '').toUpperCase();
         const cat = electionTypeToCategory(r.election_type);
+        const lokAttrs = cat === 'lokalni'
+            ? ` data-kind="${escapeHtml(r.lokalni_kind || '')}" data-county-id="${r.county_id || ''}" data-muni-id="${r.municipality_id || ''}"`
+            : '';
         const linkAttrs = cat
-            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}"${lokAttrs} role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
             : `class="result-badges"`;
         return `
         <div class="card result-card mb-3 p-3">
@@ -2188,8 +2221,11 @@ function renderPartyResultsHTML(results) {
     if (results.length === 0) return '<p class="text-muted">Nema izbornih podataka.</p>';
     return results.map(r => {
         const cat = electionTypeToCategory(r.election_type);
+        const lokAttrs = cat === 'lokalni'
+            ? ` data-kind="${escapeHtml(r.lokalni_kind || '')}" data-county-id="${r.county_id || ''}" data-muni-id="${r.municipality_id || ''}"`
+            : '';
         const linkAttrs = cat
-            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}"${lokAttrs} role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
             : `class="result-badges"`;
         return `
             <div class="card result-card mb-3 p-3">
@@ -2279,8 +2315,11 @@ function renderPersonResults(container, results) {
     container.innerHTML = results.map(r => {
         const showListName = r.list_name && r.list_name.toUpperCase() !== (r._personFullName || '').toUpperCase();
         const cat = electionTypeToCategory(r.election_type);
+        const lokAttrs = cat === 'lokalni'
+            ? ` data-kind="${escapeHtml(r.lokalni_kind || '')}" data-county-id="${r.county_id || ''}" data-muni-id="${r.municipality_id || ''}"`
+            : '';
         const linkAttrs = cat
-            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}"${lokAttrs} role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
             : `class="result-badges"`;
         return `
         <div class="card result-card mb-3 p-3">
@@ -2320,8 +2359,11 @@ function renderPartyResults(container, results) {
 
     container.innerHTML = results.map(r => {
         const cat = electionTypeToCategory(r.election_type);
+        const lokAttrs = cat === 'lokalni'
+            ? ` data-kind="${escapeHtml(r.lokalni_kind || '')}" data-county-id="${r.county_id || ''}" data-muni-id="${r.municipality_id || ''}"`
+            : '';
         const linkAttrs = cat
-            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}" role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
+            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}"${lokAttrs} role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
             : `class="result-badges"`;
         return `
             <div class="card result-card mb-3 p-3">
@@ -2403,6 +2445,10 @@ function renderStationWinnerChart(elections) {
     const colors = winners.map(w => getElectionColor(w.electionType));
     const winnerNames = winners.map(w => w.name);
     const winnerVotes = winners.map(w => w.votes);
+
+    // Wider per-election spacing + horizontal scroll, set up before chart
+    // creation so Chart.js sizes to the (potentially wider) inner element.
+    applyChartScroll(canvas, labels.length, { height: 230 });
 
     const ctx = canvas.getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 320);
@@ -5829,6 +5875,10 @@ const IZL_COMPARE_PALETTE = [
 // === Lokalni izbori — per-station results module ===
 const lok = { initialized: false, currentRound: 1, mapPaths: [], compareScopes: [] };
 const LOK_COUNTY_KINDS = new Set(['zupan', 'zup_skupstina']);
+// Kinds whose ElectoralLists are 1:1 with a candidate (head-of-executive
+// races), so each bar label is a person name and links to that person's page.
+// vijece / zup_skupstina lists are party tickets and aren't person-linkable.
+const LOK_PERSON_KINDS = new Set(['nacelnik', 'zupan']);
 const LOK_KIND_LABELS = {
     vijece: 'Vijeće', nacelnik: 'Načelnik',
     zupan: 'Župan', zup_skupstina: 'Žup. skupština',
@@ -6183,8 +6233,13 @@ function renderLokResultCard(data) {
         '#65a30d', '#c026d3', '#0284c7', '#b91c1c', '#047857',
     ];
     const items = (data.items || []).filter(i => i.votes > 0);
+    // Executive races (nacelnik/zupan) have one candidate per list, so each
+    // bar label is a person name — buildBarChart turns those into clickable
+    // links to that politician's page via data.kind === 'person'.
+    const barKind = LOK_PERSON_KINDS.has(data.kind) ? 'person' : 'party';
     if (!window._electionBarData) window._electionBarData = {};
     window._electionBarData[chartId] = {
+        kind: barKind,
         original: items.map((it, i) => ({
             name: it.name, votes: it.votes,
             color: palette[i % palette.length], origNames: [it.name],
@@ -6608,6 +6663,89 @@ function izlScopeTitle() {
     return 'Izlaznost';
 }
 
+// Wraps a chart's canvas in a horizontally scrollable container (idempotent),
+// then sizes the inner wrapper based on label count so x-tick labels don't
+// crowd together as more elections are added. Adds floating left/right scroll
+// buttons in the top-right corner; they auto-hide when the chart fits.
+//
+// IMPORTANT: call this BEFORE `new Chart(ctx, …)` for the canvas. Chart.js
+// measures the parent element on creation, so the inner wrapper must already
+// be at its final width — otherwise the chart stays at the old width even
+// after a resize() call.
+//
+// Reused across the izlaznost / station-winner / politician charts so adding
+// new elections gives every chart consistent breathing room + scroll affordance.
+function applyChartScroll(canvas, labelCount, opts) {
+    if (!canvas) return;
+    opts = opts || {};
+    const pxPerPoint = opts.pxPerPoint || 95;
+    const edgePadding = opts.edgePadding || 40;
+    const height = opts.height || 320;
+    const { scrollEl, innerEl, btnsEl } = ensureChartScrollWrap(canvas, height);
+    const containerWidth = scrollEl.clientWidth;
+    const needed = (labelCount || 0) * pxPerPoint + edgePadding * 2;
+    if (needed > containerWidth) {
+        innerEl.style.minWidth = needed + 'px';
+        btnsEl.style.display = '';
+    } else {
+        innerEl.style.minWidth = '100%';
+        btnsEl.style.display = 'none';
+        scrollEl.scrollLeft = 0;
+    }
+    if (!btnsEl.dataset.wired) {
+        const step = () => Math.max(160, scrollEl.clientWidth * 0.7);
+        btnsEl.querySelectorAll('[data-dir]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const dir = parseInt(btn.dataset.dir, 10);
+                scrollEl.scrollBy({ left: dir * step(), behavior: 'smooth' });
+            });
+        });
+        btnsEl.dataset.wired = '1';
+    }
+}
+
+// Wraps `canvas` the first time it's called; on subsequent calls returns the
+// existing refs. The arrow buttons live in a wrapper outside the scrolling
+// area so they stay pinned to the visible top-right corner (they would scroll
+// out of view if placed inside the overflow-x:auto container).
+//
+//   host
+//   └─ chart-scroll-wrap (position:relative)        ← arrows positioned to this
+//      ├─ chart-scroll-outer (overflow-x:auto)      ← horizontal scrollbar
+//      │  └─ chart-scroll-inner (min-width: …)      ← widens with data
+//      │     └─ canvas
+//      └─ chart-scroll-arrows (position:absolute)   ← stays in viewport
+function ensureChartScrollWrap(canvas, height) {
+    if (canvas.parentNode.classList.contains('chart-scroll-inner')) {
+        const innerEl = canvas.parentNode;
+        const scrollEl = innerEl.parentNode;
+        const wrapEl = scrollEl.parentNode;
+        return { scrollEl, innerEl, btnsEl: wrapEl.querySelector('.chart-scroll-arrows') };
+    }
+    const host = canvas.parentNode;
+    const wrapEl = document.createElement('div');
+    wrapEl.className = 'chart-scroll-wrap';
+    wrapEl.style.cssText = 'position:relative;';
+    const scrollEl = document.createElement('div');
+    scrollEl.className = 'chart-scroll-outer';
+    scrollEl.style.cssText = `overflow-x:auto; overflow-y:hidden; height:${height}px;`;
+    const innerEl = document.createElement('div');
+    innerEl.className = 'chart-scroll-inner';
+    innerEl.style.cssText = 'position:relative; height:100%; min-width:100%;';
+    const btnsEl = document.createElement('div');
+    btnsEl.className = 'btn-group btn-group-sm chart-scroll-arrows';
+    btnsEl.style.cssText = 'position:absolute; top:6px; right:6px; z-index:5; display:none;';
+    btnsEl.innerHTML = `
+        <button type="button" class="btn btn-outline-secondary" data-dir="-1" title="Pomakni lijevo"><i class="bi bi-chevron-left"></i></button>
+        <button type="button" class="btn btn-outline-secondary" data-dir="1" title="Pomakni desno"><i class="bi bi-chevron-right"></i></button>`;
+    host.insertBefore(wrapEl, canvas);
+    wrapEl.appendChild(scrollEl);
+    scrollEl.appendChild(innerEl);
+    innerEl.appendChild(canvas);
+    wrapEl.appendChild(btnsEl);
+    return { scrollEl, innerEl, btnsEl };
+}
+
 function izlPickRow(group) {
     // For single-scope queries against the existing endpoints, the response
     // contains all entities at that level. Pick the row matching the user's choice.
@@ -6658,8 +6796,11 @@ function renderIzlaznostChart(data) {
     const groupCategories = sortedGroups.map(g => g.category);
 
     const canvas = document.getElementById('izlChartCanvas');
-    const ctx = canvas.getContext('2d');
     if (izl.chart) { izl.chart.destroy(); izl.chart = null; }
+    // Wrap + size the scroll container BEFORE creating the chart so Chart.js
+    // measures the (potentially wider) inner element on creation.
+    applyChartScroll(canvas, labels.length, { height: 380 });
+    const ctx = canvas.getContext('2d');
 
     let datasets;
     let tableRows;
@@ -6885,7 +7026,7 @@ document.addEventListener('click', (e) => {
     if (!link) return;
     const cat = link.dataset.cat;
     const year = parseInt(link.dataset.year, 10);
-    if (cat && year) izlNavigateTo(cat, year);
+    if (cat && year) izlNavigateTo(cat, year, readLokDeepLink(link));
 });
 
 // Delegated handler: clicking a candidate name in a bar chart opens that
@@ -6922,10 +7063,22 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const cat = link.dataset.cat;
     const year = parseInt(link.dataset.year, 10);
-    if (cat && year) izlNavigateTo(cat, year);
+    if (cat && year) izlNavigateTo(cat, year, readLokDeepLink(link));
 });
 
-function izlNavigateTo(category, year) {
+// Extracts lokalni deep-link options (kind/county/muni) from a badge link's
+// data-* attrs. Returns null for non-lokalni links so izlNavigateTo skips the
+// preselect path.
+function readLokDeepLink(link) {
+    if (link.dataset.cat !== 'lokalni') return null;
+    return {
+        kind: link.dataset.kind || null,
+        countyId: link.dataset.countyId ? parseInt(link.dataset.countyId, 10) : null,
+        municipalityId: link.dataset.muniId ? parseInt(link.dataset.muniId, 10) : null,
+    };
+}
+
+function izlNavigateTo(category, year, opts) {
     if (category === 'sabor') {
         const link = document.querySelector('.sidebar-nav a[data-module="sabor-analysis"]');
         if (link) link.click();
@@ -6956,6 +7109,61 @@ function izlNavigateTo(category, year) {
         }
     };
     tryLoad();
+
+    // Lokalni: preselect županija / grad-općina / vrsta izbora dropdowns so
+    // the user lands on the matching race instead of the empty default view.
+    if (category === 'lokalni' && opts && (opts.countyId || opts.kind)) {
+        lokalniPreselect(opts);
+    }
+}
+
+// Drive the lokalni module's cascading dropdowns to a target scope. Each step
+// is async (county change fetches munis; muni change fetches stations), so
+// we poll for the next dropdown to be populated before setting its value.
+function lokalniPreselect(opts) {
+    const waitForOption = (sel, value, cb, attempts = 0) => {
+        if (!value) { cb(); return; }
+        if (!sel) { cb(); return; }
+        const found = Array.from(sel.options).find(o => String(o.value) === String(value));
+        if (found) cb();
+        else if (attempts < 40) setTimeout(() => waitForOption(sel, value, cb, attempts + 1), 100);
+        else cb();
+    };
+    const waitForEnabled = (sel, cb, attempts = 0) => {
+        if (!sel || !sel.disabled) { cb(); return; }
+        if (attempts < 40) setTimeout(() => waitForEnabled(sel, cb, attempts + 1), 100);
+        else cb();
+    };
+    const start = (attempts = 0) => {
+        const selC = document.getElementById('lokSelCounty');
+        // Counties are loaded inside initLokalniModule (async). Wait until the
+        // target county option exists before driving the change.
+        if (!selC || selC.options.length <= 1) {
+            if (attempts < 40) setTimeout(() => start(attempts + 1), 100);
+            return;
+        }
+        waitForOption(selC, opts.countyId, () => {
+            if (opts.countyId) {
+                selC.value = String(opts.countyId);
+                selC.dispatchEvent(new Event('change'));
+            }
+            const selM = document.getElementById('lokSelMuni');
+            waitForOption(selM, opts.municipalityId, () => {
+                if (opts.municipalityId) {
+                    selM.value = String(opts.municipalityId);
+                    selM.dispatchEvent(new Event('change'));
+                }
+                const selK = document.getElementById('lokSelKind');
+                waitForEnabled(selK, () => {
+                    if (opts.kind) {
+                        selK.value = opts.kind;
+                        selK.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
+        });
+    };
+    start();
 }
 
 function escapeHtml(s) {
