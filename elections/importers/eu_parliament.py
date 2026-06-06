@@ -34,6 +34,23 @@ YEAR_CONFIG = {
             'registered': 8, 'cast': 9, 'valid': 11, 'invalid': 12,
         },
     },
+    2013: {
+        # Croatia's first EP election (held April 2013, just after EU accession;
+        # 12 seats for the partial term ending 2014). Same shape as 2019/2024 —
+        # 13 geo cols + 12 candidates/list — but the file lives directly under
+        # `2013/` and a few list-name cells carry a trailing `\xa0` no-break
+        # space which str.strip() removes for free.
+        'rel_path': '2013/EUP2013_rezultati_po_BM_Work.csv',
+        'encoding': 'windows-1250',
+        'geo_cols': 13,
+        'candidates_per_list': 12,
+        'col': {
+            'county_code': 0, 'county_name': 1,
+            'muni_type': 2,  'muni_name': 3,
+            'ps_number': 4,  'ps_name': 5, 'ps_location': 6, 'ps_address': 7,
+            'registered': 8, 'cast': 9, 'valid': 11, 'invalid': 12,
+        },
+    },
     2014: {
         'rel_path': '2014/rezultati_eupa_interno_rezultati_eupa.csv',
         'encoding': 'windows-1250',
