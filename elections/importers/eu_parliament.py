@@ -3,42 +3,87 @@ from pathlib import Path
 from .base import BaseImporter
 
 
+# Per-year file layout. Older elections (2014) carry six extra geo columns
+# (Rbr GČ / Naziv GČ / Rbr MO / Naziv MO / Rbr IJ / Naziv IJ) that we don't
+# import; they sit between muni and polling-station columns. List shape also
+# differs: 2014 had 11 seats so each list has 11 candidates; from 2019 each
+# list has 12 candidates. Adding a new year = a new entry here.
+YEAR_CONFIG = {
+    2024: {
+        'rel_path': '2024/CSV/rezultati_eupa.csv',
+        'encoding': 'windows-1250',
+        'geo_cols': 13,
+        'candidates_per_list': 12,
+        'col': {
+            'county_code': 0, 'county_name': 1,
+            'muni_type': 2,  'muni_name': 3,
+            'ps_number': 4,  'ps_name': 5, 'ps_location': 6, 'ps_address': 7,
+            'registered': 8, 'cast': 9, 'valid': 11, 'invalid': 12,
+        },
+    },
+    2019: {
+        'rel_path': '2019/CSV/rezultati_eupa.csv',
+        'encoding': 'windows-1250',
+        'geo_cols': 13,
+        'candidates_per_list': 12,
+        'col': {
+            'county_code': 0, 'county_name': 1,
+            'muni_type': 2,  'muni_name': 3,
+            'ps_number': 4,  'ps_name': 5, 'ps_location': 6, 'ps_address': 7,
+            'registered': 8, 'cast': 9, 'valid': 11, 'invalid': 12,
+        },
+    },
+    2014: {
+        'rel_path': '2014/rezultati_eupa_interno_rezultati_eupa.csv',
+        'encoding': 'windows-1250',
+        'geo_cols': 19,
+        'candidates_per_list': 11,
+        'col': {
+            'county_code': 0, 'county_name': 1,
+            'muni_type': 2,  'muni_name': 3,
+            # 4-9: Rbr GČ, Naziv GČ, Rbr MO, Naziv MO, Rbr IJ, Naziv IJ — skipped
+            'ps_number': 10, 'ps_name': 11, 'ps_location': 12, 'ps_address': 13,
+            'registered': 14, 'cast': 15, 'valid': 17, 'invalid': 18,
+        },
+    },
+}
+
+
 class EUParliamentImporter(BaseImporter):
     """Import EU Parliament election results.
 
-    File format: windows-1250 encoded, semicolon-delimited.
-    No title row — header is row 1.
-
-    Geography columns (0-12): same as sabor but without district columns.
-    Then groups of 13 columns per list (1 list votes + 12 candidate votes).
-    Coalition names may contain literal newlines.
-
-    Per-year layout: files live under `{BASE_DIR}/{year}/CSV/rezultati_eupa.csv`.
-    The folder name `Rezultati_eu_parlamet_2024` is the original 2024 drop —
-    other election years (2019, …) were added as sibling year subdirectories.
+    File format: windows-1250 encoded, semicolon-delimited. Header is row 1.
+    Geography block sits at the front, then groups of `1 list-name + N
+    candidate-names` columns. Per-year shape (column offsets, candidate count,
+    file path) lives in `YEAR_CONFIG` — adding a new election year means
+    adding a new entry there. Coalition names may contain literal newlines.
     """
 
     BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_eu_parlamet_2024')
-    CANDIDATES_PER_LIST = 12
-    COLS_PER_LIST = 13  # 1 list + 12 candidates
-    GEO_COLS = 13  # columns 0-12
 
     def __init__(self, year=2024, stdout=None):
         super().__init__(stdout=stdout)
+        if year not in YEAR_CONFIG:
+            raise ValueError(f'No YEAR_CONFIG entry for {year}')
         self.year = year
+        self.cfg = YEAR_CONFIG[year]
+        self.candidates_per_list = self.cfg['candidates_per_list']
+        self.cols_per_list = self.candidates_per_list + 1
+        self.geo_cols = self.cfg['geo_cols']
+        self.cidx = self.cfg['col']
 
     def run(self):
         election_type = self.get_or_create_election_type('eu_parliament', 'Izbori za Europski parlament')
         election = self.get_or_create_election(election_type, self.year, f'Izbori za Europski parlament {self.year}')
         election_round = self.get_or_create_round(election, 1)
 
-        filepath = self.BASE_DIR / str(self.year) / 'CSV' / 'rezultati_eupa.csv'
+        filepath = self.BASE_DIR / self.cfg['rel_path']
         if not filepath.exists():
             self.log(f"File not found: {filepath}")
             return
 
         # Parse header
-        with open(filepath, encoding='windows-1250') as f:
+        with open(filepath, encoding=self.cfg['encoding']) as f:
             reader = csv.reader(f, delimiter=';')
             header = next(reader)
 
@@ -58,28 +103,29 @@ class EUParliamentImporter(BaseImporter):
             list_data.append((el_list, candidacies))
 
         # Import data rows
-        with open(filepath, encoding='windows-1250') as f:
+        c = self.cidx
+        with open(filepath, encoding=self.cfg['encoding']) as f:
             reader = csv.reader(f, delimiter=';')
             next(reader)  # skip header
 
             row_count = 0
             for row in reader:
-                if len(row) < self.GEO_COLS:
+                if len(row) < self.geo_cols:
                     continue
 
-                county_code = row[0].strip()
-                county_name = row[1].strip()
-                muni_type = row[2].strip()
-                muni_name = row[3].strip()
-                ps_number = row[4].strip()
-                ps_name = row[5].strip()
-                ps_location = row[6].strip()
-                ps_address = row[7].strip()
+                county_code = row[c['county_code']].strip()
+                county_name = row[c['county_name']].strip()
+                muni_type = row[c['muni_type']].strip()
+                muni_name = row[c['muni_name']].strip()
+                ps_number = row[c['ps_number']].strip()
+                ps_name = row[c['ps_name']].strip()
+                ps_location = row[c['ps_location']].strip()
+                ps_address = row[c['ps_address']].strip()
 
-                registered = self.parse_int(row[8])
-                cast = self.parse_int(row[9])
-                valid = self.parse_int(row[11])
-                invalid = self.parse_int(row[12])
+                registered = self.parse_int(row[c['registered']])
+                cast = self.parse_int(row[c['cast']])
+                valid = self.parse_int(row[c['valid']])
+                invalid = self.parse_int(row[c['invalid']])
 
                 county = self.get_or_create_county(county_code, county_name)
                 municipality = self.get_or_create_municipality(county, muni_name, muni_type)
@@ -89,7 +135,7 @@ class EUParliamentImporter(BaseImporter):
 
                 self.create_turnout(election_round, polling_station, registered, cast, valid, invalid)
 
-                col = self.GEO_COLS
+                col = self.geo_cols
                 for el_list, candidacies in list_data:
                     list_votes = self.parse_int(row[col]) if col < len(row) else 0
                     self.create_list_result(el_list, polling_station, list_votes)
@@ -99,7 +145,7 @@ class EUParliamentImporter(BaseImporter):
                         votes = self.parse_int(row[cand_col]) if cand_col < len(row) else 0
                         self.create_candidate_result(candidacy, polling_station, votes)
 
-                    col += self.COLS_PER_LIST
+                    col += self.cols_per_list
 
                 row_count += 1
 
@@ -109,10 +155,10 @@ class EUParliamentImporter(BaseImporter):
     def _parse_list_groups(self, header):
         """Parse header into groups of (list_name, [candidate_names])."""
         groups = []
-        col = self.GEO_COLS
-        while col + self.COLS_PER_LIST <= len(header):
+        col = self.geo_cols
+        while col + self.cols_per_list <= len(header):
             list_name = header[col].strip()
-            candidates = [header[col + 1 + i].strip() for i in range(self.CANDIDATES_PER_LIST)]
+            candidates = [header[col + 1 + i].strip() for i in range(self.candidates_per_list)]
             groups.append((list_name, candidates))
-            col += self.COLS_PER_LIST
+            col += self.cols_per_list
         return groups
