@@ -16,6 +16,13 @@ from elections.models import (
 #         (Sokol). Šuica vacated her seat Dec 2019 to become European
 #         Commission VP; Ressler took her place. The list below records
 #         everyone who held a seat at any point in that saziv.
+#   2014: Croatia's first regular EP election after joining the EU; 11 seats.
+#         Plenković left mid-term (Oct 2016) to become Croatian PM; Mimica
+#         left Nov 2014 to become EU Commissioner; Stier left Jan 2016 for
+#         Croatian Foreign Minister — all kept here because they DID get a
+#         mandate from voters, which is what the badge represents. The note
+#         "...nije svi otišli u EP" (not all winners actually went) is the
+#         reason this set is hand-curated rather than computed.
 #   2024: Current saziv. See `MEPS_BY_YEAR[2024]`.
 MEPS_BY_YEAR = {
     2024: [
@@ -31,6 +38,19 @@ MEPS_BY_YEAR = {
         ('DAVOR IVO STIER',           'Europska pučka stranka (EPP)'),
         ('MARKO VESLIGAJ',            'Progresivni savez socijalista i demokrata (S&D)'),
         ('ZELJANA ZOVKO',             'Europska pučka stranka (EPP)'),
+    ],
+    2014: [
+        ('ANDREJ PLENKOVIC',          'Europska pučka stranka (EPP)'),
+        ('DUBRAVKA SUICA',            'Europska pučka stranka (EPP)'),
+        ('IVANA MALETIC',             'Europska pučka stranka (EPP)'),
+        ('MARIJANA PETIR',            'Europska pučka stranka (EPP)'),
+        ('RUZA TOMASIC',              'Europski konzervativci i reformisti (ECR)'),
+        ('DAVOR IVO STIER',           'Europska pučka stranka (EPP)'),
+        ('NEVEN MIMICA',              'Progresivni savez socijalista i demokrata (S&D)'),
+        ('BILJANA BORZAN',            'Progresivni savez socijalista i demokrata (S&D)'),
+        ('JOZO RADOS',                'Savez liberala i demokrata za Europu (ALDE)'),
+        ('TONINO PICULA',             'Progresivni savez socijalista i demokrata (S&D)'),
+        ('MIRELA HOLY',               'Zeleni/Europski slobodni savez (Verts/ALE)'),
     ],
     2019: [
         ('RUZA TOMASIC',              'Europski konzervativci i reformisti (ECR)'),
