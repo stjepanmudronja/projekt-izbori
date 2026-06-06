@@ -1,6 +1,7 @@
 import csv
 from pathlib import Path
 from .base import BaseImporter
+from .name_utils import clean_candidate_name
 
 
 # Per-year file layout. Older elections (2014) carry six extra geo columns
@@ -153,12 +154,21 @@ class EUParliamentImporter(BaseImporter):
         self.log(f"Imported {row_count} polling station rows")
 
     def _parse_list_groups(self, header):
-        """Parse header into groups of (list_name, [candidate_names])."""
+        """Parse header into groups of (list_name, [candidate_names]). Each
+        candidate name passes through `clean_candidate_name` so academic
+        titles like "mr.sc. " / ", dipl.iur." (common in 2014 CSVs) don't
+        end up as part of the Person record's stored name — that previously
+        produced duplicates like "MR.SC. ANDREJ PLENKOVIC" alongside the
+        cleanly-named "ANDREJ PLENKOVIC" from later years.
+        """
         groups = []
         col = self.geo_cols
         while col + self.cols_per_list <= len(header):
             list_name = header[col].strip()
-            candidates = [header[col + 1 + i].strip() for i in range(self.candidates_per_list)]
+            candidates = [
+                clean_candidate_name(header[col + 1 + i])
+                for i in range(self.candidates_per_list)
+            ]
             groups.append((list_name, candidates))
             col += self.cols_per_list
         return groups

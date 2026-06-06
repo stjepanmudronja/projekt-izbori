@@ -7,7 +7,7 @@ import unicodedata
 # titles ("prof.dr.sc. MILAN , KUJUNDŽIĆ", "IVAN SINČIĆ, , univ.bacc.ing.el.").
 # Strip both so the same person hashes to the same normalized_name across
 # election years.
-_TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing)'
+_TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing|spec|oec|iur|med|sc|akad|struc|struč)'
 
 
 def clean_candidate_name(raw):
