@@ -12,6 +12,9 @@ from elections.models import (
 # etc.). Keys are Person.normalized_name (diacritics stripped, uppercase).
 #
 # Notes per term:
+#   2013: Croatia's first EP election (April 2013, just after EU accession);
+#         12 seats for the partial term ending with the 2014 regular election.
+#         Vuljanić sat with GUE/NGL — Croatia's only MEP from that group so far.
 #   2019: Croatia got 11 seats; a 12th MEP joined Feb 2020 post-Brexit
 #         (Sokol). Šuica vacated her seat Dec 2019 to become European
 #         Commission VP; Ressler took her place. The list below records
@@ -38,6 +41,24 @@ MEPS_BY_YEAR = {
         ('DAVOR IVO STIER',           'Europska pučka stranka (EPP)'),
         ('MARKO VESLIGAJ',            'Progresivni savez socijalista i demokrata (S&D)'),
         ('ZELJANA ZOVKO',             'Europska pučka stranka (EPP)'),
+    ],
+    2013: [
+        # Croatia's first EP election (April 2013, 12 seats for partial term
+        # ending 2014). Tomašić was on the HDZ coalition list at pos 6, sat
+        # with ECR via her HSP AS affiliation. Vuljanić (Hrvatski laburisti)
+        # was Croatia's only GUE/NGL member.
+        ('MARINO BALDINI',            'Progresivni savez socijalista i demokrata (S&D)'),
+        ('BILJANA BORZAN',            'Progresivni savez socijalista i demokrata (S&D)'),
+        ('ZDRAVKA BUSIC',             'Europska pučka stranka (Kršćanski demokrati) (EPP)'),
+        ('IVANA MALETIC',             'Europska pučka stranka (Kršćanski demokrati) (EPP)'),
+        ('SANDRA PETROVIC JAKOVINA',  'Progresivni savez socijalista i demokrata (S&D)'),
+        ('TONINO PICULA',             'Progresivni savez socijalista i demokrata (S&D)'),
+        ('ANDREJ PLENKOVIC',          'Europska pučka stranka (Kršćanski demokrati) (EPP)'),
+        ('DAVOR IVO STIER',           'Europska pučka stranka (Kršćanski demokrati) (EPP)'),
+        ('DUBRAVKA SUICA',            'Europska pučka stranka (Kršćanski demokrati) (EPP)'),
+        ('RUZA TOMASIC',              'Europski konzervativci i reformisti (ECR)'),
+        ('OLEG VALJALO',              'Progresivni savez socijalista i demokrata (S&D)'),
+        ('NIKOLA VULJANIC',           'Europska ujedinjena ljevica - Zelena nordijska ljevica (GUE&NGL)'),
     ],
     2014: [
         ('ANDREJ PLENKOVIC',          'Europska pučka stranka (EPP)'),
