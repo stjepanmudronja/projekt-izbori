@@ -1,6 +1,7 @@
 import csv
 from pathlib import Path
 from .base import BaseImporter
+from .name_utils import clean_candidate_name
 
 
 class SaborImporter(BaseImporter):
@@ -17,9 +18,13 @@ class SaborImporter(BaseImporter):
         XX_DD_rezultati.csv — main results
         XX_DD_rezultati_inozemstvo.csv — diaspora results
         XX_DD_rezultati_posebna.csv — special polling stations
+
+    Per-year files live under `{BASE_DIR}/{year}/CSV/`; pass `year=YYYY` to
+    `SaborImporter(year=YYYY)` (defaults to 2024). The shape has been stable
+    across 2020 and 2024 so no per-year layout config is needed yet.
     """
 
-    DATA_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor_2024/CSV')
+    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor_2024')
     CANDIDATES_PER_LIST = 14
     COLS_PER_LIST = 15  # 1 list + 14 candidates
     GEO_COLS = 15  # columns 0-14
@@ -48,9 +53,14 @@ class SaborImporter(BaseImporter):
         'PRAVEDNOST', 'ZELENA', 'NOVA', 'PRAVDA', 'RIJEKA', 'RDS',
     }
 
+    def __init__(self, year=2024, stdout=None):
+        super().__init__(stdout=stdout)
+        self.year = year
+        self.data_dir = self.BASE_DIR / str(year) / 'CSV'
+
     def run(self, only_district=None):
         election_type = self.get_or_create_election_type('sabor', 'Parlamentarni izbori')
-        election = self.get_or_create_election(election_type, 2024, 'Parlamentarni izbori 2024')
+        election = self.get_or_create_election(election_type, self.year, f'Parlamentarni izbori {self.year}')
         election_round = self.get_or_create_round(election, 1)
 
         # Import districts 1-11
@@ -68,7 +78,7 @@ class SaborImporter(BaseImporter):
     def _get_files_for_district(self, district_num):
         """Find all CSV files for a given district number."""
         files = []
-        for path in sorted(self.DATA_DIR.glob(f'*_{district_num:02d}_rezultati*.csv')):
+        for path in sorted(self.data_dir.glob(f'*_{district_num:02d}_rezultati*.csv')):
             files.append(path)
         return files
 
@@ -132,7 +142,9 @@ class SaborImporter(BaseImporter):
 
             group_files = sorted(groups[prefix])
             header = self._read_header(group_files[0])
-            candidate_names = [h.strip() for h in header[self.GEO_COLS:] if h.strip()]
+            candidate_names = [
+                clean_candidate_name(h) for h in header[self.GEO_COLS:] if h.strip()
+            ]
             total_candidates += len(candidate_names)
 
             # Each candidate gets their own electoral list (for uniformity)
@@ -157,13 +169,18 @@ class SaborImporter(BaseImporter):
         """Parse header into groups of (list_name, [candidate_names], list_col).
 
         Starting from column 15, every 15 columns is one group:
-        col 0: list name, cols 1-14: candidate names.
+        col 0: list name, cols 1-14: candidate names. Candidate names pass
+        through `clean_candidate_name` so academic-title noise doesn't split
+        the same person across years in cross-election search.
         """
         groups = []
         col = self.GEO_COLS
         while col + self.COLS_PER_LIST <= len(header):
             list_name = header[col].strip()
-            candidates = [header[col + 1 + i].strip() for i in range(self.CANDIDATES_PER_LIST)]
+            candidates = [
+                clean_candidate_name(header[col + 1 + i])
+                for i in range(self.CANDIDATES_PER_LIST)
+            ]
             groups.append((list_name, candidates, col))
             col += self.COLS_PER_LIST
         return groups
@@ -200,7 +217,7 @@ class SaborImporter(BaseImporter):
             list_name = header[list_col].strip()
             end = list_cols[i + 1] if i + 1 < len(list_cols) else len(header)
             candidates = [
-                header[c].strip() for c in range(list_col + 1, end)
+                clean_candidate_name(header[c]) for c in range(list_col + 1, end)
                 if header[c].strip()
             ]
             groups.append((list_name, candidates, list_col))

@@ -7,6 +7,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            '--year', type=int, default=2024,
+            help='Election year to import (matches the {year}/CSV/ subdirectory). Default: 2024.',
+        )
+        parser.add_argument(
             '--district', type=int, default=None,
             help='Only import a specific district (1-12)',
         )
@@ -15,28 +19,28 @@ class Command(BaseCommand):
             help='Delete existing data for the specified district before importing',
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args, year, **options):
         only_district = options.get('district')
         if options.get('wipe_district'):
             if only_district is None:
                 self.stderr.write('--wipe-district requires --district')
                 return
-            self._wipe_district(only_district)
-        importer = SaborImporter(stdout=self.stdout)
+            self._wipe_district(year, only_district)
+        importer = SaborImporter(year=year, stdout=self.stdout)
         importer.run(only_district=only_district)
-        self.stdout.write(self.style.SUCCESS('Sabor import complete.'))
+        self.stdout.write(self.style.SUCCESS(f'Sabor {year} import complete.'))
 
-    def _wipe_district(self, district_num):
+    def _wipe_district(self, year, district_num):
         from elections.models import (
             Election, ElectionRound, ElectoralDistrict, ElectoralList,
             Candidacy, ListResult, CandidateResult, TurnoutData,
         )
         try:
             election = Election.objects.get(
-                election_type__slug='sabor', year=2024,
+                election_type__slug='sabor', year=year,
             )
         except Election.DoesNotExist:
-            self.stdout.write('No existing Sabor 2024 election; nothing to wipe.')
+            self.stdout.write(f'No existing Sabor {year} election; nothing to wipe.')
             return
         round1 = ElectionRound.objects.get(election=election, round_number=1)
 
@@ -60,7 +64,7 @@ class Command(BaseCommand):
                 .distinct()
             )
             self.stdout.write(
-                f'Wiping district {dnum}: '
+                f'Wiping {year} district {dnum}: '
                 f'{lists_qs.count()} lists, {len(ps_ids)} polling stations'
             )
             CandidateResult.objects.filter(candidacy__electoral_list__in=lists_qs).delete()
@@ -78,4 +82,4 @@ class Command(BaseCommand):
             if dnum == 12:
                 district.delete()
 
-        self.stdout.write(f'District {district_num} wiped.')
+        self.stdout.write(f'{year} district {district_num} wiped.')
