@@ -3890,8 +3890,10 @@ function renderEuView(slot) {
         const winnerBadge = c.is_winner
             ? '<span class="badge bg-success-subtle text-success ms-2" style="font-size:0.65rem;">izabran</span>'
             : '<span class="badge bg-light text-muted ms-2" style="font-size:0.65rem;">nije izabran</span>';
+        // Clickable candidate name → that politician's page (same fuzzy-search hop as bar labels)
+        const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(c.name)}" title="Otvori stranicu političara: ${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`;
         return `<tr style="${dim}">
-            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${escapeHtml(c.name)}${winnerBadge}</td>
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${nameHtml}${winnerBadge}</td>
             <td class="text-muted" style="font-size:0.85rem;">${escapeHtml(partyShort)}</td>
             <td class="text-end" style="white-space:nowrap;"><strong>${c.personal_votes.toLocaleString('hr-HR')}</strong></td>
             <td class="text-end text-muted" style="white-space:nowrap;">${formatPct(c.personal_pct, 2)}</td>
@@ -4143,9 +4145,11 @@ function renderCandidateList(container, seatList) {
         const group = state.mergeMap[s.party] || s.party;
         const color = state.partyColors[group] || s.color;
         const hidden = i >= INITIAL_SHOW ? ' style="display:none;" class="seat-cand-extra"' : '';
+        // Clickable candidate name (same fuzzy-search hop as bar-label-link)
+        const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`;
         return `<tr${hidden}>
             <td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td>
-            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${s.candidate}</td>
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${nameHtml}</td>
             <td class="text-muted" style="font-size:0.85rem;">${s.party}</td>
             <td class="text-muted" style="font-size:0.85rem;">${s.district}</td>
         </tr>`;
@@ -4459,10 +4463,16 @@ async function initSaborScope() {
             const yearForFetch = _sabor.year || initYear;
             const r = await fetch(`/api/sabor/district-municipalities/${selD.value}?year=${yearForFetch}`);
             if (r.ok) {
-                (await r.json()).forEach(m => {
+                // Backend still threshold-filters by vote count (≥50) and returns
+                // them biggest-first, but we re-sort alphabetically (hr collation)
+                // here and show plain names — easier to scan than a list ranked
+                // by size.
+                const munis = (await r.json()).slice();
+                munis.sort((a, b) => a.name.localeCompare(b.name, 'hr'));
+                munis.forEach(m => {
                     const o = document.createElement('option');
                     o.value = m.id;
-                    o.textContent = `${m.name} (${m.votes.toLocaleString('hr-HR')})`;
+                    o.textContent = m.name;
                     selM.appendChild(o);
                 });
                 selM.disabled = false;
@@ -4786,7 +4796,9 @@ function renderActualSaborResults(seatsData) {
     const INITIAL = 100;
     const candRows = seatList.map((s, i) => {
         const hidden = i >= INITIAL ? ' style="display:none;" class="sa-actual-cand-extra"' : '';
-        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${s.candidate}</td><td class="text-muted" style="font-size:0.85rem;">${s.party}</td><td class="text-muted" style="font-size:0.85rem;">${s.district}</td></tr>`;
+        // Clickable candidate name → that politician's page (delegated handler at .bar-label-link)
+        const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`;
+        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${nameHtml}</td><td class="text-muted" style="font-size:0.85rem;">${s.party}</td><td class="text-muted" style="font-size:0.85rem;">${s.district}</td></tr>`;
     }).join('');
     const showBtn = seatList.length > INITIAL
         ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.sa-actual-cand-extra').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL} preostalih)</button></div>` : '';
