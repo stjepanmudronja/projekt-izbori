@@ -76,10 +76,18 @@ class SaborImporter(BaseImporter):
         self.flush_all()
 
     def _get_files_for_district(self, district_num):
-        """Find all CSV files for a given district number."""
-        files = []
-        for path in sorted(self.data_dir.glob(f'*_{district_num:02d}_rezultati*.csv')):
-            files.append(path)
+        """Find all CSV files for a given district number.
+
+        Two filename conventions exist across years:
+          2020/2024: `XX_DD_rezultati*.csv` — district in the 2nd field (e.g. 02_01)
+          2016:      `DDD_00_rezultati*.csv` — district in the 1st field (e.g. 001_00);
+                     district 12's minority sub-districts are 012_13 … 012_63.
+        The 2016 fields are effectively swapped, so fall back to a first-field
+        glob when the standard second-field pattern finds nothing.
+        """
+        files = sorted(self.data_dir.glob(f'*_{district_num:02d}_rezultati*.csv'))
+        if not files:
+            files = sorted(self.data_dir.glob(f'{district_num:03d}_*_rezultati*.csv'))
         return files
 
     def _import_district(self, election, election_round, district_num):
@@ -128,7 +136,10 @@ class SaborImporter(BaseImporter):
         from collections import defaultdict
         groups = defaultdict(list)
         for fp in files:
-            prefix = fp.name.split('_')[0]
+            # Sub-district code is the 1st field in 2020/2024 (13_12) but the
+            # 2nd in 2016 (012_13); pick whichever field is a known sub-district.
+            parts = fp.name.split('_')
+            prefix = next((p for p in parts[:2] if p in self.MINORITY_SUBDISTRICTS), parts[0])
             groups[prefix].append(fp)
 
         total_candidates = 0

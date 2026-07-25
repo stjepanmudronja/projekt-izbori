@@ -9,13 +9,20 @@ import unicodedata
 # election years.
 _TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing|spec|oec|iur|med|sc|akad|struc|struč)'
 
+# A leading run of academic-title tokens, each either a title word followed by
+# a dot — run together ("prof.dr.sc.") or space-separated ("prof. dr. sc.") —
+# or a spelled-out title with no dot ("akademik", "akademkinja"). Real name
+# tokens are never dotted and never these words, so this can't eat a name.
+_LEADING_TITLES_RE = re.compile(
+    r'^(?:(?:' + _TITLE_TOKENS + r'\.|(?:akademik|akademkinja)\b)\s*)+',
+    re.IGNORECASE)
+
 
 def clean_candidate_name(raw):
     """Strip academic titles and stray commas from a CSV candidate column."""
     s = (raw or '').strip()
-    # Leading academic prefix (e.g. "prof.dr.sc. MILAN")
-    s = re.sub(r'^(prof\.dr\.sc\.|doc\.dr\.sc\.|dr\.sc\.|mr\.sc\.|prof\.|doc\.|dr\.|mr\.|mag\.\w*\.?|dipl\.\w*\.?)\s+',
-               '', s, flags=re.IGNORECASE)
+    # Leading academic prefix, e.g. "prof.dr.sc. MILAN" or "dr. sc. DRAGO".
+    s = _LEADING_TITLES_RE.sub('', s)
     # Trailing academic tail after a comma (e.g. ", univ.bacc.ing.el.")
     s = re.sub(r',\s*' + _TITLE_TOKENS + r'\b.*$', '', s, flags=re.IGNORECASE)
     # Collapse stray ", " into a single space; drop any remaining bare commas.
