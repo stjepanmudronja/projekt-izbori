@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 from .base import BaseImporter
-from .name_utils import clean_candidate_name
+from .name_utils import clean_candidate_name, looks_like_person_name
 
 
 class SaborImporter(BaseImporter):
@@ -103,7 +103,8 @@ class SaborImporter(BaseImporter):
         # District 11 (diaspora) uses variable-width list groups; others use fixed 15.
         header = self._read_header(files[0])
         if district_num == 11:
-            lists_info = self._parse_list_groups_variable(header)
+            totals = self._column_totals(files, len(header))
+            lists_info = self._parse_list_groups_variable(header, col_totals=totals)
         else:
             lists_info = self._parse_list_groups(header)
         self.log(f"District {district_num}: {len(lists_info)} lists, {len(files)} files")
@@ -202,27 +203,78 @@ class SaborImporter(BaseImporter):
         rather than a personal candidate name?"""
         if not text:
             return False
-        # Party names commonly contain these separators, personal names don't.
-        if ' - ' in text or ',' in text or '!' in text:
+        # Unambiguous party/coalition punctuation, which personal names (even
+        # with a hyphenated surname — no surrounding spaces) never carry.
+        if ' - ' in text or '!' in text or '"' in text:
             return True
         # Known party/coalition keywords.
         tokens = text.replace('.', '').replace('!', '').split()
         for tok in tokens:
             if tok in cls.LIST_KEYWORDS:
                 return True
-        return False
+        # A bare comma is *not* enough on its own: older CSVs (2015, 2016) put
+        # academic titles in candidate columns ("IVANA BUNTIĆ, mag. iur."),
+        # which would otherwise be read as lists and shatter the district-11
+        # groups. Fall back to shape — anything that isn't a personal name here
+        # is a list, so a single-token party like "MOST" still reads as one.
+        return not looks_like_person_name(text)
 
-    def _parse_list_groups_variable(self, header):
+    def _column_totals(self, files, ncols):
+        """Sum every result column across all of a district's files."""
+        totals = [0] * ncols
+        for filepath in files:
+            with open(filepath, encoding='windows-1250') as f:
+                reader = csv.reader(f, delimiter=';')
+                next(reader)
+                for row in reader:
+                    for col in range(self.GEO_COLS, min(len(row), ncols)):
+                        totals[col] += self.parse_int(row[col])
+        return totals
+
+    def _repair_list_cols(self, list_cols, totals, ncols):
+        """Insert list boundaries the name heuristic missed.
+
+        A preferential vote is only countable for the list it was cast on, so
+        a list's candidate votes can never outnumber the list's own votes.
+        Where a group breaks that, a party whose name reads like a person's
+        (2016 district 11 has "AKCIJA MLADIH") is sitting inside it, and the
+        column where the running candidate total overruns the list total is
+        exactly where that party starts. Splitting only groups that actually
+        violate keeps the heuristic's correct boundaries intact.
+        """
+        repaired = []
+        queue = list(list_cols)
+        while queue:
+            col = queue.pop(0)
+            repaired.append(col)
+            end = queue[0] if queue else ncols
+            running = 0
+            for c in range(col + 1, end):
+                running += totals[c]
+                if running > totals[col]:
+                    self.log(
+                        f"  list boundary recovered at column {c} "
+                        f"({totals[col]} list votes < {running} preferential)"
+                    )
+                    queue.insert(0, c)
+                    break
+        return repaired
+
+    def _parse_list_groups_variable(self, header, col_totals=None):
         """Parse header with variable-width list groups (used for district 11).
 
         Detects list-header columns by pattern; all columns between two list
-        headers are that list's candidates. Returns
+        headers are that list's candidates. When `col_totals` is supplied the
+        boundaries are validated against the vote counts and any the name
+        heuristic missed are recovered. Returns
         [(list_name, [candidate_names], list_col), ...].
         """
         list_cols = [
             col for col in range(self.GEO_COLS, len(header))
             if self._is_list_name(header[col].strip())
         ]
+        if col_totals:
+            list_cols = self._repair_list_cols(list_cols, col_totals, len(header))
         groups = []
         for i, list_col in enumerate(list_cols):
             list_name = header[list_col].strip()

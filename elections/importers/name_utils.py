@@ -18,18 +18,54 @@ _LEADING_TITLES_RE = re.compile(
     re.IGNORECASE)
 
 
-def clean_candidate_name(raw):
-    """Strip academic titles and stray commas from a CSV candidate column."""
-    s = (raw or '').strip()
+def _strip_titles(s):
+    """Remove leading and trailing academic-title runs, leaving any comma that
+    is not part of a title intact."""
     # Leading academic prefix, e.g. "prof.dr.sc. MILAN" or "dr. sc. DRAGO".
     s = _LEADING_TITLES_RE.sub('', s)
     # Trailing academic tail after a comma (e.g. ", univ.bacc.ing.el.")
-    s = re.sub(r',\s*' + _TITLE_TOKENS + r'\b.*$', '', s, flags=re.IGNORECASE)
+    return re.sub(r',\s*' + _TITLE_TOKENS + r'\b.*$', '', s, flags=re.IGNORECASE)
+
+
+def clean_candidate_name(raw):
+    """Strip academic titles and stray commas from a CSV candidate column."""
+    s = _strip_titles((raw or '').strip())
     # Collapse stray ", " into a single space; drop any remaining bare commas.
+    # NB: a ", rođ. 1962." disambiguator survives this (minus its comma) on
+    # purpose — DIP uses it to tell two same-named candidates apart, so
+    # dropping it would merge them into one Person.
     s = s.replace(', ', ' ').replace(',', '')
     # Fix hyphenated surnames split with a space (e.g. "GRABAR- KITAROVIĆ").
     s = re.sub(r'-\s+', '-', s)
     return ' '.join(s.split())
+
+
+# A birth-year disambiguator DIP appends when two candidates share a name
+# ("JOZO RADOŠ, rođ. 1962."). Not a title, but equally not part of the name.
+_BIRTH_YEAR_RE = re.compile(r',\s*ro[đd]\.?\s*\d{4}\.?\s*$', re.IGNORECASE)
+
+# A personal-name token: letters only, optionally hyphenated or apostrophed.
+_NAME_TOKEN_RE = re.compile(r"^[^\W\d_]+(?:[-'][^\W\d_]+)*$", re.UNICODE)
+
+
+def looks_like_person_name(text):
+    """True if `text` reads as an individual's name rather than a party or
+    coalition name.
+
+    Used to find list-group boundaries in variable-width Sabor headers, where
+    a list-name column is followed by a run of candidate-name columns. Titles
+    and birth-year suffixes are stripped first, so "IVANA BUNTIĆ, mag. iur."
+    is recognised as a person even though the raw string contains a comma.
+    A party name that survives stripping still gives itself away with a comma,
+    a digit, or a token count outside the 2-4 range typical of personal names.
+    """
+    s = _strip_titles(_BIRTH_YEAR_RE.sub('', (text or '').strip()))
+    if ',' in s:
+        return False
+    tokens = s.split()
+    if not 2 <= len(tokens) <= 4:
+        return False
+    return all(_NAME_TOKEN_RE.match(tok) for tok in tokens)
 
 
 # "GRAD X" / "OPĆINA X" prefixes are administrative qualifiers some DIP files
