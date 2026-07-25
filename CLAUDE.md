@@ -32,6 +32,8 @@ python manage.py import_sabor --year 2015             # 2015 uses the 2020/2024 
 python manage.py import_sabor --district 12 --wipe-district  # re-import single district (applies to --year)
 python manage.py import_local
 python manage.py normalize_persons [--dry-run]
+python manage.py merge_person_aliases [--dry-run]      # curated same-person name variants
+python manage.py merge_person_aliases --suggest        # list new middle-name splits for review
 python manage.py normalize_municipalities [--dry-run]  # merge "GRAD X"/"OPĆINA X" dup munis
 python manage.py clean_person_titles [--dry-run]       # strip academic titles from Person rows, merge with un-titled twin if one exists. `clean_candidate_name` (name_utils.py) handles dotted prefixes run-together or space-separated (mr.sc., prof. dr. sc.), trailing suffixes (, dipl.iur.), and spelled-out titles with no dot (akademik, akademkinja)
 
@@ -87,6 +89,7 @@ Single-page app with multiple modules, served at port 5001:
 - All election types share the same ListResult/CandidateResult tables
 - Even single candidates (presidential, mayors) get an ElectoralList for uniformity
 - Person.normalized_name (diacritics stripped, uppercase) enables cross-election search
+- **Middle-name splits are curated, never automatic** (`merge_person_aliases`): DIP records a middle name in some years and not others, so the same person lands in two Person rows ("IVAN SINČIĆ" in the 2014 presidential/EU and 2015 sabor files vs "IVAN VILIBOR SINČIĆ" from 2016 on). `normalize_persons` can't catch these — it only merges exact normalized-name matches — and they can't be merged by rule either, because genuinely different people also differ by one middle token (ŽELJKA BARIČEVIĆ vs ŽELJKA ILIJAŠ BARIČEVIĆ, both sabor 2024, different parties and districts). Each merge in `KNOWN_ALIASES` carries its evidence; `--suggest` lists new candidates after an import and flags any pair sharing an election type+year as near-certainly two people, since nobody stands twice in one election. Currently merged: Sinčić, Predrag Fred Matić, Natalia Tafra Bazina. **7 pairs are deliberately left unmerged** — 4 confirmed distinct, 3 (Marija Brajdić Vuković, Ana-Marija Barnjak Lovrić, Ivana Ocvirek Orlić) unresolved added-surname cases awaiting evidence.
 - Bulk insert with `ignore_conflicts=True` for performance
 - Geography and person caches in BaseImporter avoid repeated DB lookups
 - District 12 minorities use sub-districts 121-126 in DB, merged to single "NACIONALNE MANJINE" group in API responses
