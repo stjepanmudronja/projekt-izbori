@@ -26,6 +26,11 @@ class Election(models.Model):
 class ElectionRound(models.Model):
     election = models.ForeignKey(Election, on_delete=models.CASCADE, related_name='rounds')
     round_number = models.IntegerField()
+    # Rounds of the same election are held weeks apart and can fall in
+    # different calendar years — the 2019 presidential first round was
+    # 22 Dec 2019, its runoff 5 Jan 2020 — so `Election.date` (the first
+    # round) can't label round 2. Set by `set_election_dates`.
+    date = models.DateField(null=True, blank=True)
 
     class Meta:
         unique_together = ['election', 'round_number']

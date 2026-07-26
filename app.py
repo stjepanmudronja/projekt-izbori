@@ -58,6 +58,7 @@ class ElectionRound(db.Model):
     __tablename__ = 'elections_electionround'
     id = db.Column(db.Integer, primary_key=True)
     round_number = db.Column(db.Integer)
+    date = db.Column(db.Date)
     election_id = db.Column(db.Integer, db.ForeignKey('elections_election.id'))
     election = db.relationship('Election', backref='rounds', lazy=True)
 
@@ -251,6 +252,24 @@ def search():
             }
             for s in stations
         ])
+
+
+def round_date_iso(er, election=None):
+    """ISO polling date for a result badge, preferring the round's own date.
+
+    A runoff is held weeks after the first round and can fall in the next
+    calendar year (2019 presidential: 22 Dec 2019, runoff 5 Jan 2020), so the
+    election-level date is only correct for round 1. Falls back to it for
+    elections whose rounds predate `set_election_dates`, and returns None when
+    neither is known — the frontend then shows the bare year.
+    """
+    if er is not None and er.date:
+        return er.date.isoformat()
+    if election is None:
+        election = er.election if er is not None else None
+    if election is not None and election.date:
+        return election.date.isoformat()
+    return None
 
 
 # Cache of Sabor seat winners per election round (data is static after import).
@@ -592,7 +611,7 @@ def person_detail(person_id):
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
             'year': election.year,
-            'date': election.date.isoformat() if election.date else None,
+            'date': round_date_iso(er, election),
             'round': er.round_number,
             'list_name': el.name,
             'position': c.position_on_list,
@@ -649,7 +668,7 @@ def party_detail_by_name(name):
             ),
             'election_type': etype.name if etype else '',
             'year': election.year if election else None,
-            'date': election.date.isoformat() if election and election.date else None,
+            'date': round_date_iso(er, election),
             'round': er.round_number if er else None,
             'list_name': el.name,
             'district': el.district.name if el.district else None,
@@ -706,7 +725,7 @@ def party_detail(party_id):
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
             'year': election.year,
-            'date': election.date.isoformat() if election.date else None,
+            'date': round_date_iso(er, election),
             'round': er.round_number,
             'list_name': el.name,
             'district': el.district.name if el.district else None,
@@ -807,7 +826,7 @@ def station_detail(station_id):
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
             'year': election.year,
-            'date': election.date.isoformat() if election.date else None,
+            'date': round_date_iso(er, election),
             'round': er.round_number,
             'registered_voters': td.registered_voters,
             'ballots_cast': td.ballots_cast,
@@ -1059,7 +1078,7 @@ def location_results():
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
             'year': election.year,
-            'date': election.date.isoformat() if election.date else None,
+            'date': round_date_iso(er, election),
             'round': er.round_number,
             'registered_voters': td.registered_voters,
             'ballots_cast': td.ballots_cast,
@@ -1266,7 +1285,7 @@ def national_results(category, year):
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
             'year': election.year,
-            'date': election.date.isoformat() if election.date else None,
+            'date': round_date_iso(er, election),
             'round': er.round_number,
             'registered_voters': registered,
             'ballots_cast': ballots,
@@ -2149,7 +2168,9 @@ def analytics_elections():
             Election.id,
             Election.year,
             Election.name,
-            Election.date,
+            # Round date first — a 2. krug card must show the runoff's own day,
+            # not the first round's. Election.date covers rounds with no date.
+            db.func.coalesce(ElectionRound.date, Election.date),
             ElectionType.name,
         )
         .join(Election, ElectionRound.election_id == Election.id)

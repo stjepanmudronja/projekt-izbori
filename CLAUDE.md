@@ -31,6 +31,7 @@ python manage.py import_sabor --year 2020             # other years live in {yea
 python manage.py import_sabor --year 2015             # 2015 uses the 2020/2024 filename convention
 python manage.py import_sabor --district 12 --wipe-district  # re-import single district (applies to --year)
 python manage.py import_local
+python manage.py set_election_dates [--dry-run]         # polling dates on elections + rounds
 python manage.py normalize_persons [--dry-run]
 python manage.py merge_person_aliases [--dry-run]      # curated same-person name variants
 python manage.py merge_person_aliases --suggest        # list new middle-name splits for review
@@ -52,7 +53,7 @@ python app.py  # runs on port 5001
 
 Models split into 4 modules under `elections/models/`:
 - **geography.py** — County (22), Municipality (604), PollingStation (7544)
-- **elections.py** — ElectionType, Election, ElectionRound, ElectoralDistrict
+- **elections.py** — ElectionType, Election, ElectionRound, ElectoralDistrict. **Dates live on both**: `Election.date` is the first round, `ElectionRound.date` the round's own polling day — a runoff sits weeks later and can cross into the next calendar year (2019 presidential: 22 Dec 2019, runoff 5 Jan 2020), so the election-level date mislabels round 2. Seed both with `set_election_dates` (official dates for all 25 elections / 34 rounds live in that command; add new years there). Result badges show a full date via `round_date_iso(er, election)` in app.py, which prefers the round date and falls back to the election's, then to the bare year — a missing date degrades silently, which is why every year except EU 2024 used to show only "2016".
 - **participants.py** — Person (normalized_name for cross-election search), Party, ElectoralList, Candidacy
 - **results.py** — TurnoutData, ListResult, CandidateResult
 
