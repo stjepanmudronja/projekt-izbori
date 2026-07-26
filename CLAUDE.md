@@ -57,6 +57,32 @@ Models split into 4 modules under `elections/models/`:
 - **participants.py** — Person (normalized_name for cross-election search), Party, ElectoralList, Candidacy
 - **results.py** — TurnoutData, ListResult, CandidateResult
 
+### Election Polling Dates
+
+Every date currently in the DB, as seeded by `set_election_dates` (that command is the source of truth — change it, not this table). Round 2 is the runoff; **bold** ones fall in the calendar year *after* the election's `year`, which is why `ElectionRound.date` exists.
+
+| Type | Year | Round 1 | Round 2 |
+|---|---|---|---|
+| Predsjednički | 1992 | 2 Aug 1992 | — |
+| Predsjednički | 1997 | 15 Jun 1997 | — |
+| Predsjednički | 2000 | 24 Jan 2000 | 7 Feb 2000 |
+| Predsjednički | 2005 | 2 Jan 2005 | 16 Jan 2005 |
+| Predsjednički | 2009 | 27 Dec 2009 | **10 Jan 2010** |
+| Predsjednički | 2014 | 28 Dec 2014 | **11 Jan 2015** |
+| Predsjednički | 2019 | 22 Dec 2019 | **5 Jan 2020** |
+| Predsjednički | 2024 | 29 Dec 2024 | **12 Jan 2025** |
+| Sabor | 2015 | 8 Nov 2015 | — |
+| Sabor | 2016 | 11 Sep 2016 | — |
+| Sabor | 2020 | 5 Jul 2020 | — |
+| Sabor | 2024 | 17 Apr 2024 | — |
+| EU parlament | 2013 | 14 Apr 2013 | — |
+| EU parlament | 2014 | 25 May 2014 | — |
+| EU parlament | 2019 | 26 May 2019 | — |
+| EU parlament | 2024 | 9 Jun 2024 | — |
+| Lokalni (all 9 types) | 2025 | 18 May 2025 | 1 Jun 2025 |
+
+Sabor and EU parlament are single-round by law. Lokalni share one polling day across all 9 sub-types, but only the executive offices (`local_mayor`, `local_city_mayor`, `local_county_prefect`) actually hold a runoff — councils and assemblies are decided in round 1, so only those three have a round-2 row in the DB. **Provenance**: EU 2024, presidential 1992/1997/2024 and lokalni 2025 were already stored before this table existed and agreed with it; the other 12 were added from public record and are worth spot-checking if a badge ever looks wrong.
+
 ### Import Pipeline: `elections/importers/`
 - **base.py** — BaseImporter with geography/person caches and bulk result insertion (batch size 5000). `get_or_create_municipality()` matches on a **prefix-/hyphen-normalized name** (`normalize_municipality_name` in `name_utils.py`) so the same place isn't split when one year's file says `DUGO SELO` and another says `GRAD DUGO SELO`. Legacy split rows were merged by the one-off `normalize_municipalities` command (repoints polling stations — merging by station number on collision — plus turnout/list/candidate result rows, then deletes the empty dup; guarded against merging genuine grad-vs-općina pairs). This split is why per-municipality views previously showed zeros for some election years (e.g. predsjednički 2005 in Dugo Selo). A further set of **presidential-only** name-variant splits (not prefix-based, so unreachable by the command) was merged by hand: "SVETI X" vs "SV. X" abbreviations, Istrian Croatian/Italian **bilingual** names added from 2014 on (`PULA` → `PULA - POLA`, etc.), and disambiguators (`OTOK (VINKOVCI)`, `DONJI MARTIJANEC`). For diaspora (county 22) only pure abbreviations + the Macedonia rename were merged; **`SRBIJA I CRNA GORA` (2005) is intentionally kept separate** from `SRBIJA`/`CRNA GORA` as a real historical entity. Turnout is buffered in a dict keyed on `(election_round, polling_station)` and **summed** across repeated calls, flushed via `bulk_create(update_conflicts=True)` — this handles Sabor mobile/abroad stations that appear in all 10 district files.
 - **presidential.py** — UTF-8 BOM CSV, semicolon delimited, title row + header + data
