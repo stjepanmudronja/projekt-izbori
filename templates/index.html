@@ -1076,10 +1076,14 @@
                         </div>
                         <div class="d-flex justify-content-between align-items-center mt-3">
                             <small class="text-muted">Lokalni izbori 2025.</small>
+                            <!-- Round 2 is additive (shows krug 1 + 2), not an
+                                 alternative to krug 1, so this is a switch
+                                 rather than a two-button group. Matches the
+                                 "2. krug" checkboxes used by the other filters. -->
                             <div id="lokRoundToggle" class="d-none">
-                                <div class="btn-group btn-group-sm" role="group" aria-label="Krug">
-                                    <button type="button" class="btn btn-outline-primary active" data-round="1">1. krug</button>
-                                    <button type="button" class="btn btn-outline-primary" data-round="2">2. krug</button>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="lokShowRound2">
+                                    <label class="form-check-label small" for="lokShowRound2">Prikaži 2. krug</label>
                                 </div>
                             </div>
                         </div>
@@ -5925,12 +5929,9 @@ async function initLokalniModule() {
     document.getElementById('lokAddCompareBtn').addEventListener('click', onLokAddCompare);
     document.getElementById('lokClearScopeBtn').addEventListener('click', onLokClearScope);
 
-    document.querySelectorAll('#lokRoundToggle button').forEach(btn => {
-        btn.addEventListener('click', () => {
-            lok.currentRound = parseInt(btn.dataset.round, 10);
-            updateLokRoundButtons();
-            loadLokResults();
-        });
+    document.getElementById('lokShowRound2').addEventListener('change', (e) => {
+        lok.currentRound = e.target.checked ? 2 : 1;
+        loadLokResults();
     });
 }
 
@@ -6067,14 +6068,10 @@ function renderLokCompareChips() {
     });
 }
 
-function updateLokRoundButtons() {
-    // 2. krug active means BOTH rounds are visible — highlight both buttons.
-    // 1. krug active means only round 1 — highlight only that button.
-    document.querySelectorAll('#lokRoundToggle button').forEach(b => {
-        const r = parseInt(b.dataset.round, 10);
-        const active = lok.currentRound === 2 || r === lok.currentRound;
-        b.classList.toggle('active', active);
-    });
+function updateLokRoundSwitch() {
+    // Switch on == currentRound 2 == render krug 1 and 2 stacked.
+    const sw = document.getElementById('lokShowRound2');
+    if (sw) sw.checked = lok.currentRound === 2;
 }
 
 async function onLokCountyChange() {
@@ -6191,15 +6188,27 @@ async function loadLokResults() {
     }));
     spinner.style.display = 'none';
 
-    // Round toggle visibility — based on the first successful round's metadata.
+    // Round switch visibility — based on the first successful round's metadata.
+    // `rounds_available` is per-kind: nacelnik/zupan have a runoff, vijece and
+    // zup_skupstina are decided in one round.
     const toggle = document.getElementById('lokRoundToggle');
     const meta = blocks.flatMap(b => b.results).find(r => !r.error);
-    if (meta && meta.rounds_available && meta.rounds_available.length > 1) {
+    const avail = (meta && meta.rounds_available) || [1];
+    if (avail.length > 1) {
         toggle.classList.remove('d-none');
-        updateLokRoundButtons();
     } else {
+        // Kind has no runoff — hide the switch and fall back to krug 1, so the
+        // choice doesn't persist into a kind that can't honour it.
         toggle.classList.add('d-none');
+        lok.currentRound = 1;
     }
+    updateLokRoundSwitch();
+
+    // Drop rounds this kind doesn't have. Without this, turning the switch on
+    // for Gradonačelnik and then picking Gradsko vijeće renders a "no round 2
+    // for election N" warning, because the fetch above already went out with
+    // the previous kind's round selection.
+    blocks.forEach(b => { b.results = b.results.filter(r => avail.includes(r.round)); });
 
     // Single mode (no chips): just stack the round cards as before.
     const compareMode = lok.compareScopes.length > 0;
