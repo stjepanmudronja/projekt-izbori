@@ -1363,6 +1363,7 @@ function activateModule(mod, opts) {
     if (moduleTitles[mod]) moduleTitle.innerHTML = moduleTitles[mod];
 
     if (mod === 'analytics-turnout') initIzlaznost();
+    if (mod === 'sabor-analysis') initSaborAnalysis();
     if (mod === 'results-lokalni') initLokalniModule();
     else if (mod && mod.startsWith('results-')) {
         initResultsModule(mod.substring('results-'.length));
@@ -1394,8 +1395,15 @@ function activateModuleFromUrl() {
 window.addEventListener('popstate', activateModuleFromUrl);
 document.addEventListener('DOMContentLoaded', activateModuleFromUrl);
 // In case DOMContentLoaded already fired (script runs at bottom of body),
-// also try to activate immediately.
-activateModuleFromUrl();
+// also activate on our own. Deferred to a macrotask rather than called
+// straight away: activateModule runs the target module's init, and those
+// inits read top-level `const`s declared further down this same script
+// (`lok`, `_resultsModuleInitialized`, `_saState`). Calling synchronously
+// here hits the temporal dead zone and throws — which is why loading
+// /lokalni-izbori or /eu-parlamentarni-izbori directly used to log a
+// "Cannot access 'lok' before initialization" exception and only render
+// because the DOMContentLoaded listener above ran later and succeeded.
+setTimeout(activateModuleFromUrl, 0);
 
 // Per-module chart instances
 const moduleCharts = {};
@@ -5827,13 +5835,10 @@ function attachSARowDragDrop() {
     });
 }
 
-// Init when module is shown
-const origModuleSwitch = document.querySelectorAll('.sidebar-nav a[data-module]');
-origModuleSwitch.forEach(link => {
-    link.addEventListener('click', () => {
-        if (link.dataset.module === 'sabor-analysis') initSaborAnalysis();
-    });
-});
+// (initSaborAnalysis is invoked from activateModule alongside the other
+// modules' inits. It used to hang off a separate sidebar-link click handler,
+// which meant loading /rezultati-koalicije-sabor directly — or arriving via
+// back/forward — showed the module with an empty year picker.)
 
 // ---- Compare feature ----
 const compareState = {
