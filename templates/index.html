@@ -4838,10 +4838,14 @@ function renderActualSaborResults(seatsData, opts) {
     parties.forEach(p => {
         for (let i = 0; i < p.seats; i++) {
             const c = candidates[candIdx] || {};
-            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || p.name, district: c.district || '' });
+            // `candidate` stays null when the seat has no known holder (pre-2015
+            // years publish no candidate names for districts I-XI), so the
+            // table can show a placeholder instead of echoing the party name.
+            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || null, district: c.district || '' });
             candIdx++;
         }
     });
+    const namedSeats = seatList.filter(s => s.candidate).length;
 
     // Hemicycle SVG
     const svgW = 700, svgH = 380, cx = svgW / 2, cy = svgH - 30, dotR = 8, dotSpacing = dotR * 2.5, innerR = 90;
@@ -4856,7 +4860,8 @@ function renderActualSaborResults(seatsData, opts) {
     let dots = '';
     positions.forEach((pos, i) => {
         const seat = seatList[i]; if (!seat) return;
-        dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="1.5" style="cursor:pointer;"><title>${seat.candidate}\n${seat.party}\n${seat.district}</title></circle>`;
+        const tip = [seat.candidate, seat.party, seat.district].filter(Boolean).join('\n');
+        dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="1.5" style="cursor:pointer;"><title>${tip}</title></circle>`;
     });
 
     hemiEl.innerHTML = `
@@ -4881,15 +4886,31 @@ function renderActualSaborResults(seatsData, opts) {
     const INITIAL = 100;
     const candRows = seatList.map((s, i) => {
         const hidden = i >= INITIAL ? ` style="display:none;" class="${extraCls}"` : '';
-        // Clickable candidate name → that politician's page (delegated handler at .bar-label-link)
-        const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`;
+        // Clickable candidate name → that politician's page (delegated handler at .bar-label-link).
+        // Seats with no known holder get inert placeholder text: linking them
+        // would fire a politician search for a party name.
+        const nameHtml = s.candidate
+            ? `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`
+            : `<span class="text-muted fst-italic" title="Imena kandidata nisu objavljena za ovu izbornu godinu">nije objavljeno</span>`;
         return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${nameHtml}</td><td class="text-muted" style="font-size:0.85rem;">${s.party}</td><td class="text-muted" style="font-size:0.85rem;">${s.district}</td></tr>`;
     }).join('');
     const showBtn = seatList.length > INITIAL
         ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.${extraCls}').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL} preostalih)</button></div>` : '';
 
+    // Pre-2015 elections had no preferential voting, so DIP published list
+    // totals only for districts I-X(I) and we hold no candidate names for them.
+    // Say so, rather than leaving a table of "nije objavljeno" looking broken.
+    const missingNote = namedSeats < seatList.length
+        ? `<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:0.82rem;">
+               <i class="bi bi-info-circle me-1"></i>Za ovu izbornu godinu objavljeni su samo rezultati po listama,
+               bez imena kandidata (preferencijsko glasovanje uvedeno je 2015.).
+               Poznato je ${namedSeats} od ${seatList.length} mandata.
+           </div>`
+        : '';
+
     candEl.innerHTML = `
         <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
+        ${missingNote}
         <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
             <thead><tr><th></th><th>Ime i prezime</th><th>Stranka / Koalicija</th><th>Izborna jedinica</th></tr></thead>
             <tbody>${candRows}</tbody>

@@ -26,7 +26,14 @@ class Command(BaseCommand):
                 self.stderr.write('--wipe-district requires --district')
                 return
             self._wipe_district(year, only_district)
-        importer = SaborImporter(year=year, stdout=self.stdout)
+        # 2011 predates preferential voting and ships a different export
+        # (no candidate columns, no county columns, per-file geo widths),
+        # so it has its own importer rather than a YEAR_CONFIG entry.
+        if year == 2011:
+            from elections.importers.sabor_2011 import Sabor2011Importer
+            importer = Sabor2011Importer(year=year, stdout=self.stdout)
+        else:
+            importer = SaborImporter(year=year, stdout=self.stdout)
         importer.run(only_district=only_district)
         self.stdout.write(self.style.SUCCESS(f'Sabor {year} import complete.'))
 

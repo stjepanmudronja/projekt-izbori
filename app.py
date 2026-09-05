@@ -1474,9 +1474,16 @@ def sabor_seats(year):
                     'district': dist.name,
                 })
 
-            for i in range(seats_won - len(chosen)):
+            # Seats the list won but for which we hold no candidate row. Before
+            # 2015 there was no preferential voting, so DIP published only list
+            # totals for districts I-XI and no candidate names exist at all for
+            # e.g. 2011. Emit an explicit placeholder rather than repeating the
+            # party name in a person field — the frontend would otherwise print
+            # a party under "Ime i prezime" and link it to a politician search.
+            for _ in range(seats_won - len(chosen)):
                 all_candidates.append({
-                    'name': group,
+                    'name': None,
+                    'placeholder': True,
                     'party': group,
                     'district': dist.name,
                 })
