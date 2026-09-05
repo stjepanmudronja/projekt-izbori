@@ -1153,6 +1153,10 @@
                     <span class="visually-hidden">Učitavanje...</span>
                 </div>
             </div>
+            <!-- Multi-year comparison. Replaces #saborAnalysisArea (which holds
+                 the single-year hemicycle + coalition simulation) whenever 2-3
+                 years are selected. -->
+            <div id="saborCompareArea" style="display:none;"></div>
             <div id="saborAnalysisArea" style="display:none;">
                 <!-- Actual results hemicycle with candidates (collapsible) -->
                 <div class="card result-card mb-3" id="saActualResultsCard" style="display:none;">
@@ -4420,6 +4424,7 @@ const _saState = {
     forceInclude: new Set(),  // parties forced above threshold
     computed: null,
     year: null,
+    years: [],      // active year set; length > 1 puts the module in compare mode
     jumpersActive: false,
     jumpers: {},   // partyName -> seat delta (+/-)
     jumperSource: null,  // party currently giving seats
@@ -4434,9 +4439,65 @@ async function initSaborAnalysis() {
     const sabor = (Array.isArray(data) ? data : data.categories || []).find(c => c.key === 'sabor');
     if (!sabor) { container.innerHTML = '<span class="text-muted">Nema podataka</span>'; return; }
     container.innerHTML = sabor.years.map(y =>
-        `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}" onclick="loadSaborAnalysis(${y})">${y}.</button>`
-    ).join('');
+        `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}">${y}.</button>`
+    ).join('') + (sabor.years.length > 1
+        ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
+        : '');
+    container.querySelectorAll('.sa-year-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Bootstrap paints :focus on .btn-outline-primary with the same
+            // filled blue as .active, so a year you just *deselected* keeps
+            // looking selected while it holds focus. Harmless when the picker
+            // was single-select; misleading now that it's multi-select.
+            btn.blur();
+            onSaborYearClick(parseInt(btn.dataset.year, 10));
+        });
+    });
     await initSaborScope();
+}
+
+// Year picker is additive, mirroring the EU/predsjednički pickers: clicking a
+// second year adds it to the selection (max 3) rather than replacing it.
+// Clicking an active year removes it, but the set is never allowed to empty.
+function onSaborYearClick(yr) {
+    const cur = (_saState.years && _saState.years.length)
+        ? _saState.years.slice()
+        : (_saState.year ? [_saState.year] : []);
+    let next;
+    if (_sabor.compareScopes.length > 0) {
+        // Scope-chip comparison is active — years stay single-select, since
+        // scopes × years would multiply into an unreadable grid.
+        next = [yr];
+    } else if (cur.includes(yr)) {
+        next = cur.filter(y => y !== yr);
+        if (next.length === 0) next = [yr];
+    } else {
+        next = cur.concat(yr);
+        if (next.length > 3) next = next.slice(-3);
+    }
+    setSaborYears(next);
+}
+
+// Guards against out-of-order completion. Clicking 2024 then 2020 quickly
+// kicks off a single-year load followed by a compare load; the single-year
+// load does more work (raw data, district options, maps, simulation), so it
+// can finish last and overwrite the compare view with its own state. Every
+// load takes a token and abandons itself once a newer one has started.
+let _saLoadSeq = 0;
+
+// Single entry point for "which years are active" — used by the picker and by
+// deep links, which need to land on exactly one year rather than toggling.
+function setSaborYears(years) {
+    const sorted = years.slice().sort((a, b) => b - a);
+    _saState.years = sorted;
+    document.querySelectorAll('.sa-year-btn').forEach(b =>
+        b.classList.toggle('active', sorted.includes(parseInt(b.dataset.year, 10))));
+    // Scope chips can't be combined with a multi-year comparison.
+    const addBtn = document.getElementById('saborAddCompareBtn');
+    if (addBtn && sorted.length > 1) addBtn.disabled = true;
+    const seq = ++_saLoadSeq;
+    if (sorted.length > 1) loadSaborCompare(sorted, seq);
+    else loadSaborAnalysis(sorted[0], seq);
 }
 
 // === Sabor scope dropdowns + map + compare chips
@@ -4583,7 +4644,10 @@ function saborHighlightMapDistrict(number) {
 function saborUpdateAddBtn() {
     const btn = document.getElementById('saborAddCompareBtn');
     if (!btn) return;
-    btn.disabled = !document.getElementById('saborSelDistrict').value;
+    // Scope chips and multi-year comparison are mutually exclusive — combining
+    // them would fan out into scopes × years columns.
+    const multiYear = (_saState.years && _saState.years.length > 1);
+    btn.disabled = multiYear || !document.getElementById('saborSelDistrict').value;
 }
 
 function saborCurrentScopeKey() {
@@ -4739,10 +4803,19 @@ function renderSaborScopeBlocks(results) {
     });
 }
 
-function renderActualSaborResults(seatsData) {
-    const card = document.getElementById('saActualResultsCard');
-    if (!seatsData || !seatsData.parties) { card.style.display = 'none'; return; }
-    card.style.display = 'block';
+// `opts` lets compare mode redirect the output into a per-year column instead
+// of the single-year card's fixed ids. `idSuffix` keeps the "Prikaži sve"
+// toggle scoped to its own column — without it one click would expand the
+// candidate table in every year at once.
+function renderActualSaborResults(seatsData, opts) {
+    opts = opts || {};
+    const card = opts.cardEl !== undefined ? opts.cardEl : document.getElementById('saActualResultsCard');
+    const hemiEl = opts.hemicycleEl || document.getElementById('saActualHemicycle');
+    const legendEl = opts.legendEl || document.getElementById('saActualLegend');
+    const candEl = opts.candidateEl || document.getElementById('saActualCandidateList');
+    const extraCls = `sa-actual-cand-extra${opts.idSuffix || ''}`;
+    if (!seatsData || !seatsData.parties) { if (card) card.style.display = 'none'; return; }
+    if (card) card.style.display = 'block';
 
     const parties = seatsData.parties;
     const totalSeats = seatsData.total_seats || 151;
@@ -4778,7 +4851,7 @@ function renderActualSaborResults(seatsData) {
         dots += `<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${dotR}" fill="${seat.color}" stroke="white" stroke-width="1.5" style="cursor:pointer;"><title>${seat.candidate}\n${seat.party}\n${seat.district}</title></circle>`;
     });
 
-    document.getElementById('saActualHemicycle').innerHTML = `
+    hemiEl.innerHTML = `
         <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:700px; display:block; margin:0 auto;">
             ${dots}
             <text x="${cx}" y="${cy - 15}" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a2e">${totalSeats}</text>
@@ -4787,7 +4860,7 @@ function renderActualSaborResults(seatsData) {
 
     // Legend — stacked vertically, sorted by seats desc
     const legendParties = [...parties].sort((a, b) => b.seats - a.seats || a.name.localeCompare(b.name));
-    document.getElementById('saActualLegend').innerHTML = `
+    legendEl.innerHTML = `
         <div class="d-flex flex-column gap-1 align-items-stretch mx-auto" style="max-width:520px;">
             ${legendParties.map(p => `<div class="d-flex align-items-center gap-1" style="font-size:0.82rem; padding:4px 8px; border-radius:6px;" title="${p.name}">
                 <span style="width:14px;height:14px;border-radius:50%;background:${partyColors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
@@ -4799,15 +4872,15 @@ function renderActualSaborResults(seatsData) {
     // Candidate list with show-more
     const INITIAL = 100;
     const candRows = seatList.map((s, i) => {
-        const hidden = i >= INITIAL ? ' style="display:none;" class="sa-actual-cand-extra"' : '';
+        const hidden = i >= INITIAL ? ` style="display:none;" class="${extraCls}"` : '';
         // Clickable candidate name → that politician's page (delegated handler at .bar-label-link)
         const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`;
         return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${nameHtml}</td><td class="text-muted" style="font-size:0.85rem;">${s.party}</td><td class="text-muted" style="font-size:0.85rem;">${s.district}</td></tr>`;
     }).join('');
     const showBtn = seatList.length > INITIAL
-        ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.sa-actual-cand-extra').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL} preostalih)</button></div>` : '';
+        ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.${extraCls}').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL} preostalih)</button></div>` : '';
 
-    document.getElementById('saActualCandidateList').innerHTML = `
+    candEl.innerHTML = `
         <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
         <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
             <thead><tr><th></th><th>Ime i prezime</th><th>Stranka / Koalicija</th><th>Izborna jedinica</th></tr></thead>
@@ -4815,7 +4888,71 @@ function renderActualSaborResults(seatsData) {
         </table></div>${showBtn}`;
 }
 
-async function loadSaborAnalysis(year) {
+// Compare 2-3 sazivs side by side. Only "Konačni rezultati" is comparable —
+// the coalition simulation is a single interactive sandbox on one shared
+// _saState, so it's hidden here and returns when you drop back to one year.
+async function loadSaborCompare(years, seq) {
+    if (seq === undefined) seq = ++_saLoadSeq;
+    const stale = () => seq !== _saLoadSeq;
+    const spinner = document.getElementById('saborAnalysisSpinner');
+    const single = document.getElementById('saborAnalysisArea');
+    const area = document.getElementById('saborCompareArea');
+    single.style.display = 'none';
+    document.getElementById('saborScopeArea').innerHTML = '';
+    area.style.display = 'none';
+    spinner.classList.add('show');
+
+    const datasets = await Promise.all(years.map(async y => {
+        const r = await fetch(`/api/national/sabor-seats/${y}`);
+        if (!r.ok) return { year: y, error: `HTTP ${r.status}` };
+        const d = await r.json();
+        return { year: y, data: d };
+    }));
+    if (stale()) return;
+
+    spinner.classList.remove('show');
+
+    const grid = document.createElement('div');
+    grid.className = 'compare-grid scope-compare-grid';
+    area.innerHTML = '';
+    area.appendChild(grid);
+
+    datasets.forEach((ds, i) => {
+        const col = document.createElement('div');
+        col.className = 'compare-card';
+        const seats = ds.data && ds.data.total_seats ? `${ds.data.total_seats} mandata` : '';
+        col.innerHTML = `<div class="compare-card-header">
+                <h6><i class="bi bi-bank me-1"></i>Sabor ${ds.year}.</h6>
+                ${seats ? `<span class="badge bg-info text-dark" style="font-size:0.65rem;">${seats}</span>` : ''}
+            </div>`;
+        grid.appendChild(col);
+        if (ds.error) {
+            col.insertAdjacentHTML('beforeend',
+                `<div class="compare-card-body"><div class="alert alert-warning mb-0">${escapeHtml(ds.error)}</div></div>`);
+            return;
+        }
+        const body = document.createElement('div');
+        body.className = 'compare-card-body';
+        const hemi = document.createElement('div');
+        const legend = document.createElement('div');
+        legend.className = 'mt-3';
+        const cands = document.createElement('div');
+        cands.className = 'mt-3';
+        body.append(hemi, legend, cands);
+        col.appendChild(body);
+        renderActualSaborResults(ds.data, {
+            cardEl: null, hemicycleEl: hemi, legendEl: legend,
+            candidateEl: cands, idSuffix: `-cmp${i}`,
+        });
+    });
+
+    area.style.display = 'block';
+}
+
+async function loadSaborAnalysis(year, seq) {
+    if (seq === undefined) seq = ++_saLoadSeq;
+    const stale = () => seq !== _saLoadSeq;
+    document.getElementById('saborCompareArea').style.display = 'none';
     document.querySelectorAll('.sa-year-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.year) === year));
     const spinner = document.getElementById('saborAnalysisSpinner');
     const area = document.getElementById('saborAnalysisArea');
@@ -4827,14 +4964,17 @@ async function loadSaborAnalysis(year) {
         fetch(`/api/national/sabor-raw/${year}`),
         fetch(`/api/national/sabor-seats/${year}`),
     ]);
+    if (stale()) return;
     const data = await rawRes.json();
     const seatsData = await seatsRes.json();
+    if (stale()) return;
 
     // Render actual results hemicycle
     renderActualSaborResults(seatsData);
 
     _saState.rawData = data;
     _saState.year = year;
+    _saState.years = [year];  // keep the picker's set in sync with single-year loads
     _sabor.year = year; // mirror so the scope card knows the active year
     // District ids vary per year; reload the dropdown for the freshly picked year
     // and clear any stale chips/selection from a different year.
@@ -7103,11 +7243,13 @@ function izlNavigateTo(category, year, opts) {
     if (category === 'sabor') {
         const link = document.querySelector('.sidebar-nav a[data-module="sabor-analysis"]');
         if (link) link.click();
-        // Wait for module init (fetches year list), then trigger year load
+        // Wait for module init (fetches year list), then load that year.
+        // Uses setSaborYears rather than btn.click() because the picker is
+        // additive — a click would append to whatever was already selected.
         const tryLoad = (attempts = 0) => {
             const btn = document.querySelector(`.sa-year-btn[data-year="${year}"]`);
             if (btn) {
-                btn.click();
+                setSaborYears([year]);
             } else if (attempts < 20) {
                 setTimeout(() => tryLoad(attempts + 1), 100);
             }
