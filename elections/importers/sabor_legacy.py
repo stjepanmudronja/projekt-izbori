@@ -1,13 +1,13 @@
-"""Import the 2011 Sabor election.
+"""Import the pre-preferential Sabor elections (2007 and 2011).
 
-2011 predates preferential voting, so DIP published a different export than
-2015 onward and `sabor.py` cannot read it:
+Both years predate preferential voting, so DIP published a different export
+than 2015 onward and `sabor.py` cannot read either of them:
 
   * **No candidate columns.** Districts I-XI carry one column per list and
     nothing else, so those districts produce ListResult rows only. Only
     district XII (minorities) names individuals, one column per candidate.
   * **No county columns.** 2015+ files carry `Rbr.županije` / `Županija`;
-    2011 gives only the town/municipality name, so the county has to be
+    these years give only the town/municipality name, so the county has to be
     recovered by matching that name against municipalities already imported
     from other years (see `_resolve_municipality`).
   * **Geo width varies per file type** rather than being a fixed 15, so the
@@ -15,14 +15,27 @@
   * **Verbose filenames**, e.g. `01_I_izborna_jedinica_REDOVITA_BM.csv`, and
     an extra `rezultati/` directory level.
 
-Files per district (windows-1250, semicolon-delimited):
-    NN_R_izborna_jedinica_REDOVITA_BM.csv     regular stations
-    NN_R_izborna_jedinica_POSEBNA_BM.csv      mobile/special stations
-    NN_R_izborna_jedinica_BM_INOZEMSTVO.csv   embassy stations for that district
-    NN_R_izborna_jedinica_Gradovi-opcine.csv  PER-MUNICIPALITY AGGREGATE - skipped
-District XI adds `DIJASPORA_U_RH` (diaspora voting inside Croatia) and
-`DRZAVE`, a per-country aggregate that is likewise skipped. Importing either
-aggregate would double-count every vote in the district.
+Files per district (windows-1250, semicolon-delimited); 2007 and 2011 ship the
+same set under different spellings, so everything matched on a filename here is
+matched case-insensitively:
+
+    ..._REDOVITA_BM / ..._Redovita_BM         regular stations
+    ..._POSEBNA_BM / ..._Posebna_BM           mobile/special stations
+    ..._BM_INOZEMSTVO / ..._BM_u_inozemstvu   embassy stations for that district
+    ..._Gradovi-opcine                        PER-MUNICIPALITY AGGREGATE - skipped
+
+District XI adds the diaspora-voting-inside-Croatia file (`DIJASPORA_U_RH` in
+2011, `BM_u_RH` in 2007) and a per-country aggregate (`DRZAVE` / `Drzave`) that
+is likewise skipped. Importing either aggregate would double-count every vote in
+the district — 2007 makes that trap easy to fall into, since one of its files is
+misspelled `Grdovi-opcine`, which is why aggregates are also rejected
+structurally on their header (see `_is_aggregate`).
+
+The 2007 header block is its own dialect: seven leading columns naming the
+station only by `Redni broj biračkog mjesta` (no name/location/address at all,
+so those stay blank unless a later year's import fills them in), and district
+XII prefixing it with a bare `Izborna jedinica`. `_parse_header` accepts either
+year's labels.
 """
 import csv
 import re
@@ -39,6 +52,26 @@ from .name_utils import clean_candidate_name, normalize_municipality_name
 _MUNI_HEADERS = {'grad / općine', 'grad / općina', 'grad/općine', 'grad/općina'}
 _FOREIGN_HEADERS = {'država'}
 
+# The per-municipality / per-country aggregates count a whole town in one row
+# and head that row's station column "Broj biračkih mjesta" (how many stations
+# it covers) where a real station file says "Redni broj biračkog mjesta". That
+# difference is the reliable aggregate tell — 2007 ships one of them misspelled
+# (`04_IV_..._Grdovi-opcine.csv`), so a filename check alone would let it
+# through and double-count district IV.
+_STATION_NUMBER_HEADERS = ('bm rbr', 'redni broj biračkog mjesta')
+_AGGREGATE_NUMBER_HEADER = 'broj biračkih mjesta'
+
+# 2007 appends per-district subtotals to the bottom of every station file
+# ("POSEBNA BM ZA I. IJ", "UKUPNO ZA I. IJ", a bare "UKUPNO"). They are rows in
+# the same shape as a real station and would double-count the district if let
+# through — no municipality is called UKUPNO or ends in a bare "IJ".
+_SUMMARY_ROW_RE = re.compile(r'^UKUPNO\b|\bIJ\.?$', re.IGNORECASE)
+
+# "OTOK (VINKOVCI)": 2007 tells repeated place names apart by naming a nearby
+# town in brackets. Every other year stores the plain name, so the bracketed
+# hint is resolved to its own municipality and used as a county filter.
+_PAREN_HINT_RE = re.compile(r'^(.*?)\s*\(([^)]+)\)\s*$')
+
 # ", Nositelj liste: IME PREZIME" is appended to every list name. Dropping it
 # keeps the stored list name comparable with the other years, which matters for
 # the coalition grouping that keys on the text before the first comma.
@@ -52,11 +85,11 @@ _KANDIDAT_RE = re.compile(
     re.IGNORECASE | re.DOTALL)
 
 
-class Sabor2011Importer(BaseImporter):
+class SaborLegacyImporter(BaseImporter):
     BASE_DIR = Path(
         '/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor_2024'
     )
-    YEAR = 2011
+    YEARS = (2007, 2011)
 
     # nm-suffix in the filename -> (sub-district number, seats, name).
     # Same numbering as sabor.py so a minority seat lines up across years.
@@ -106,7 +139,7 @@ class Sabor2011Importer(BaseImporter):
     def _build_muni_index(self):
         """Index existing municipalities by normalized name.
 
-        2011 has no county column, so the county is recovered from
+        These years have no county column, so the county is recovered from
         municipalities already imported by other election years. Croatia has a
         handful of repeated place names (OTOK, PRIVLAKA, SVETA NEDELJA), which
         is why the index keeps every match and `_resolve_municipality` breaks
@@ -121,9 +154,21 @@ class Sabor2011Importer(BaseImporter):
         # record the county. Used only to disambiguate repeated place names.
         from elections.models import ElectoralList, ListResult
         self._district_counties = defaultdict(set)
+        # Main stations only. Mobile and embassy stations carry a letter
+        # prefix on their number (see `_station_prefix`) and sit anywhere in
+        # the country regardless of the district whose file lists them, so
+        # counting them makes every district look like all 22 counties and the
+        # tie-break stops narrowing anything.
         rows = (ListResult.objects
                 .filter(electoral_list__election_round__election__election_type__slug='sabor',
                         electoral_list__district__number__lte=11)
+                .exclude(polling_station__number__regex=r'^[A-Z]')
+                # ...and only from the years that record the county. A legacy
+                # year resolved by this very map would otherwise teach it its
+                # own guesses: 2011 put OTOK in district IX under Vukovar-
+                # Srijem, which then made district IX look like it contains
+                # both OTOKs and left the name ambiguous forever.
+                .exclude(electoral_list__election_round__election__year__in=self.YEARS)
                 .values_list('electoral_list__district__number',
                              'polling_station__municipality__county_id')
                 .distinct())
@@ -145,7 +190,7 @@ class Sabor2011Importer(BaseImporter):
             return self.get_or_create_municipality(county, raw_name, 'država')
 
         key = self._muni_key(raw_name)
-        matches = self._muni_index.get(key, [])
+        matches = self._muni_index.get(key, []) or self._match_bracketed(raw_name)
 
         if len(matches) > 1 and district_num:
             # Repeated place name: keep only the ones whose county actually
@@ -169,27 +214,56 @@ class Sabor2011Importer(BaseImporter):
             return None
         return matches[0]
 
+    def _match_bracketed(self, raw_name):
+        """Resolve "OTOK (VINKOVCI)" — base name, county taken from the town
+        named in brackets. Empty list when the name has no brackets or the hint
+        does not pin down a county."""
+        m = _PAREN_HINT_RE.match((raw_name or '').strip())
+        if not m:
+            return []
+        base, hint = m.group(1), m.group(2)
+        counties = {h.county_id
+                    for h in self._muni_index.get(self._muni_key(hint), [])}
+        return [c for c in self._muni_index.get(self._muni_key(base), [])
+                if c.county_id in counties]
+
+    @staticmethod
+    def _is_summary_row(raw_name):
+        """True for 2007's per-district subtotal rows (see _SUMMARY_ROW_RE)."""
+        return bool(_SUMMARY_ROW_RE.search((raw_name or '').strip()))
+
     # ---- file discovery ----------------------------------------------
 
     def _files_for(self, prefix):
         """Result files for a district prefix, aggregates excluded."""
         out = []
         for fp in sorted(self.data_dir.glob(f'{prefix}_*.csv')):
-            if 'Gradovi-opcine' in fp.name or 'DRZAVE' in fp.name:
-                continue  # per-municipality / per-country totals; would double-count
+            name = fp.name.lower()
+            # per-municipality / per-country totals; would double-count.
+            # "opcine" also catches 2007's misspelled "Grdovi-opcine".
+            if 'opcine' in name or 'drzave' in name:
+                continue
             out.append(fp)
         return out
+
+    @staticmethod
+    def _is_main_file(filepath):
+        """The regular-stations file — widest roster, always present."""
+        return 'redovita' in filepath.name.lower()
 
     @staticmethod
     def _station_prefix(filepath):
         """Keep same-numbered stations from different file types apart, the way
         sabor.py does for the later years."""
-        n = filepath.name
-        if 'POSEBNA' in n:
+        n = filepath.name.lower()
+        if 'posebna' in n:
             return 'P'
-        if 'INOZEMSTVO' in n:
+        # BM_INOZEMSTVO (2011) / BM_u_inozemstvu (2007) — the stem is all the
+        # two spellings share.
+        if 'inozemst' in n:
             return 'I'
-        if 'DIJASPORA_U_RH' in n:
+        # diaspora voting inside Croatia: DIJASPORA_U_RH (2011) / BM_u_RH (2007)
+        if 'dijaspora_u_rh' in n or 'bm_u_rh' in n:
             return 'D'
         return ''
 
@@ -211,7 +285,7 @@ class Sabor2011Importer(BaseImporter):
             return None
 
         invalid = find('listići nevažeći')
-        if invalid is None:
+        if invalid is None or self._is_aggregate(low):
             return None
         muni = next((i for i, h in enumerate(low) if h in _MUNI_HEADERS), None)
         foreign_col = next((i for i, h in enumerate(low) if h in _FOREIGN_HEADERS), None)
@@ -220,8 +294,11 @@ class Sabor2011Importer(BaseImporter):
         return {
             'muni': muni if muni is not None else foreign_col,
             'is_foreign': muni is None,
-            'home_district': find('izborna jedinica grada / općine'),
-            'number': find('bm rbr'),
+            # 2011 spells the minority files' home-district column
+            # "Izborna jedinica grada / općine"; 2007 just "Izborna jedinica".
+            'home_district': find('izborna jedinica grada / općine',
+                                  'izborna jedinica'),
+            'number': find(*_STATION_NUMBER_HEADERS),
             'name': find('bm naziv'),
             'location': find('bm lokacija'),
             'address': find('bm adresa'),
@@ -231,6 +308,12 @@ class Sabor2011Importer(BaseImporter):
             'invalid': invalid,
             'first_result': invalid + 1,
         }
+
+    @staticmethod
+    def _is_aggregate(low_header):
+        """True for a per-municipality / per-country totals file."""
+        return (_AGGREGATE_NUMBER_HEADER in low_header
+                and not any(h in low_header for h in _STATION_NUMBER_HEADERS))
 
     @staticmethod
     def _split_list_label(raw):
@@ -288,7 +371,7 @@ class Sabor2011Importer(BaseImporter):
 
         # Take the list roster from the regular-stations file: it is the widest
         # and always present.
-        main = next((f for f in files if 'REDOVITA' in f.name), files[0])
+        main = next((f for f in files if self._is_main_file(f)), files[0])
         header = self._read_header(main)
         info = self._parse_header(header)
         cols = self._result_columns(header, info['first_result'])
@@ -330,6 +413,8 @@ class Sabor2011Importer(BaseImporter):
                 raw_muni = row[info['muni']].strip()
                 if not raw_muni:
                     continue  # blank spacer row
+                if self._is_summary_row(raw_muni):
+                    continue  # 2007 district subtotal; would double-count
                 muni = self._resolve_municipality(raw_muni, district_num, info['is_foreign'])
                 if muni is None:
                     skipped += 1
@@ -358,7 +443,12 @@ class Sabor2011Importer(BaseImporter):
         def cell(key):
             i = info[key]
             return row[i].strip() if i is not None and i < len(row) else ''
-        number = f"{prefix}{cell('number')}"
+        # 2011 writes bare station numbers ("1"), 2015+ writes them already
+        # padded ("001"). Pad before prefixing so the two years agree on
+        # "I001" — appending first would leave "I1", which BaseImporter's
+        # zfill(3) then mangles into "0I1" and splits the same embassy station
+        # into a separate row per year.
+        number = f"{prefix}{cell('number').zfill(3)}"
         return self.get_or_create_polling_station(
             muni, number, cell('name'), cell('location'), cell('address'))
 
@@ -373,7 +463,7 @@ class Sabor2011Importer(BaseImporter):
                 continue
             district = self.get_or_create_district(election, sub_number, sub_name)
 
-            main = next((f for f in files if 'REDOVITA' in f.name), files[0])
+            main = next((f for f in files if self._is_main_file(f)), files[0])
             header = self._read_header(main)
             info = self._parse_header(header)
             cols = self._result_columns(header, info['first_result'])
@@ -412,7 +502,7 @@ class Sabor2011Importer(BaseImporter):
                 if len(row) <= info['invalid']:
                     continue
                 raw_muni = row[info['muni']].strip()
-                if not raw_muni:
+                if not raw_muni or self._is_summary_row(raw_muni):
                     continue
                 # The nm files span the whole country, so the district hint for
                 # repeated place names comes from the row's own home-district

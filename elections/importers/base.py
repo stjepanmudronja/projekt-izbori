@@ -80,10 +80,26 @@ class BaseImporter:
         number = str(number).zfill(3)
         key = (municipality.id, number)
         if key not in self._polling_station_cache:
-            obj, _ = PollingStation.objects.get_or_create(
+            obj, created = PollingStation.objects.get_or_create(
                 municipality=municipality, number=number,
                 defaults={'name': name, 'location': location, 'address': address}
             )
+            # Descriptive fields are only in `defaults`, so whichever import
+            # first touched a station fixed them forever. Older exports often
+            # ship a station number with no name at all (presidential 2000-2009,
+            # the 2011 "posebna" files), which left the row permanently blank
+            # even though a later year names the very same station — the UI then
+            # renders it as a bare ", ". Fill blanks in from any later import
+            # that does carry the text; never overwrite an existing value, since
+            # the first non-empty one is as good as any and stability matters.
+            if not created:
+                fill = {f: v for f, v in
+                        (('name', name), ('location', location), ('address', address))
+                        if v and not getattr(obj, f)}
+                if fill:
+                    for f, v in fill.items():
+                        setattr(obj, f, v)
+                    obj.save(update_fields=list(fill))
             self._polling_station_cache[key] = obj
         return self._polling_station_cache[key]
 

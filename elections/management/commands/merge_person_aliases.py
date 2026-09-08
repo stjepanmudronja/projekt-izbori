@@ -23,6 +23,9 @@ KNOWN_ALIASES = [
      'SDP, V. IJ in every sabor 2015-2024; "Fred" recorded from 2019 on'),
     ('NATALIA TAFRA BAZINA', 'NATALIA BAZINA',
      'PAMETNO lineage, X. IJ in 2015/2016/2020; surname extended by 2020'),
+    ('SEAD BRACO HASANOVIĆ', 'SEAD HASANOVIĆ',
+     'same minority sub-district 125 in 2007, 2011 and 2016, never twice in one '
+     'election; the nickname "Braco" is recorded from 2011 on'),
 ]
 
 

@@ -272,6 +272,21 @@ def round_date_iso(er, election=None):
     return None
 
 
+# Diaspora (district XI) did not have a fixed seat count before 2011: the law
+# converted diaspora votes at the domestic votes-per-seat rate, which gave 5
+# seats in 2007. From 2011 on it is a fixed 3. Everything else has been stable
+# across every year we import — 14 seats per district I-X, 8 for the minorities.
+DIASPORA_SEATS_BY_YEAR = {2007: 5}
+
+
+def diaspora_seats(year):
+    return DIASPORA_SEATS_BY_YEAR.get(year, 3)
+
+
+def sabor_total_seats(year):
+    return 140 + diaspora_seats(year) + 8
+
+
 # Cache of Sabor seat winners per election round (data is static after import).
 _SABOR_SEAT_WINNERS_CACHE = {}
 
@@ -288,6 +303,12 @@ def sabor_seat_winner_candidacy_ids(er_id):
     MINORITY_SEATS = {121: 3, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1}
     PREF_THRESHOLD_PCT = 10.0
     winner_ids = set()
+    year = (
+        db.session.query(Election.year)
+        .join(ElectionRound, ElectionRound.election_id == Election.id)
+        .filter(ElectionRound.id == er_id)
+        .scalar()
+    )
 
     districts = (
         db.session.query(ElectoralDistrict)
@@ -301,7 +322,7 @@ def sabor_seat_winner_candidacy_ids(er_id):
         if dist.number in MINORITY_SEATS:
             n_seats = MINORITY_SEATS[dist.number]
         elif dist.number == 11:
-            n_seats = 3
+            n_seats = diaspora_seats(year)
         elif dist.number == 12:
             n_seats = 8
         else:
@@ -1355,7 +1376,7 @@ def sabor_seats(year):
         if dist.number in MINORITY_SEATS:
             n_seats = MINORITY_SEATS[dist.number]
         elif dist.number == 11:
-            n_seats = 3  # diaspora
+            n_seats = diaspora_seats(year)  # diaspora: 5 in 2007, 3 since 2011
         elif dist.number == 12:
             n_seats = 8  # old monolithic district 12 (legacy)
         else:
@@ -1522,7 +1543,7 @@ def sabor_seats(year):
 
     return jsonify({
         'year': year,
-        'total_seats': 151,
+        'total_seats': sabor_total_seats(year),
         'parties': seat_list,
         'candidates': ordered_candidates,
         'districts': district_details,
@@ -1563,7 +1584,7 @@ def sabor_raw(year):
         if dist.number in MINORITY_SEATS:
             n_seats = MINORITY_SEATS[dist.number]
         elif dist.number == 11:
-            n_seats = 3
+            n_seats = diaspora_seats(year)
         elif dist.number == 12:
             n_seats = 8
         else:
