@@ -4931,11 +4931,14 @@ function renderActualSaborResults(seatsData, opts) {
     // DIP published list totals only for districts I-X(I) and no names.
     let missingNote = '';
     if (useRoster) {
-        const extra = tableRows.length - seatList.length;
+        // The roster holds who *won* a mandate, so it should match the seat
+        // count exactly; a shortfall means names are still missing.
+        const short = seatList.length - tableRows.length;
         missingNote = `<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:0.82rem;">
-               <i class="bi bi-info-circle me-1"></i>Popis zastupnika ovog saziva. Imena nisu izračunata iz rezultata —
+               <i class="bi bi-info-circle me-1"></i>Zastupnici izabrani na ovim izborima. Imena nisu izračunata iz rezultata —
                preferencijsko glasovanje uvedeno je tek 2015., pa za izborne jedinice I.-XI. nisu objavljena imena kandidata.
-               ${extra > 0 ? `Navedeno je ${tableRows.length} zastupnika na ${seatList.length} mandata jer su neki mandat preuzeli ili napustili tijekom saziva.` : ''}
+               Zamjenici koji su mandat preuzeli tijekom saziva nisu na popisu.
+               ${short > 0 ? `Poznato je ${tableRows.length} od ${seatList.length} mandata.` : ''}
            </div>`;
     } else if (namedSeats < seatList.length) {
         missingNote = `<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:0.82rem;">

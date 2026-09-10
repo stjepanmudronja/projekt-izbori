@@ -27,11 +27,25 @@ MINORITY_SEATS = {121: 3, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1}
 # which for a coalition year is the member's own party, not the joint list
 # name they were elected on (e.g. the SDP-HNS-IDS-HSU "Kukuriku" list).
 MEMBERS_BY_YEAR = {
-    # 7. saziv (2011-2015). 152 names for 151 seats: Zoran Vasić held Marina
-    # Lovrić Merzel's seat while hers was in mirovanje (she was Sisak-Moslavina
-    # prefect) and left when she reactivated it on 11 Sep 2014. Party labels
-    # are the caucus as of the term, so members who switched (Holy → ORaH,
-    # Kajin/Grubišić/Kregar/Linić → nezavisni) show their later affiliation.
+    # 7. saziv (2011-2015), as elected: the 151 who won a mandate at the 2011
+    # election, not everyone who sat during the term. Substitutes (zamjenici)
+    # who stood in for a mandate in mirovanje are therefore out, and the member
+    # they stood in for is in — a mandate in mirovanje was still won at the
+    # election. Two such pairs, both from the public listing this was
+    # transcribed from:
+    #   Zoran Vasić stood in for Marina Lovrić Merzel (Sisak-Moslavina
+    #     prefect) until she took the seat up on 11 Sep 2014. Vasić dropped.
+    #   Ivan Šimunović's mandate "began 1 July 2013" — Croatia's accession day,
+    #     when the 12 MEPs elected that April left the Sabor. HSP dr. Ante
+    #     Starčević won exactly one seat in 2011 (district X, 14938 votes) and
+    #     its holder, party leader Ruža Tomašić, is in MEPS_BY_YEAR[2013]. So
+    #     Šimunović is dropped and Tomašić, who was elected, takes the row.
+    # That lands the roster on exactly 151, which is the check that the
+    # substitution bookkeeping came out even.
+    #
+    # Party labels are the caucus as of the term, so members who switched
+    # (Holy → ORaH, Kajin/Grubišić/Kregar/Linić → nezavisni) show their later
+    # affiliation — they will not add up to the election-day list totals.
     #
     # Three district-XII names in the public roster this was transcribed from
     # belong to a later convocation and are corrected here against the
@@ -126,7 +140,7 @@ MEMBERS_BY_YEAR = {
         ('JOSIP LEKO', 'SDP', False, ''),
         ('DRAGUTIN LESAR', 'Hrvatski laburisti - Stranka rada', False, ''),
         ('SLAVKO LINIĆ', 'nezavisni', False, ''),
-        ('MARINA LOVRIĆ MERZEL', 'nezavisna', False, 'reaktivirala mandat 11. rujna 2014.'),
+        ('MARINA LOVRIĆ MERZEL', 'nezavisna', False, 'mandat u mirovanju do 11. rujna 2014.'),
         ('FRANJO LUCIĆ', 'HDZ', False, ''),
         ('ŠIME LUČIN', 'SDP', False, ''),
         ('MARIJA LUGARIĆ', 'SDP', False, ''),
@@ -177,17 +191,16 @@ MEMBERS_BY_YEAR = {
         ('VLADIMIR ŠEKS', 'HDZ', False, ''),
         ('ŽELJKO ŠEMPER', 'HSU', False, ''),
         ('TATJANA ŠIMAC BONAČIĆ', 'SDP', False, ''),
-        ('IVAN ŠIMUNOVIĆ', 'HSP dr. Ante Starčević', False, 'mandat počeo 1. srpnja 2013.'),
-        ('VESNA ŠKARE OŽBOLT', 'DC', False, 'prestanak mirovanja mandata od 18. veljače 2014.'),
+        ('VESNA ŠKARE OŽBOLT', 'DC', False, 'mandat u mirovanju do 18. veljače 2014.'),
         ('MARIJAN ŠKVARIĆ', 'HNS', False, ''),
         ('DUNJA ŠPOLJAR', 'SDP', False, ''),
         ('IVAN ŠUKER', 'HDZ', False, ''),
         ('NANSI TIRELI', 'Hrvatski laburisti - Stranka rada', False, ''),
+        ('RUŽA TOMAŠIĆ', 'HSP dr. Ante Starčević', False, 'mandat do 1. srpnja 2013. — odlazak u Europski parlament'),
         ('DAMIR TOMIĆ', 'SDP', False, ''),
         ('MIROSLAV TUĐMAN', 'HDZ', False, ''),
         ('NADA TURINA-ĐURIĆ', 'HNS', False, ''),
         ('ZLATKO TUŠAK', 'Hrvatski laburisti - Stranka rada', False, ''),
-        ('ZORAN VASIĆ', 'SDP', False, 'zastupnik do 11. rujna 2014.'),
         ('FRANKO VIDOVIĆ', 'SDP', False, ''),
         ('TANJA VRBAT GRGIĆ', 'SDP', False, ''),
         ('JOSIP VUKOVIĆ', 'SDP', False, ''),
