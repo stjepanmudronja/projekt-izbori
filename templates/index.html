@@ -2222,6 +2222,7 @@ function renderPersonResultsHTML(results) {
                 <div class="d-flex gap-3 flex-wrap">
                     ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
                     ${r.position ? `<small class="text-muted"><i class="bi bi-list-ol me-1"></i>Pozicija: ${r.position}</small>` : ''}
+                    ${r.note ? `<small class="text-muted"><i class="bi bi-info-circle me-1"></i>${escapeHtml(r.note)}</small>` : ''}
                 </div>
             </div>
             <hr class="my-2" style="opacity: 0.1;">
@@ -2355,6 +2356,7 @@ function renderPersonResults(container, results) {
                 <div class="d-flex gap-3 flex-wrap">
                     ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
                     ${r.position ? `<small class="text-muted"><i class="bi bi-list-ol me-1"></i>Pozicija: ${r.position}</small>` : ''}
+                    ${r.note ? `<small class="text-muted"><i class="bi bi-info-circle me-1"></i>${escapeHtml(r.note)}</small>` : ''}
                 </div>
             </div>
             <hr class="my-2" style="opacity: 0.1;">
@@ -4882,37 +4884,72 @@ function renderActualSaborResults(seatsData, opts) {
             </div>`).join('')}
         </div>`;
 
-    // Candidate list with show-more
+    // Candidate list with show-more.
+    //
+    // Two sources, in order of preference:
+    //   1. `members` — the curated roster of who actually sat in this saziv
+    //      (ParliamentMember). The only source for pre-2015 years, where no
+    //      candidate names were published for districts I-XI, and the only one
+    //      that knows about mid-term arrivals and departures.
+    //   2. `seatList` — holders derived from the results (D'Hondt +
+    //      preferential votes), which is all 2015+ needs.
+    const members = seatsData.members || [];
+    const useRoster = members.length > 0;
     const INITIAL = 100;
-    const candRows = seatList.map((s, i) => {
-        const hidden = i >= INITIAL ? ` style="display:none;" class="${extraCls}"` : '';
-        // Clickable candidate name → that politician's page (delegated handler at .bar-label-link).
-        // Seats with no known holder get inert placeholder text: linking them
-        // would fire a politician search for a party name.
-        const nameHtml = s.candidate
-            ? `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`
-            : `<span class="text-muted fst-italic" title="Imena kandidata nisu objavljena za ovu izbornu godinu">nije objavljeno</span>`;
-        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px;"></span>${nameHtml}</td><td class="text-muted" style="font-size:0.85rem;">${s.party}</td><td class="text-muted" style="font-size:0.85rem;">${s.district}</td></tr>`;
-    }).join('');
-    const showBtn = seatList.length > INITIAL
-        ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.${extraCls}').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${seatList.length - INITIAL} preostalih)</button></div>` : '';
 
-    // Pre-2015 elections had no preferential voting, so DIP published list
-    // totals only for districts I-X(I) and we hold no candidate names for them.
-    // Say so, rather than leaving a table of "nije objavljeno" looking broken.
-    const missingNote = namedSeats < seatList.length
-        ? `<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:0.82rem;">
+    // Roster parties are individual caucuses (SDP, HNS, IDS…), not the joint
+    // lists the hemicycle is coloured by, so they get their own colour ramp.
+    const rosterColors = {};
+    if (useRoster) {
+        const order = [];
+        members.forEach(m => { if (!order.includes(m.party)) order.push(m.party); });
+        order.forEach((party, i) => { rosterColors[party] = hemicycleColors[i % hemicycleColors.length]; });
+    }
+
+    const tableRows = useRoster ? members : seatList;
+    const nameLink = n => `<span class="bar-label-link" data-person-name="${escapeHtml(n)}" title="Otvori stranicu političara: ${escapeHtml(n)}">${escapeHtml(n)}</span>`;
+    const candRows = tableRows.map((row, i) => {
+        const hidden = i >= INITIAL ? ` style="display:none;" class="${extraCls}"` : '';
+        const color = useRoster ? rosterColors[row.party] : row.color;
+        // Clickable name → that politician's page (delegated handler at .bar-label-link).
+        // A derived seat with no known holder gets inert placeholder text:
+        // linking it would fire a politician search for a party name.
+        const name = useRoster ? row.name : row.candidate;
+        const nameHtml = name
+            ? nameLink(name)
+            : `<span class="text-muted fst-italic" title="Imena kandidata nisu objavljena za ovu izbornu godinu">nije objavljeno</span>`;
+        const lastCol = useRoster
+            ? `${row.minority ? '<span class="badge bg-secondary" style="font-size:0.7rem;">nacionalne manjine</span> ' : ''}${escapeHtml(row.note || '')}`
+            : row.district;
+        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${nameHtml}</td><td class="text-muted" style="font-size:0.85rem;">${escapeHtml(row.party)}</td><td class="text-muted" style="font-size:0.85rem;">${lastCol}</td></tr>`;
+    }).join('');
+    const showBtn = tableRows.length > INITIAL
+        ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.${extraCls}').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${tableRows.length - INITIAL} preostalih)</button></div>` : '';
+
+    // Explain why the roster can outnumber the seats, or — with no roster —
+    // why pre-2015 rows are blank: those years had no preferential voting, so
+    // DIP published list totals only for districts I-X(I) and no names.
+    let missingNote = '';
+    if (useRoster) {
+        const extra = tableRows.length - seatList.length;
+        missingNote = `<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:0.82rem;">
+               <i class="bi bi-info-circle me-1"></i>Popis zastupnika ovog saziva. Imena nisu izračunata iz rezultata —
+               preferencijsko glasovanje uvedeno je tek 2015., pa za izborne jedinice I.-XI. nisu objavljena imena kandidata.
+               ${extra > 0 ? `Navedeno je ${tableRows.length} zastupnika na ${seatList.length} mandata jer su neki mandat preuzeli ili napustili tijekom saziva.` : ''}
+           </div>`;
+    } else if (namedSeats < seatList.length) {
+        missingNote = `<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:0.82rem;">
                <i class="bi bi-info-circle me-1"></i>Za ovu izbornu godinu objavljeni su samo rezultati po listama,
                bez imena kandidata (preferencijsko glasovanje uvedeno je 2015.).
                Poznato je ${namedSeats} od ${seatList.length} mandata.
-           </div>`
-        : '';
+           </div>`;
+    }
 
     candEl.innerHTML = `
         <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
         ${missingNote}
         <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
-            <thead><tr><th></th><th>Ime i prezime</th><th>Stranka / Koalicija</th><th>Izborna jedinica</th></tr></thead>
+            <thead><tr><th></th><th>Ime i prezime</th><th>${useRoster ? 'Stranka / klub' : 'Stranka / Koalicija'}</th><th>${useRoster ? 'Napomena' : 'Izborna jedinica'}</th></tr></thead>
             <tbody>${candRows}</tbody>
         </table></div>${showBtn}`;
 }

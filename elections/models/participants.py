@@ -73,3 +73,49 @@ class ElectedMandate(models.Model):
 
     def __str__(self):
         return f"Mandate: {self.candidacy.person}"
+
+
+class ParliamentMember(models.Model):
+    """A person who held a Sabor seat in the convocation elected at `election`.
+
+    Complements ElectedMandate, which hangs off a Candidacy and so only works
+    where DIP published candidate names. Before preferential voting (2015) it
+    published list totals only for districts I-XI, so no Candidacy exists for
+    the 2007/2011 MPs and there is nothing for an ElectedMandate to point at.
+    This table also carries mid-term replacements, who never appear in the
+    election-day result at all — hence a roster per convocation rather than a
+    flag on the election result.
+
+    `party` is the label as published (an abbreviation, a coalition name, or
+    "nezavisni"), not a Party FK: the roster names the caucus a member sat in,
+    which need not be one of the ElectoralList names they were elected on.
+    `candidacy` is filled in where the person does have one (district XII).
+    """
+    election = models.ForeignKey(
+        'Election', on_delete=models.CASCADE, related_name='parliament_members'
+    )
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name='parliament_memberships'
+    )
+    party = models.CharField(max_length=200, blank=True)
+    minority = models.BooleanField(
+        default=False, help_text='Elected in district XII (nacionalne manjine)'
+    )
+    note = models.CharField(
+        max_length=300, blank=True,
+        help_text='Mandate start/end, reactivation after mirovanje, etc.'
+    )
+    candidacy = models.ForeignKey(
+        Candidacy, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='parliament_members'
+    )
+
+    class Meta:
+        unique_together = ['election', 'person']
+        ordering = ['person__last_name', 'person__first_name']
+        indexes = [
+            models.Index(fields=['election']),
+        ]
+
+    def __str__(self):
+        return f"{self.person} ({self.party}) — {self.election}"

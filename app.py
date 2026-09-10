@@ -54,6 +54,18 @@ class ElectedMandate(db.Model):
     group = db.Column(db.String)
 
 
+class ParliamentMember(db.Model):
+    __tablename__ = 'elections_parliamentmember'
+    id = db.Column(db.Integer, primary_key=True)
+    election_id = db.Column(db.Integer, db.ForeignKey('elections_election.id'))
+    person_id = db.Column(db.Integer, db.ForeignKey('elections_person.id'))
+    party = db.Column(db.String)
+    minority = db.Column(db.Boolean)
+    note = db.Column(db.String)
+    candidacy_id = db.Column(db.Integer, db.ForeignKey('elections_candidacy.id'))
+    person = db.relationship('Person', backref='parliament_memberships', lazy=True)
+
+
 class ElectionRound(db.Model):
     __tablename__ = 'elections_electionround'
     id = db.Column(db.Integer, primary_key=True)
@@ -650,6 +662,55 @@ def person_detail(person_id):
             'county_id': county_id,
             'municipality_id': muni_id,
         })
+
+    # Sabor convocations this person sat in without a candidacy to hang the
+    # result on — pre-2015 years published no candidate names for districts
+    # I-XI, and mid-term replacements never appear in a result at all. Emit a
+    # vote-less row so the politician page shows the mandate instead of a gap.
+    # (District XII members do have a candidacy and are already covered above.)
+    covered_elections = {
+        c.electoral_list.election_round.election.id for c in candidacies
+    }
+    memberships = (
+        db.session.query(ParliamentMember, Election, ElectionType)
+        .join(Election, Election.id == ParliamentMember.election_id)
+        .join(ElectionType, ElectionType.id == Election.election_type_id)
+        .filter(ParliamentMember.person_id == person_id)
+        .all()
+    )
+    for m, election, etype in memberships:
+        if election.id in covered_elections:
+            continue
+        er = (
+            ElectionRound.query
+            .filter_by(election_id=election.id, round_number=1)
+            .first()
+        )
+        results.append({
+            'election': election.name or f'{etype.name} {election.year}',
+            'election_type': etype.name,
+            'year': election.year,
+            'date': round_date_iso(er, election) if er else None,
+            'round': er.round_number if er else 1,
+            'list_name': m.party,
+            'position': None,
+            'district': 'XII. IJ - nacionalne manjine' if m.minority else None,
+            'candidate_votes': 0,
+            'list_votes': 0,
+            'total_valid_ballots': 0,
+            'vote_share': 0,
+            'rank': None,
+            'total_candidates_in_round': None,
+            'won_seat': True,
+            'mandate_only': True,
+            'note': m.note or '',
+            'eu_mep': False,
+            'eu_group': None,
+            'lokalni_kind': None,
+            'county_id': None,
+            'municipality_id': None,
+        })
+    results.sort(key=lambda r: (-(r['year'] or 0), r['date'] or '', -(r['round'] or 0)))
 
     return jsonify({
         'id': person.id,
@@ -1541,11 +1602,37 @@ def sabor_seats(year):
         for c in cands:
             ordered_candidates.append(c)
 
+    # Curated roster of who actually sat in this convocation. Present for
+    # years where the seat holders can't be derived (no candidate names were
+    # published before preferential voting) — see ParliamentMember. Ordered
+    # by caucus size, then surname, so the table groups the way the hemicycle
+    # legend does.
+    member_rows = (
+        db.session.query(ParliamentMember, Person)
+        .join(Person, Person.id == ParliamentMember.person_id)
+        .filter(ParliamentMember.election_id == election.id)
+        .all()
+    )
+    party_size = {}
+    for m, _ in member_rows:
+        party_size[m.party] = party_size.get(m.party, 0) + 1
+    member_rows.sort(key=lambda row: (
+        -party_size[row[0].party], row[0].party,
+        row[1].last_name or '', row[1].first_name or '',
+    ))
+    members = [{
+        'name': f'{prs.first_name} {prs.last_name}'.strip(),
+        'party': m.party,
+        'minority': bool(m.minority),
+        'note': m.note or '',
+    } for m, prs in member_rows]
+
     return jsonify({
         'year': year,
         'total_seats': sabor_total_seats(year),
         'parties': seat_list,
         'candidates': ordered_candidates,
+        'members': members,
         'districts': district_details,
     })
 

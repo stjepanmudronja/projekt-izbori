@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     County, Municipality, PollingStation,
     ElectionType, Election, ElectionRound, ElectoralDistrict,
-    Person, Party, ElectoralList, Candidacy, ElectedMandate,
+    Person, Party, ElectoralList, Candidacy, ElectedMandate, ParliamentMember,
     TurnoutData, ListResult, CandidateResult,
 )
 
@@ -98,3 +98,11 @@ class ElectedMandateAdmin(admin.ModelAdmin):
     list_display = ['candidacy', 'group']
     search_fields = ['candidacy__person__first_name', 'candidacy__person__last_name']
     list_filter = ['candidacy__electoral_list__election_round__election']
+
+
+@admin.register(ParliamentMember)
+class ParliamentMemberAdmin(admin.ModelAdmin):
+    list_display = ['person', 'party', 'election', 'minority', 'note']
+    search_fields = ['person__first_name', 'person__last_name', 'party']
+    list_filter = ['election', 'minority', 'party']
+    autocomplete_fields = ['person']
