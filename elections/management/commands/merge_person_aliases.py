@@ -6,11 +6,16 @@ years and not others ("IVAN SINČIĆ" in 2014/2015, "IVAN VILIBOR SINČIĆ" from
 2016 on). Those variants can't be merged automatically — plenty of genuinely
 different people also differ by one middle token, so every merge here is a
 curated, evidenced decision. `--suggest` finds the candidates; a human decides.
+
+One class *is* safe by rule and so runs automatically: the same name written
+with and without a hyphen ("GORAN BEUS RICHEMBERGH" / "GORAN BEUS-RICHEMBERGH").
+normalize_person_name() keeps hyphens, so the two spellings are different keys,
+and Croatian compound names differ by a hyphen alone — never two people.
 """
 from collections import defaultdict
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from elections.models import Person, Candidacy
+from elections.models import Person, Candidacy, ParliamentMember
 
 
 # (canonical name, variant name, evidence). The canonical is the fuller name —
@@ -44,7 +49,7 @@ class Command(BaseCommand):
             return
 
         dry_run = options['dry_run']
-        merged = 0
+        merged = self._merge_hyphen_variants(dry_run)
         for canonical_name, variant_name, evidence in KNOWN_ALIASES:
             canonical = self._find(canonical_name)
             variant = self._find(variant_name)
@@ -61,13 +66,66 @@ class Command(BaseCommand):
                 f"-> {canonical_name} (id={canonical.pk})\n     {evidence}"
             )
             if not dry_run:
-                with transaction.atomic():
-                    variant.candidacies.update(person=canonical)
-                    variant.delete()
+                self._absorb(canonical, variant)
             merged += 1
 
         action = 'Would merge' if dry_run else 'Merged'
         self.stdout.write(self.style.SUCCESS(f'{action} {merged} person alias(es)'))
+
+    @staticmethod
+    def _absorb(canonical, variant):
+        """Move everything hanging off `variant` onto `canonical`, then drop it.
+
+        ParliamentMember is unique per (election, person), so a roster row for
+        an election the canonical already sits in would collide — that is the
+        same membership recorded twice and is simply dropped.
+        """
+        with transaction.atomic():
+            variant.candidacies.update(person=canonical)
+            taken = set(
+                ParliamentMember.objects
+                .filter(person=canonical).values_list('election_id', flat=True)
+            )
+            memberships = ParliamentMember.objects.filter(person=variant)
+            memberships.filter(election_id__in=taken).delete()
+            memberships.update(person=canonical)
+            variant.delete()
+
+    def _merge_hyphen_variants(self, dry_run):
+        """Merge rows whose normalized names differ only by hyphens.
+
+        Safe without curation, unlike the middle-name splits above: a hyphen
+        never distinguishes two Croatian politicians. The row with more
+        candidacies survives, so the merge repoints as little as possible and
+        keeps the spelling the most source files actually use.
+        """
+        by_loose = defaultdict(list)
+        for person in Person.objects.all():
+            by_loose[(person.normalized_name or '').replace('-', ' ')].append(person)
+
+        merged = 0
+        for group in by_loose.values():
+            if len(group) < 2:
+                continue
+            # Most candidacies first, so the merge repoints as little as
+            # possible and keeps the spelling most source files use. On a tie
+            # prefer the un-hyphenated form: a hyphen between two name tokens
+            # is usually clean_candidate_name() closing a "BEUS- RICHEMBERGH"
+            # split, not a character the person's name actually has.
+            group.sort(key=lambda q: (
+                -q.candidacies.count(), '-' in (q.normalized_name or ''), q.pk))
+            canonical, variants = group[0], group[1:]
+            for variant in variants:
+                self.stdout.write(
+                    f"  {variant.normalized_name} (id={variant.pk}, "
+                    f"{variant.candidacies.count()} candidacies) -> "
+                    f"{canonical.normalized_name} (id={canonical.pk})\n"
+                    f"     hyphen spelling variant of the same name"
+                )
+                if not dry_run:
+                    self._absorb(canonical, variant)
+                merged += 1
+        return merged
 
     @staticmethod
     def _find(full_name):

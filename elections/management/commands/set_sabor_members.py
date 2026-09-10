@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Value
+from django.db.models.functions import Replace
 
 from elections.importers.name_utils import (
     normalize_person_name, parse_person_name,
@@ -58,7 +59,7 @@ MEMBERS_BY_YEAR = {
     #   122 (Mađarska, 1 seat): Šoja 2441 over Jankovics 2296 — NOT Šandor
     #     Juhas, who first won in 2015.
     2011: [
-        ('INGRID ANTIČEVIĆ MARINOVIĆ', 'SDP', False, ''),
+        ('INGRID ANTIČEVIĆ-MARINOVIĆ', 'SDP', False, ''),
         ('ANTE BABIĆ', 'HDZ', False, ''),
         ('VEDRAN BABIĆ', 'SDP', False, ''),
         ('BRANKO BAČIĆ', 'HDZ', False, ''),
@@ -213,6 +214,30 @@ MEMBERS_BY_YEAR = {
 }
 
 
+def _find_person(normalized):
+    """Look up a Person by normalized name, tolerating hyphen spelling.
+
+    normalize_person_name() strips diacritics but keeps hyphens, so a compound
+    surname written both ways across sources lands in two Person rows — DIP's
+    2015 file has "ANTIČEVIĆ-MARINOVIĆ" where the roster listing writes
+    "ANTIČEVIĆ MARINOVIĆ", and an exact-key lookup would create a second
+    Ingrid. Croatian compound surnames differ by the hyphen alone, never two
+    different people, so a loose match is safe here. Prefer a row that already
+    has candidacies: that is the one carrying election data to attach to.
+    """
+    person = Person.objects.filter(normalized_name=normalized).first()
+    if person:
+        return person
+    loose = normalized.replace('-', ' ')
+    matches = list(
+        Person.objects
+        .annotate(loose_name=Replace('normalized_name', Value('-'), Value(' ')))
+        .filter(loose_name=loose)
+    )
+    matches.sort(key=lambda q: -q.candidacies.count())
+    return matches[0] if matches else None
+
+
 def _minority_winners(round_ids):
     """Who actually won the district-XII seats, straight from the votes.
 
@@ -270,7 +295,12 @@ class Command(BaseCommand):
         with transaction.atomic():
             for full_name, party, minority, note in roster:
                 normalized = normalize_person_name(full_name)
-                person = Person.objects.filter(normalized_name=normalized).first()
+                person = _find_person(normalized)
+                if person and person.normalized_name != normalized:
+                    self.stdout.write(
+                        f'  ~ {full_name} matched existing {person.normalized_name} '
+                        f'(hyphen spelling)'
+                    )
                 if not person:
                     first_name, last_name = parse_person_name(full_name)
                     if dry_run:
@@ -354,8 +384,25 @@ class Command(BaseCommand):
             f'created {created}, updated {updated}, stale removed {stale_n}, '
             f'new Person rows {new_persons}, linked to a candidacy {linked}.'
         ))
-        if new_persons:
-            self.stdout.write(
-                'Review the NEW PERSON rows with `merge_person_aliases --suggest` — '
-                'a middle-name variant may already exist under another spelling.'
-            )
+        # Roster members who exist in no other election are where a spelling
+        # variant hides: a name typed one way here and another way in a DIP
+        # file splits one politician across two Person rows, and only the
+        # roster row would be missing every other year's results. Listed on
+        # every run so the split shows up rather than sitting there silently.
+        if not dry_run:
+            unmatched = [
+                m.person for m in ParliamentMember.objects
+                .filter(election=election).select_related('person')
+                if not m.person.candidacies.exists()
+            ]
+            if unmatched:
+                self.stdout.write(self.style.WARNING(
+                    f'\n{len(unmatched)} roster members appear in no other election '
+                    f'(no candidacy anywhere) — check for spelling variants:'
+                ))
+                for prs in sorted(unmatched, key=lambda q: q.normalized_name):
+                    self.stdout.write(f'  {prs.normalized_name}')
+                self.stdout.write(
+                    'Cross-check with `merge_person_aliases --suggest` — a middle-name '
+                    'variant may already exist under another spelling.'
+                )
