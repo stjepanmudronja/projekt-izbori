@@ -15,6 +15,7 @@ and Croatian compound names differ by a hyphen alone — never two people.
 from collections import defaultdict
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from elections.importers.name_utils import normalize_person_name, parse_person_name
 from elections.models import Person, Candidacy, ParliamentMember
 
 
@@ -34,6 +35,18 @@ KNOWN_ALIASES = [
 ]
 
 
+# Names where the un-hyphenated spelling is the real one, so it wins even when
+# the hyphenated row carries more candidacies (the usual tie-break can't tell).
+# Keyed by the de-hyphenated normalized name. Also used to rename a survivor
+# that was already merged the other way, so this stays correct after a
+# re-import recreates the hyphenated spelling.
+PREFER_UNHYPHENATED = {
+    'ILIRJANA CROATA MEDUR':
+        '"Croata" is a middle name, not half a compound surname — the hyphen is '
+        'clean_candidate_name() closing an "ILIRJANA- CROATA" split in the source file',
+}
+
+
 class Command(BaseCommand):
     help = 'Merge curated same-person name variants (middle names, added surnames)'
 
@@ -50,6 +63,7 @@ class Command(BaseCommand):
 
         dry_run = options['dry_run']
         merged = self._merge_hyphen_variants(dry_run)
+        merged += self._apply_spelling_preferences(dry_run)
         for canonical_name, variant_name, evidence in KNOWN_ALIASES:
             canonical = self._find(canonical_name)
             variant = self._find(variant_name)
@@ -71,6 +85,36 @@ class Command(BaseCommand):
 
         action = 'Would merge' if dry_run else 'Merged'
         self.stdout.write(self.style.SUCCESS(f'{action} {merged} person alias(es)'))
+
+    def _apply_spelling_preferences(self, dry_run):
+        """Drop an artifact hyphen from a PREFER_UNHYPHENATED name.
+
+        The merge pass above only chooses between rows that both exist. Once
+        one has already won with the hyphenated spelling, nothing else would
+        ever correct it — so rename it here, or absorb it if the un-hyphenated
+        row has since reappeared from a re-import.
+        """
+        fixed = 0
+        for loose, evidence in PREFER_UNHYPHENATED.items():
+            for person in Person.objects.filter(normalized_name__contains='-'):
+                if (person.normalized_name or '').replace('-', ' ') != loose:
+                    continue
+                display = f'{person.first_name} {person.last_name}'.replace('-', ' ')
+                target = Person.objects.filter(normalized_name=loose).first()
+                self.stdout.write(
+                    f"  {person.normalized_name} (id={person.pk}) -> {display}"
+                    f"\n     {evidence}"
+                )
+                if not dry_run:
+                    if target:
+                        self._absorb(target, person)
+                    else:
+                        person.first_name, person.last_name = parse_person_name(display)
+                        person.normalized_name = normalize_person_name(display)
+                        person.save(update_fields=[
+                            'first_name', 'last_name', 'normalized_name'])
+                fixed += 1
+        return fixed
 
     @staticmethod
     def _absorb(canonical, variant):
@@ -104,7 +148,7 @@ class Command(BaseCommand):
             by_loose[(person.normalized_name or '').replace('-', ' ')].append(person)
 
         merged = 0
-        for group in by_loose.values():
+        for loose, group in by_loose.items():
             if len(group) < 2:
                 continue
             # Most candidacies first, so the merge repoints as little as
@@ -112,8 +156,14 @@ class Command(BaseCommand):
             # prefer the un-hyphenated form: a hyphen between two name tokens
             # is usually clean_candidate_name() closing a "BEUS- RICHEMBERGH"
             # split, not a character the person's name actually has.
-            group.sort(key=lambda q: (
-                -q.candidacies.count(), '-' in (q.normalized_name or ''), q.pk))
+            if loose in PREFER_UNHYPHENATED:
+                # Curated: the un-hyphenated spelling is the person's real
+                # name, so it survives however few candidacies it carries.
+                group.sort(key=lambda q: (
+                    '-' in (q.normalized_name or ''), -q.candidacies.count(), q.pk))
+            else:
+                group.sort(key=lambda q: (
+                    -q.candidacies.count(), '-' in (q.normalized_name or ''), q.pk))
             canonical, variants = group[0], group[1:]
             for variant in variants:
                 self.stdout.write(
