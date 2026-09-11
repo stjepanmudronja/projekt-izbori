@@ -29,6 +29,10 @@ KNOWN_ALIASES = [
      'SDP, V. IJ in every sabor 2015-2024; "Fred" recorded from 2019 on'),
     ('NATALIA TAFRA BAZINA', 'NATALIA BAZINA',
      'PAMETNO lineage, X. IJ in 2015/2016/2020; surname extended by 2020'),
+    ('TANJA VRBAT GRGIĆ', 'TANJA VRBAT',
+     'SDP, in the Sabor continuously 2007-2016 — the 2007 roster as Vrbat, the '
+     '2011 roster and the 2015/2016 candidate files (VIII. IJ) as Vrbat Grgić, '
+     'never twice in one election; married surname appended'),
     ('SEAD BRACO HASANOVIĆ', 'SEAD HASANOVIĆ',
      'same minority sub-district 125 in 2007, 2011 and 2016, never twice in one '
      'election; the nickname "Braco" is recorded from 2011 on'),
@@ -183,7 +187,16 @@ class Command(BaseCommand):
         return Person.objects.filter(first_name=first, last_name=last).first()
 
     def _suggest(self):
-        """Find persons differing only by inserted middle token(s).
+        """Find persons differing only by an extra name token.
+
+        Two shapes, both real in DIP data and neither reducible to a rule:
+          inserted/prepended — MARIJA VUKOVIĆ / MARIJA BRAJDIĆ VUKOVIĆ, where
+            the first and last tokens are unchanged;
+          appended — TANJA VRBAT / TANJA VRBAT GRGIĆ, the ordinary Croatian
+            married-name pattern, where the *last* token changes and only the
+            leading pair is stable.
+        Indexing on (first, last) alone sees the first shape and is blind to
+        the second, so both keys are built.
 
         A pair appearing in the same election type and year is almost certainly
         two different people — nobody stands twice in one election — so that is
@@ -191,29 +204,34 @@ class Command(BaseCommand):
         """
         known = {v for _, v, _ in KNOWN_ALIASES} | {c for c, _, _ in KNOWN_ALIASES}
         by_ends = defaultdict(list)
+        by_head = defaultdict(list)
         for person in Person.objects.all():
             tokens = (person.normalized_name or '').split()
             if len(tokens) >= 2:
                 by_ends[(tokens[0], tokens[-1])].append((person, tokens))
+                by_head[(tokens[0], tokens[1])].append((person, tokens))
 
-        found = 0
-        for group in by_ends.values():
-            shorts = [p for p, t in group if len(t) == 2]
-            longs = [p for p, t in group if len(t) > 2]
-            for short in shorts:
-                for long in longs:
-                    if self._name(short) in known and self._name(long) in known:
-                        continue
-                    found += 1
-                    a, b = self._elections(short), self._elections(long)
-                    overlap = sorted(a & b)
-                    self.stdout.write(
-                        f"\n  {self._name(short)} {sorted(a)}"
-                        f"\n  {self._name(long)} {sorted(b)}"
-                        f"\n     same election as both: {overlap or 'none'}"
-                        f"{'  <- likely DIFFERENT people' if overlap else ''}"
-                    )
-        self.stdout.write(f"\n{found} candidate pair(s) needing review")
+        pairs = {}
+        for index in (by_ends, by_head):
+            for group in index.values():
+                shorts = [p for p, t in group if len(t) == 2]
+                longs = [p for p, t in group if len(t) > 2]
+                for short in shorts:
+                    for long in longs:
+                        if self._name(short) in known and self._name(long) in known:
+                            continue
+                        pairs[(short.pk, long.pk)] = (short, long)
+
+        for short, long in sorted(pairs.values(), key=lambda pr: pr[0].normalized_name):
+            a, b = self._elections(short), self._elections(long)
+            overlap = sorted(a & b)
+            self.stdout.write(
+                f"\n  {self._name(short)} {sorted(a)}"
+                f"\n  {self._name(long)} {sorted(b)}"
+                f"\n     same election as both: {overlap or 'none'}"
+                f"{'  <- likely DIFFERENT people' if overlap else ''}"
+            )
+        self.stdout.write(f"\n{len(pairs)} candidate pair(s) needing review")
 
     @staticmethod
     def _name(person):
@@ -221,7 +239,19 @@ class Command(BaseCommand):
 
     @staticmethod
     def _elections(person):
-        return {
+        """Every election this person appears in, candidacy or Sabor roster.
+
+        Rosters count: a pre-2015 Sabor member has no candidacy at all, so
+        without them two roster-only names would both look election-less and
+        the "same election as both" disqualifier — the strongest signal that a
+        pair is two people — would never fire.
+        """
+        rosters = {
+            (m.election.election_type.slug, m.election.year)
+            for m in ParliamentMember.objects.filter(person=person).select_related(
+                'election__election_type')
+        }
+        return rosters | {
             (c.electoral_list.election_round.election.election_type.slug,
              c.electoral_list.election_round.election.year)
             for c in Candidacy.objects.filter(person=person).select_related(
