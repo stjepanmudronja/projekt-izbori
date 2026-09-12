@@ -6,6 +6,7 @@ from django.db.models.functions import Replace
 from elections.importers.name_utils import (
     normalize_person_name, parse_person_name,
 )
+from elections.management.commands.merge_person_aliases import KNOWN_ALIASES
 from elections.models import (
     ElectionType, Election, ElectionRound, Candidacy, Person, ParliamentMember,
 )
@@ -549,6 +550,17 @@ MEMBERS_BY_YEAR = {
 }
 
 
+# Normalized variant name -> normalized canonical name, from the curated
+# merges. A roster that spells a member the pre-merge way would otherwise
+# recreate the row `merge_person_aliases` had just folded away, and the next
+# seed would silently undo the merge — 2007 lists Tanja Vrbat, who is the
+# Tanja Vrbat Grgić of 2011 and 2015.
+_ALIAS_BY_VARIANT = {
+    normalize_person_name(variant): normalize_person_name(canonical)
+    for canonical, variant, _ in KNOWN_ALIASES
+}
+
+
 def _find_person(normalized):
     """Look up a Person by normalized name, tolerating hyphen spelling.
 
@@ -570,7 +582,11 @@ def _find_person(normalized):
         .filter(loose_name=loose)
     )
     matches.sort(key=lambda q: -q.candidacies.count())
-    return matches[0] if matches else None
+    if matches:
+        return matches[0]
+
+    canonical = _ALIAS_BY_VARIANT.get(normalized)
+    return Person.objects.filter(normalized_name=canonical).first() if canonical else None
 
 
 def _minority_winners(round_ids):
@@ -593,6 +609,44 @@ def _minority_winners(round_ids):
         for c in rows:
             winners[c.person.normalized_name] = (number, int(c.v or 0))
     return winners
+
+
+# Roster party labels are abbreviations; the Zastupnici table shows the full
+# "<NAME> - <ABBR>" form so a pre-2015 saziv reads the same way as 2015+, where
+# the label comes straight from the electoral-list name. Spellings are taken
+# from the list names actually imported for these years, so the roster matches
+# its own year's hemicycle legend.
+#
+# Five entries cannot come from list names: BDSH, ORaH, Novi val, the
+# Laburisti and the Reformisti first contested a Sabor election after the saziv
+# their members sat in (or under a different banner), and DZMH and SDA Hrvatske
+# are minority proposers, which DIP records in the district XII candidate
+# column rather than as a list. Those are transcribed from that column.
+PARTY_FULL_NAMES = {
+    'HDZ':   'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ',
+    'SDP':   'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP',
+    'HNS':   'HRVATSKA NARODNA STRANKA - LIBERALNI DEMOKRATI - HNS',
+    'HSS':   'HRVATSKA SELJAČKA STRANKA - HSS',
+    'HSP':   'HRVATSKA STRANKA PRAVA - HSP',
+    'HSU':   'HRVATSKA STRANKA UMIROVLJENIKA - HSU',
+    'HSLS':  'HRVATSKA SOCIJALNO LIBERALNA STRANKA - HSLS',
+    'HDSSB': 'HRVATSKI DEMOKRATSKI SAVEZ SLAVONIJE I BARANJE - HDSSB',
+    'IDS':   'ISTARSKI DEMOKRATSKI SABOR - IDS',
+    'SDSS':  'SAMOSTALNA DEMOKRATSKA SRPSKA STRANKA - SDSS',
+    'HGS':   'HRVATSKA GRAĐANSKA STRANKA - HGS',
+    'DC':    'DEMOKRATSKI CENTAR - DC',
+    'BDSH':  'BRANITELJSKO DOMOLJUBNA STRANKA HRVATSKE - BDSH',
+    'ORaH':  'ODRŽIVI RAZVOJ HRVATSKE - ORaH',
+    'SDAH':  'STRANKA DEMOKRATSKE AKCIJE HRVATSKE - SDA HRVATSKE',
+    'DZMH':  'DEMOKRATSKA ZAJEDNICA MAĐARA HRVATSKE - DZMH',
+    'Novi val': 'NOVI VAL - STRANKA RAZVOJA - NOVI VAL',
+    'HSP dr. Ante Starčević': 'HRVATSKA STRANKA PRAVA DR.ANTE STARČEVIĆ - HSP DR.ANTE STARČEVIĆ',
+    'Hrvatski laburisti - Stranka rada': 'HRVATSKI LABURISTI - STRANKA RADA',
+    'Narodna stranka - reformisti': 'NARODNA STRANKA - REFORMISTI',
+    # Not parties; uppercased only so the column reads consistently.
+    'nezavisni':  'NEZAVISNI',
+    'nezavisna':  'NEZAVISNA',
+}
 
 
 class Command(BaseCommand):
@@ -628,7 +682,16 @@ class Command(BaseCommand):
         created = updated = new_persons = linked = 0
         kept_ids = []
         with transaction.atomic():
+            unknown = sorted({p for _, p, _, _ in roster
+                              if p and p not in PARTY_FULL_NAMES})
+            if unknown:
+                self.stderr.write(self.style.ERROR(
+                    f'No full name for party label(s): {unknown}. '
+                    f'Add them to PARTY_FULL_NAMES.'))
+                return
+
             for full_name, party, minority, note in roster:
+                party = PARTY_FULL_NAMES.get(party, party)
                 normalized = normalize_person_name(full_name)
                 person = _find_person(normalized)
                 if person and person.normalized_name != normalized:
@@ -707,8 +770,8 @@ class Command(BaseCommand):
 
         by_party = {}
         for _, party, _, _ in roster:
-            by_party[party or '(stranka nije zabilježena)'] = (
-                by_party.get(party or '(stranka nije zabilježena)', 0) + 1)
+            label = PARTY_FULL_NAMES.get(party, party) or '(stranka nije zabilježena)'
+            by_party[label] = by_party.get(label, 0) + 1
         minority_n = sum(1 for _, _, m, _ in roster if m)
 
         self.stdout.write('')
