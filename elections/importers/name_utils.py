@@ -7,7 +7,9 @@ import unicodedata
 # titles ("prof.dr.sc. MILAN , KUJUNDŽIĆ", "IVAN SINČIĆ, , univ.bacc.ing.el.").
 # Strip both so the same person hashes to the same normalized_name across
 # election years.
-_TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing|spec|oec|iur|med|sc|akad|struc|struč)'
+# NB: 'sci' precedes 'sc' so the longer spelling wins the alternation — 2003
+# writes "mr.sci. STIPE ČIZMIĆ" where other years write "mr.sc.".
+_TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing|spec|oec|iur|med|sci|sc|akad|struc|struč)'
 
 # A leading run of academic-title tokens, each either a title word followed by
 # a dot — run together ("prof.dr.sc.") or space-separated ("prof. dr. sc.") —

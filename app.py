@@ -288,7 +288,7 @@ def round_date_iso(er, election=None):
 # converted diaspora votes at the domestic votes-per-seat rate, which gave 5
 # seats in 2007. From 2011 on it is a fixed 3. Everything else has been stable
 # across every year we import — 14 seats per district I-X, 8 for the minorities.
-DIASPORA_SEATS_BY_YEAR = {2007: 5}
+DIASPORA_SEATS_BY_YEAR = {2003: 4, 2007: 5}
 
 
 def diaspora_seats(year):

@@ -25,6 +25,7 @@ ELECTION_DATES = {
     ('presidential', 2019): {1: date(2019, 12, 22), 2: date(2020, 1, 5)},
     ('presidential', 2024): {1: date(2024, 12, 29), 2: date(2025, 1, 12)},
 
+    ('sabor', 2003): {1: date(2003, 11, 23)},
     ('sabor', 2007): {1: date(2007, 11, 25)},
     ('sabor', 2011): {1: date(2011, 12, 4)},
     ('sabor', 2015): {1: date(2015, 11, 8)},

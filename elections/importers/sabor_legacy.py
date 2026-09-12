@@ -91,6 +91,11 @@ class SaborLegacyImporter(BaseImporter):
     )
     YEARS = (2007, 2011)
 
+    # Rows before the first data row. 2003 subclasses this with a 3-row block
+    # (labels, column numbers, a blank spacer).
+    HEADER_ROWS = 1
+    ENCODING = 'windows-1250'
+
     # nm-suffix in the filename -> (sub-district number, seats, name).
     # Same numbering as sabor.py so a minority seat lines up across years.
     MINORITY_SUBDISTRICTS = {
@@ -404,36 +409,33 @@ class SaborLegacyImporter(BaseImporter):
                      f'district roster, e.g. {sorted(unknown)[:2]}')
 
         rows = skipped = 0
-        with open(filepath, encoding='windows-1250') as f:
-            reader = csv.reader(f, delimiter=';')
-            next(reader)
-            for row in reader:
-                if len(row) <= info['invalid']:
-                    continue
-                raw_muni = row[info['muni']].strip()
-                if not raw_muni:
-                    continue  # blank spacer row
-                if self._is_summary_row(raw_muni):
-                    continue  # 2007 district subtotal; would double-count
-                muni = self._resolve_municipality(raw_muni, district_num, info['is_foreign'])
-                if muni is None:
-                    skipped += 1
-                    continue
-                station = self._station_for(row, info, muni, prefix)
+        for row in self._data_rows(filepath):
+            if len(row) <= info['invalid']:
+                continue
+            raw_muni = row[info['muni']].strip()
+            if not raw_muni:
+                continue  # blank spacer row
+            if self._is_summary_row(raw_muni):
+                continue  # 2007 district subtotal; would double-count
+            muni = self._resolve_municipality(raw_muni, district_num, info['is_foreign'])
+            if muni is None:
+                skipped += 1
+                continue
+            station = self._station_for(row, info, muni, prefix)
 
-                self.create_turnout(
-                    election_round, station,
-                    self.parse_int(row[info['registered']]),
-                    self.parse_int(row[info['cast']]),
-                    self.parse_int(row[info['valid']]),
-                    self.parse_int(row[info['invalid']]),
-                )
-                for idx in names:
-                    el = list_objs.get(names[idx])
-                    if el is None or idx >= len(row):
-                        continue
-                    self.create_list_result(el, station, self.parse_int(row[idx]))
-                rows += 1
+            self.create_turnout(
+                election_round, station,
+                self.parse_int(row[info['registered']]),
+                self.parse_int(row[info['cast']]),
+                self.parse_int(row[info['valid']]),
+                self.parse_int(row[info['invalid']]),
+            )
+            for idx in names:
+                el = list_objs.get(names[idx])
+                if el is None or idx >= len(row):
+                    continue
+                self.create_list_result(el, station, self.parse_int(row[idx]))
+            rows += 1
 
         self.flush_all()
         extra = f', {skipped} rows skipped (unresolved municipality)' if skipped else ''
@@ -495,38 +497,35 @@ class SaborLegacyImporter(BaseImporter):
         prefix = self._station_prefix(filepath)
 
         rows = skipped = 0
-        with open(filepath, encoding='windows-1250') as f:
-            reader = csv.reader(f, delimiter=';')
-            next(reader)
-            for row in reader:
-                if len(row) <= info['invalid']:
-                    continue
-                raw_muni = row[info['muni']].strip()
-                if not raw_muni or self._is_summary_row(raw_muni):
-                    continue
-                # The nm files span the whole country, so the district hint for
-                # repeated place names comes from the row's own home-district
-                # column rather than the file.
-                hint = None
-                hd = info['home_district']
-                if hd is not None and hd < len(row):
-                    hint = self.parse_int(row[hd]) or None
-                muni = self._resolve_municipality(raw_muni, hint, info['is_foreign'])
-                if muni is None:
-                    skipped += 1
-                    continue
-                station = self._station_for(row, info, muni, prefix)
+        for row in self._data_rows(filepath):
+            if len(row) <= info['invalid']:
+                continue
+            raw_muni = row[info['muni']].strip()
+            if not raw_muni or self._is_summary_row(raw_muni):
+                continue
+            # The nm files span the whole country, so the district hint for
+            # repeated place names comes from the row's own home-district
+            # column rather than the file.
+            hint = None
+            hd = info['home_district']
+            if hd is not None and hd < len(row):
+                hint = self.parse_int(row[hd]) or None
+            muni = self._resolve_municipality(raw_muni, hint, info['is_foreign'])
+            if muni is None:
+                skipped += 1
+                continue
+            station = self._station_for(row, info, muni, prefix)
 
-                for idx, raw in cols:
-                    name = self._clean_minority_candidate(raw)
-                    entry = entries.get(name)
-                    if entry is None or idx >= len(row):
-                        continue
-                    el, candidacy = entry
-                    votes = self.parse_int(row[idx])
-                    self.create_list_result(el, station, votes)
-                    self.create_candidate_result(candidacy, station, votes)
-                rows += 1
+            for idx, raw in cols:
+                name = self._clean_minority_candidate(raw)
+                entry = entries.get(name)
+                if entry is None or idx >= len(row):
+                    continue
+                el, candidacy = entry
+                votes = self.parse_int(row[idx])
+                self.create_list_result(el, station, votes)
+                self.create_candidate_result(candidacy, station, votes)
+            rows += 1
 
         self.flush_all()
         extra = f', {skipped} rows skipped (unresolved municipality)' if skipped else ''
@@ -535,8 +534,20 @@ class SaborLegacyImporter(BaseImporter):
     # ---- helpers -------------------------------------------------------
 
     def _read_header(self, filepath):
-        with open(filepath, encoding='windows-1250') as f:
+        with open(filepath, encoding=self.ENCODING, newline='') as f:
             return next(csv.reader(f, delimiter=';'))
+
+    def _data_rows(self, filepath):
+        """Yield the data rows of a result file, header block dropped.
+
+        `newline=''` matters: some exports quote a header cell that contains a
+        real newline, and only the csv module may decide where a record ends.
+        """
+        with open(filepath, encoding=self.ENCODING, newline='') as f:
+            reader = csv.reader(f, delimiter=';')
+            for _ in range(self.HEADER_ROWS):
+                next(reader, None)
+            yield from reader
 
     @staticmethod
     def _roman(n):

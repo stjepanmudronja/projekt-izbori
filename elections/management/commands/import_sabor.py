@@ -26,11 +26,17 @@ class Command(BaseCommand):
                 self.stderr.write('--wipe-district requires --district')
                 return
             self._wipe_district(year, only_district)
-        # 2007 and 2011 predate preferential voting and ship a different export
-        # (no candidate columns, no county columns, per-file geo widths),
-        # so they have their own importer rather than a YEAR_CONFIG entry.
+        # 2003, 2007 and 2011 predate preferential voting and ship different
+        # exports (no candidate columns, no county columns, per-file geo
+        # widths), so they have their own importers rather than a YEAR_CONFIG
+        # entry. 2003 differs again from the other two — three header rows, a
+        # fixed geo block, mixed polling stations in their own files — so it
+        # subclasses the legacy importer; check it first, since it narrows.
+        from elections.importers.sabor_2003 import Sabor2003Importer
         from elections.importers.sabor_legacy import SaborLegacyImporter
-        if year in SaborLegacyImporter.YEARS:
+        if year in Sabor2003Importer.YEARS:
+            importer = Sabor2003Importer(year=year, stdout=self.stdout)
+        elif year in SaborLegacyImporter.YEARS:
             importer = SaborLegacyImporter(year=year, stdout=self.stdout)
         else:
             importer = SaborImporter(year=year, stdout=self.stdout)
