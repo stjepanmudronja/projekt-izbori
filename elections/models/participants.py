@@ -86,9 +86,12 @@ class ParliamentMember(models.Model):
     election-day result at all — hence a roster per convocation rather than a
     flag on the election result.
 
-    `party` is the label as published (an abbreviation, a coalition name, or
-    "nezavisni"), not a Party FK: the roster names the caucus a member sat in,
-    which need not be one of the ElectoralList names they were elected on.
+    `party` holds the full "<NAME> - <ABBR>" form the results pages show, not a
+    Party FK: the roster names the party a member sat for, which need not be
+    one of the ElectoralList names they were elected on (a coalition list
+    returns members of several parties). `set_sabor_members` expands the
+    abbreviation its rosters are written with. It is blank where the published
+    roster records no affiliation, as for the 2003 saziv.
     `candidacy` is filled in where the person does have one (district XII).
     """
     election = models.ForeignKey(
