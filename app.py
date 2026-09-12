@@ -63,6 +63,8 @@ class ParliamentMember(db.Model):
     minority = db.Column(db.Boolean)
     note = db.Column(db.String)
     candidacy_id = db.Column(db.Integer, db.ForeignKey('elections_candidacy.id'))
+    district_id = db.Column(db.Integer, db.ForeignKey('elections_electoraldistrict.id'))
+    district = db.relationship('ElectoralDistrict', lazy=True)
     person = db.relationship('Person', backref='parliament_memberships', lazy=True)
 
 
@@ -1625,6 +1627,9 @@ def sabor_seats(year):
         'party': m.party,
         'minority': bool(m.minority),
         'note': m.note or '',
+        # Only rosters published per electoral district carry one (2003 does,
+        # 2007 and 2011 are a single national roll).
+        'district': m.district.name if m.district else '',
     } for m, prs in member_rows]
 
     return jsonify({

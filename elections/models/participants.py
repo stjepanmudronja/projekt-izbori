@@ -112,6 +112,12 @@ class ParliamentMember(models.Model):
         Candidacy, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='parliament_members'
     )
+    district = models.ForeignKey(
+        'ElectoralDistrict', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='parliament_members',
+        help_text='Electoral district the member was elected in, where the '
+                  'published roster says. Null when it does not.'
+    )
 
     class Meta:
         unique_together = ['election', 'person']

@@ -8,7 +8,8 @@ from elections.importers.name_utils import (
 )
 from elections.management.commands.merge_person_aliases import KNOWN_ALIASES
 from elections.models import (
-    ElectionType, Election, ElectionRound, Candidacy, Person, ParliamentMember,
+    ElectionType, Election, ElectionRound, ElectoralDistrict, ElectoralList,
+    Candidacy, Person, ParliamentMember,
 )
 
 # Seats per district-XII sub-district (one minority group each), 8 in total.
@@ -39,159 +40,172 @@ MEMBERS_BY_YEAR = {
     # switches and by-elections, so attaching it to the members elected in
     # 2003 would be wrong. Fill it in only from a source that gives the
     # affiliation per person at election time.
+    # 5. saziv (2003-2007), constituted 22 Dec 2003 and dissolved 12 Oct 2007,
+    # **as elected** — the members who took the 152 seats at the election, not
+    # everyone who sat during the term.
+    #
+    # Entries here are 5-tuples: unlike 2007 and 2011, whose published rosters
+    # are a single national roll, the 2003 result is published per electoral
+    # district, so each member carries the district and the list they were
+    # elected on. The party string is that list's full name, coalition members
+    # included, which is what the "Stranka / Koalicija" column means and what
+    # the hemicycle legend shows for the same year.
+    #
+    # Cross-checked against the D'Hondt allocation computed from the imported
+    # votes: the seats per list per district agree exactly, all eleven
+    # districts. **District III is short its four HDZ members** — the source
+    # this was transcribed from loses that block mid-name ("ć, dr. med.") —
+    # so 148 of the 152 are recorded. The allocation is what says the gap is
+    # HDZ and that it is exactly four.
     2003: [
-        ('JENE ADAM', '', True, ''),
-        ('ĐURĐA ADLEŠIČ', '', False, ''),
-        ('IRENA AHEL', '', False, ''),
-        ('ZDENKO ANTEŠIĆ', '', False, ''),
-        ('INGRID ANTIČEVIĆ-MARINOVIĆ', '', False, ''),
-        ('ŽELJKA ANTUNOVIĆ', '', False, ''),
-        ('FRANJO ARAPOVIĆ', '', False, ''),
-        ('MATO ARLOVIĆ', '', False, ''),
-        ('ZDENKA BABIĆ PETRIČEVIĆ', '', False, ''),
-        ('STJEPAN BAČIĆ', '', False, ''),
-        ('ANTO BAGARIĆ', '', False, ''),
-        ('IVAN BAGARIĆ', '', False, ''),
-        ('MARIJA BAJT', '', False, ''),
-        ('IVO BANAC', '', False, ''),
-        ('LUKA BEBIĆ', '', False, ''),
-        ('MARIJAN BEKAVAC', '', False, ''),
-        ('JURE BITUNJAC', '', False, ''),
-        ('FLORIJAN BORAS', '', False, ''),
-        ('DRAŽEN BOŠNJAKOVIĆ', '', False, ''),
-        ('LJUBICA BRDARIĆ', '', False, ''),
-        ('MIRJANA BRNADIĆ', '', False, ''),
-        ('KAJO BUĆAN', '', False, ''),
-        ('PERICA BUKIĆ', '', False, ''),
-        ('MIROSLAV ČAČIJA', '', False, ''),
-        ('KARMELA CAPARIN', '', False, ''),
-        ('IVAN ČEHOK', '', False, ''),
-        ('LINO ČERVAR', '', False, ''),
-        ('LUCIJA ČIKEŠ', '', False, ''),
-        ('KREŠIMIR ĆOSIĆ', '', False, ''),
-        ('MATO CRKVENAC', '', False, ''),
-        ('ZDENKA ČUHNIL', '', True, ''),
-        ('TOMISLAV ČULJAK', '', False, ''),
-        ('JOSIP ĐAKIĆ', '', False, ''),
-        ('ANTO ĐAPIĆ', '', False, ''),
-        ('MIRJANA DIDOVIĆ', '', False, ''),
-        ('MILJENKO DORIĆ', '', False, ''),
-        ('VALTER DRANDIĆ', '', False, ''),
-        ('IVAN DRMIĆ', '', False, ''),
-        ('SREĆKO FERENČAK', '', False, ''),
-        ('MIRKO FILIPOVIĆ', '', False, ''),
-        ('STJEPAN FIOLIĆ', '', False, ''),
-        ('RATKO GAJICA', '', True, ''),
-        ('MATO GAVRAN', '', False, ''),
-        ('BRANIMIR GLAVAŠ', '', False, ''),
-        ('ANDRIJA HEBRANG', '', False, ''),
-        ('VILIM HERMAN', '', False, ''),
-        ('SILVANO HRELJA', '', False, ''),
-        ('NIKOLA IVANIŠ', '', False, ''),
-        ('RADE IVAS', '', False, ''),
-        ('GORDAN JANDROKOVIĆ', '', False, ''),
-        ('IVAN JARNJAK', '', False, ''),
-        ('VLADO JELKOVAC', '', False, ''),
-        ('IVO JOSIPOVIĆ', '', False, ''),
-        ('VLADO JUKIĆ', '', False, ''),
-        ('LJUBO JURČIĆ', '', False, ''),
-        ('MARIN JURJEVIĆ', '', False, ''),
-        ('IVAN JURKIN', '', False, ''),
-        ('DAMIR KAJIN', '', False, ''),
-        ('ANTUN KAPRALJEVIĆ', '', False, ''),
-        ('IVICA KLEM', '', False, ''),
-        ('IVAN KOLAR', '', False, ''),
-        ('ZLATKO KORAČEVIĆ', '', False, ''),
-        ('MIROSLAV KORENIKA', '', False, ''),
-        ('ALENKA KOŠIŠA ČIČIN-ŠAIN', '', False, ''),
-        ('PERO KOVAČEVIĆ', '', False, ''),
-        ('STJEPAN KOZINA', '', False, ''),
-        ('ZLATKO KRAMARIĆ', '', False, ''),
-        ('VLADIMIR KUREČIĆ', '', False, ''),
-        ('ŽELJKO KURTOV', '', False, ''),
-        ('LJUBICA LALIĆ', '', False, ''),
-        ('ŽELJKO LEDINSKI', '', False, ''),
-        ('JOSIP LEKO', '', False, ''),
-        ('RUŽA LELIĆ', '', False, ''),
-        ('DRAGUTIN LESAR', '', False, ''),
-        ('SLAVEN LETICA', '', False, ''),
-        ('SLAVKO LINIĆ', '', False, ''),
-        ('IVO LONČAR', '', False, ''),
-        ('ŠIME LUČIN', '', False, ''),
-        ('MARIJA LUGARIĆ', '', False, ''),
-        ('NEVENKA MAJDENIĆ', '', False, ''),
-        ('NIKOLA MAK', '', True, ''),
-        ('JAKŠA MARASOVIĆ', '', False, ''),
-        ('ANTE MARKOV', '', False, ''),
-        ('KRUNOSLAV MARKOVINOVIĆ', '', False, ''),
-        ('JAGODA MARTIĆ', '', False, ''),
-        ('JAGODA MAJSKA MARTINČEVIĆ', '', False, ''),
-        ('FRANO MATUŠIĆ', '', False, ''),
-        ('MILAN MEDEN', '', False, ''),
-        ('DARKO MILINOVIĆ', '', False, ''),
-        ('NEVEN MIMICA', '', False, ''),
-        ('MARIJAN MLINARIĆ', '', False, ''),
-        ('PETAR MLINARIĆ', '', False, ''),
-        ('ZVONIMIR MRŠIĆ', '', False, ''),
-        ('ŽELJKO NENADIĆ', '', False, ''),
-        ('ŽIVKO NENADIĆ', '', False, ''),
-        ('MILANKA OPAČIĆ', '', False, ''),
-        ('IVICA PANČIĆ', '', False, ''),
-        ('BOŽIDAR PANKRETIĆ', '', False, ''),
-        ('BRANIMIR PASECKY', '', False, ''),
-        ('JELENA PAVIČIĆ VUKIČEVIĆ', '', False, ''),
-        ('ŽELJKO PAVLIC', '', False, ''),
-        ('ŽELJKO PECEK', '', False, ''),
-        ('BISERKA PERMAN', '', False, ''),
-        ('KRUNO PERONJA', '', False, ''),
-        ('ANTON PERUŠKO', '', False, ''),
-        ('DOROTEA PEŠIĆ-BUKOVAC', '', False, ''),
-        ('TONINO PICULA', '', False, ''),
-        ('VELIMIR PLEŠA', '', False, ''),
-        ('VALTER POROPAT', '', False, ''),
-        ('IVANA POSAVEC KRIVEC', '', False, ''),
-        ('ŠIME PRTENJAČA', '', False, ''),
-        ('DRAGUTIN PUKLEŠ', '', False, ''),
-        ('MILORAD PUPOVAC', '', True, ''),
-        ('VESNA PUSIĆ', '', False, ''),
-        ('IVICA RAČAN', '', False, 'umro'),
-        ('FURIO RADIN', '', True, ''),
-        ('JOZO RADOŠ', '', False, ''),
-        ('NIKO REBIĆ', '', False, ''),
-        ('LUKA ROIĆ', '', False, ''),
-        ('IVANKA ROKSANDIĆ', '', False, ''),
-        ('MIROSLAV ROŽIĆ', '', False, ''),
-        ('ZVONIMIR SABATI', '', False, ''),
-        ('VLADIMIR ŠEKS', '', False, ''),
-        ('PETAR SELEM', '', False, ''),
-        ('DAMIR SESVEČAN', '', False, ''),
-        ('MARKO ŠIRAC', '', False, ''),
-        ('VLADIMIR ŠIŠLJAGIĆ', '', False, ''),
-        ('VESNA ŠKARE OŽBOLT', '', False, ''),
-        ('VESNA ŠKULIĆ', '', False, ''),
-        ('GORDANA SOBOL', '', False, ''),
-        ('ZDRAVKO SOČKOVIĆ', '', False, ''),
-        ('BOŽICA ŠOLIĆ', '', False, ''),
-        ('NIKOLA SOPČIĆ', '', False, ''),
-        ('VOJISLAV STANIMIROVIĆ', '', True, ''),
-        ('NENAD STAZIĆ', '', False, ''),
-        ('VLADIMIR ŠTENGL', '', False, ''),
-        ('IVANA SUČEC-TRAKOŠTANEC', '', False, ''),
-        ('TONČI TADIĆ', '', False, ''),
-        ('ŠEMSO TANKOVIĆ', '', True, ''),
-        ('RUŽA TOMAŠIĆ', '', False, ''),
-        ('TOMISLAV TOMIĆ', '', False, ''),
-        ('EMIL TOMLJANOVIĆ', '', False, ''),
-        ('JOZO TOPIĆ', '', False, ''),
-        ('PEJO TRGOVČEVIĆ', '', False, ''),
-        ('MARKO TURIĆ', '', False, ''),
-        ('DAVORKO VIDOVIĆ', '', False, ''),
-        ('IVAN VUČIĆ', '', False, ''),
-        ('ANTUN VUJIĆ', '', False, ''),
-        ('NIKOLA VULJANIĆ', '', False, ''),
-        ('DRAGICA ZGREBEC', '', False, ''),
-        ('MARIO ZUBOVIĆ', '', False, ''),
-        ('MIOMIR ŽUŽUL', '', False, ''),
+        ('IVICA RAČAN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, 'umro', 1),
+        ('ANTUN VUJIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 1),
+        ('MIRKO FILIPOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 1),
+        ('IVO JOSIPOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 1),
+        ('VICE VUKOV', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 1),
+        ('JELENA PAVIČIĆ VUKIČEVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 1),
+        ('JADRANKA KOSOR', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 1),
+        ('BOŽO BIŠKUPIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 1),
+        ('MARKO TURIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 1),
+        ('PETAR SELEM', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 1),
+        ('FRANJO ARAPOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 1),
+        ('VESNA PUSIĆ', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 1),
+        ('SREĆKO FERENČAK', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 1),
+        ('SLAVEN LETICA', 'HRVATSKA STRANKA PRAVA - HSP, ZAGORSKA DEMOKRATSKA STRANKA - ZDS', False, '', 1),
+        ('ANDRIJA HEBRANG', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 2),
+        ('GORDAN JANDROKOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 2),
+        ('IVANA SUČEC-TRAKOŠTANEC', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 2),
+        ('STJEPAN BAČIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 2),
+        ('DAMIR SESVEČAN', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 2),
+        ('KARMELA CAPARIN', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 2),
+        ('MILAN BANDIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 2),
+        ('ZVONIMIR MRŠIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 2),
+        ('JOZO RADOŠ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 2),
+        ('IVICA PANČIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 2),
+        ('ZLATKO TOMČIĆ', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 2),
+        ('JOSIP FRIŠČIĆ', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 2),
+        ('PERO KOVAČEVIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 2),
+        ('ĐURĐA ADLEŠIČ', 'HRVATSKA SOCIJALNO LIBERALNA STRANKA - HSLS', False, '', 2),
+        ('TONINO PICULA', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
+        ('DRAGICA ZGREBEC', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
+        ('MIROSLAV KORENIKA', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
+        ('ŽELJKO PAVLIC', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
+        ('RADIMIR ČAČIĆ', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 3),
+        ('DRAGUTIN LESAR', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 3),
+        ('ZVONIMIR SABATI', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 3),
+        ('JOSIP SUDEC', 'HRVATSKA STRANKA UMIROVLJENIKA - HSU', False, '', 3),
+        ('IVAN ČEHOK', 'HRVATSKA SOCIJALNO LIBERALNA STRANKA - HSLS, DEMOKRATSKI CENTAR - DC', False, '', 3),
+        ('IVO LONČAR', 'HRVATSKA DEMOKRATSKA SELJAČKA STRANKA - HDSS', False, '', 3),
+        ('VLADIMIR ŠEKS', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('BRANIMIR GLAVAŠ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('MATO ŠTIMAC', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('IVICA BUCONJIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('VLADIMIR ŠIŠLJAGIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('IVAN DRMIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('JOSIP ĐAKIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 4),
+        ('ŽELJKA ANTUNOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 4),
+        ('ZLATKO KRAMARIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 4),
+        ('VILIM HERMAN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 4),
+        ('ANTO ĐAPIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 4),
+        ('ŽELJKO PECEK', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 4),
+        ('ANTUN KAPRALJEVIĆ', 'HRVATSKA NARODNA STRANKA - HNS, SLAVONSKO-BARANJSKA HRVATSKA STRANKA - SBHS', False, '', 4),
+        ('DRAGUTIN PUKLEŠ', 'HRVATSKA STRANKA UMIROVLJENIKA - HSU', False, '', 4),
+        ('PETAR ČOBANKOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('ANTO BAGARIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('ZDRAVKO SOČKOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('TOMISLAV ČULJAK', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('MARIJA BAJT', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('DRAGO PRGOMET', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('PETAR MLINARIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('IVICA KLEM', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 5),
+        ('MATO ARLOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 5),
+        ('MATO GAVRAN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 5),
+        ('LJUBICA BRDARIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 5),
+        ('VLADO JUKIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 5),
+        ('LJUBICA LALIĆ', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 5),
+        ('VESNA ŠKARE-OŽBOLT', 'HRVATSKA SOCIJALNO LIBERALNA STRANKA - HSLS, DEMOKRATSKI CENTAR - DC', False, '', 5),
+        ('IVAN ŠUKER', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 6),
+        ('ĐURO BRODARAC', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 6),
+        ('STJEPAN FIOLIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 6),
+        ('MARIO ZUBOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 6),
+        ('ŽELJKO NENADIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 6),
+        ('DRAŽEN BOŠNJAKOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 6),
+        ('DAVORKO VIDOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBERALNA STRANKA - LS', False, '', 6),
+        ('IVO BANAC', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBERALNA STRANKA - LS', False, '', 6),
+        ('JOSIP LEKO', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBERALNA STRANKA - LS', False, '', 6),
+        ('SNJEŽANA BIGA-FRIGANOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBERALNA STRANKA - LS', False, '', 6),
+        ('LJUBO JURČIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBERALNA STRANKA - LS', False, '', 6),
+        ('VELIMIR KVESIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 6),
+        ('ALENKA KOŠIŠA ČIČIN-ŠAIN', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 6),
+        ('ŽELJKO LEDINSKI', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 6),
+        ('MIOMIR ŽUŽUL', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('BRANKO VUKELIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('BRANIMIR PASECKY', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('KOLINDA GRABAR-KITAROVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('IVAN VUČIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('NEVEN JURICA', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('KRUNOSLAV MLINARIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 7),
+        ('MATO CRKVENAC', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 7),
+        ('MILANKA OPAČIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 7),
+        ('VESNA ŠKULIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 7),
+        ('NENAD STAZIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 7),
+        ('MIROSLAV ROŽIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 7),
+        ('DARKO ŠANTIĆ', 'HRVATSKA NARODNA STRANKA - HNS, PRIMORSKO GORANSKI SAVEZ - PGS', False, '', 7),
+        ('BOŽIDAR PANKRETIĆ', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 7),
+        ('DAMIR KAJIN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('GORDANA SOBOL', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('VALTER DRANDIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('BISERKA PERMAN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('IVAN JAKOVČIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('ANTON PERUŠKO', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('DOROTEA PEŠIĆ-BUKOVAC', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('ZDENKO ANTEŠIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, ISTARSKI DEMOKRATSKI SABOR - IDS', False, '', 8),
+        ('LINO ČERVAR', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 8),
+        ('VLADIMIR VRANKOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 8),
+        ('NEVIO ŠETIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 8),
+        ('MILJENKO DORIĆ', 'HRVATSKA NARODNA STRANKA - HNS, PRIMORSKO GORANSKI SAVEZ - PGS', False, '', 8),
+        ('NIKOLA IVANIŠ', 'HRVATSKA NARODNA STRANKA - HNS, PRIMORSKO GORANSKI SAVEZ - PGS', False, '', 8),
+        ('SILVANO HRELJA', 'HRVATSKA STRANKA UMIROVLJENIKA - HSU', False, '', 8),
+        ('BOŽIDAR KALMETA', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('DARKO MILINOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('PERICA BUKIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('JURE BITUNJAC', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('ŠIME PRTENJAČA', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('JOZO TOPIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('EMIL TOMLJANOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('ANA LOVRIN', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('NIKO REBIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 9),
+        ('ŠIME LUČIN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 9),
+        ('INGRID ANTIČEVIĆ-MARINOVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 9),
+        ('IVICA MAŠTRUKO', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 9),
+        ('TONČI TADIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 9),
+        ('ANTE MARKOV', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 9),
+        ('IVO SANADER', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('ŽIVKO NENADIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('LUKA BEBIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('DUBRAVKA ŠUICA', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('ZVONIMIR PULJIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('DUJOMIR MARASOVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('BRANKO BAČIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 10),
+        ('SLAVKO LINIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA, LIBERALNA STRANKA - LS', False, '', 10),
+        ('MARIN JURJEVIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA, LIBERALNA STRANKA - LS', False, '', 10),
+        ('NEVEN MIMICA', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA, LIBERALNA STRANKA - LS', False, '', 10),
+        ('JAGODA MARTIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA, LIBERALNA STRANKA - LS', False, '', 10),
+        ('JAKŠA MARASOVIĆ', 'HRVATSKA NARODNA STRANKA - HNS', False, '', 10),
+        ('RUŽA TOMAŠIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 10),
+        ('LUKA ROIĆ', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 10),
+        ('ZDENKA BABIĆ PETRIČEVIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 11),
+        ('FLORIJAN BORAS', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 11),
+        ('KREŠIMIR ĆOSIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 11),
+        ('IVAN BAGARIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 11),
+        ('VOJISLAV STANIMIROVIĆ', 'SAMOSTALNA DEMOKRATSKA SRPSKA STRANKA - SDSS', True, '', 121),
+        ('MILORAD PUPOVAC', 'SAMOSTALNA DEMOKRATSKA SRPSKA STRANKA - SDSS', True, '', 121),
+        ('RATKO GAJICA', 'SAMOSTALNA DEMOKRATSKA SRPSKA STRANKA - SDSS', True, '', 121),
+        ('JENE ADAM', 'DEMOKRATSKA ZAJEDNICA MAĐARA HRVATSKE - DZMH', True, '', 122),
+        ('FURIO RADIN', 'NEZAVISNI', True, '', 123),
+        ('ZDENKA ČUHNIL', 'HRVATSKA SELJAČKA STRANKA - HSS', True, '', 124),
+        ('NIKOLA MAK', 'NJEMAČKA NARODNOSNA ZAJEDNICA - ZEMALJSKA UDRUGA PODUNAVSKIH ŠVABA U HRVATSKOJ-OSIJEK', True, '', 125),
+        ('ŠEMSO TANKOVIĆ', 'STRANKA DEMOKRATSKE AKCIJE HRVATSKE - SDA HRVATSKE', True, '', 126),
     ],
     # 6. saziv (2008-2011), constituted 11 Jan 2008 and dissolved 28 Oct 2011.
     # 153 members for the 153 seats of that Sabor — 2007 is the one year the
@@ -561,6 +575,44 @@ _ALIAS_BY_VARIANT = {
 }
 
 
+def _check_district_seats(roster, stderr, style):
+    """Report districts whose member count differs from their seat count.
+
+    Only meaningful for a roster that records districts. Districts I-X always
+    return 14 and the six minority sub-districts always return 3/1/1/1/1/1, so
+    those are checkable without consulting the election. Diaspora district XI
+    is not: its size is year-dependent and that table lives in app.py, so it is
+    reported rather than asserted.
+    """
+    counts = {}
+    for entry in roster:
+        d = _unpack(entry)[4]
+        if d:
+            counts[d] = counts.get(d, 0) + 1
+    if not counts:
+        return
+    expected = {n: 14 for n in range(1, 11)} | MINORITY_SEATS
+    for number in sorted(counts):
+        want = expected.get(number)
+        if want is not None and counts[number] != want:
+            stderr.write(style.ERROR(
+                f'  district {number}: {counts[number]} member(s) for {want} seat(s) '
+                f'— roster is incomplete'))
+    if 11 in counts:
+        stderr.write(f'  district 11 (dijaspora): {counts[11]} member(s)')
+
+
+def _unpack(entry):
+    """(name, party, minority, note, district) from a roster entry.
+
+    2003 carries a district as a fifth field; 2007 and 2011 have no district to
+    carry, so their entries stay four-wide rather than ending in a column of
+    None.
+    """
+    name, party, minority, note = entry[:4]
+    return name, party, minority, note, (entry[4] if len(entry) > 4 else None)
+
+
 def _find_person(normalized):
     """Look up a Person by normalized name, tolerating hyphen spelling.
 
@@ -639,6 +691,8 @@ PARTY_FULL_NAMES = {
     'ORaH':  'ODRŽIVI RAZVOJ HRVATSKE - ORaH',
     'SDAH':  'STRANKA DEMOKRATSKE AKCIJE HRVATSKE - SDA HRVATSKE',
     'DZMH':  'DEMOKRATSKA ZAJEDNICA MAĐARA HRVATSKE - DZMH',
+    'NNZ':   ('NJEMAČKA NARODNOSNA ZAJEDNICA - ZEMALJSKA UDRUGA PODUNAVSKIH '
+              'ŠVABA U HRVATSKOJ-OSIJEK'),
     'Novi val': 'NOVI VAL - STRANKA RAZVOJA - NOVI VAL',
     'HSP dr. Ante Starčević': 'HRVATSKA STRANKA PRAVA DR.ANTE STARČEVIĆ - HSP DR.ANTE STARČEVIĆ',
     'Hrvatski laburisti - Stranka rada': 'HRVATSKI LABURISTI - STRANKA RADA',
@@ -682,16 +736,35 @@ class Command(BaseCommand):
         created = updated = new_persons = linked = 0
         kept_ids = []
         with transaction.atomic():
-            unknown = sorted({p for _, p, _, _ in roster
-                              if p and p not in PARTY_FULL_NAMES})
+            # A roster may name the party either way: 2007 and 2011 write the
+            # abbreviation and it is expanded here, while 2003 carries the full
+            # electoral-list name, coalitions included, which has no
+            # abbreviation to write. Validating the second form against the
+            # lists actually imported for the year is the useful check — it
+            # catches a mistyped coalition and guarantees the column matches
+            # the hemicycle legend character for character.
+            known = (set(PARTY_FULL_NAMES) | set(PARTY_FULL_NAMES.values())
+                     | set(ElectoralList.objects
+                           .filter(election_round__election=election)
+                           .values_list('name', flat=True)))
+            unknown = sorted({e[1] for e in roster if e[1] and e[1] not in known})
             if unknown:
                 self.stderr.write(self.style.ERROR(
                     f'No full name for party label(s): {unknown}. '
                     f'Add them to PARTY_FULL_NAMES.'))
                 return
 
-            for full_name, party, minority, note in roster:
+            districts = {
+                d.number: d for d in ElectoralDistrict.objects.filter(election=election)
+            }
+            for entry in roster:
+                full_name, party, minority, note, district_num = _unpack(entry)
                 party = PARTY_FULL_NAMES.get(party, party)
+                district = districts.get(district_num) if district_num else None
+                if district_num and district is None:
+                    self.stderr.write(self.style.WARNING(
+                        f'  no district {district_num} in {year}; '
+                        f'{full_name} stored without one'))
                 normalized = normalize_person_name(full_name)
                 person = _find_person(normalized)
                 if person and person.normalized_name != normalized:
@@ -729,8 +802,8 @@ class Command(BaseCommand):
 
                 obj, was_created = ParliamentMember.objects.update_or_create(
                     election=election, person=person,
-                    defaults={'party': party, 'minority': minority,
-                              'note': note, 'candidacy': candidacy},
+                    defaults={'party': party, 'minority': minority, 'note': note,
+                              'candidacy': candidacy, 'district': district},
                 )
                 kept_ids.append(obj.id)
                 created += was_created
@@ -748,11 +821,12 @@ class Command(BaseCommand):
             if dry_run:
                 transaction.set_rollback(True)
 
+        _check_district_seats(roster, self.stderr, self.style)
+
         # Cross-check the district-XII half of the roster against the votes.
         expected = _minority_winners(round_ids)
         claimed = {
-            normalize_person_name(full_name)
-            for full_name, _, minority, _ in roster if minority
+            normalize_person_name(e[0]) for e in roster if e[2]
         }
         wrong = sorted(claimed - set(expected))
         missed = sorted(set(expected) - claimed)
@@ -769,10 +843,11 @@ class Command(BaseCommand):
                 ))
 
         by_party = {}
-        for _, party, _, _ in roster:
+        for entry in roster:
+            party = _unpack(entry)[1]
             label = PARTY_FULL_NAMES.get(party, party) or '(stranka nije zabilježena)'
             by_party[label] = by_party.get(label, 0) + 1
-        minority_n = sum(1 for _, _, m, _ in roster if m)
+        minority_n = sum(1 for e in roster if e[2])
 
         self.stdout.write('')
         for party, n in sorted(by_party.items(), key=lambda kv: (-kv[1], kv[0])):
