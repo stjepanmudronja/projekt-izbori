@@ -4899,8 +4899,12 @@ function renderActualSaborResults(seatsData, opts) {
 
     // Roster parties are individual caucuses (SDP, HNS, IDS…), not the joint
     // lists the hemicycle is coloured by, so they get their own colour ramp.
+    // Some rosters record no party at all — the published list of the 2003
+    // saziv is names only — and then the column and the colour dot are
+    // dropped rather than shown empty for every row.
+    const hasParty = useRoster && members.some(m => m.party);
     const rosterColors = {};
-    if (useRoster) {
+    if (hasParty) {
         const order = [];
         members.forEach(m => { if (!order.includes(m.party)) order.push(m.party); });
         order.forEach((party, i) => { rosterColors[party] = hemicycleColors[i % hemicycleColors.length]; });
@@ -4911,6 +4915,8 @@ function renderActualSaborResults(seatsData, opts) {
     const candRows = tableRows.map((row, i) => {
         const hidden = i >= INITIAL ? ` style="display:none;" class="${extraCls}"` : '';
         const color = useRoster ? rosterColors[row.party] : row.color;
+        const dot = (useRoster && !hasParty) ? ''
+            : `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>`;
         // Clickable name → that politician's page (delegated handler at .bar-label-link).
         // A derived seat with no known holder gets inert placeholder text:
         // linking it would fire a politician search for a party name.
@@ -4921,7 +4927,9 @@ function renderActualSaborResults(seatsData, opts) {
         const lastCol = useRoster
             ? `${row.minority ? '<span class="badge bg-secondary" style="font-size:0.7rem;">nacionalne manjine</span> ' : ''}${escapeHtml(row.note || '')}`
             : row.district;
-        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${nameHtml}</td><td class="text-muted" style="font-size:0.85rem;">${escapeHtml(row.party)}</td><td class="text-muted" style="font-size:0.85rem;">${lastCol}</td></tr>`;
+        const partyCell = (useRoster && !hasParty) ? ''
+            : `<td class="text-muted" style="font-size:0.85rem;">${escapeHtml(row.party)}</td>`;
+        return `<tr${hidden}><td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td><td>${dot}${nameHtml}</td>${partyCell}<td class="text-muted" style="font-size:0.85rem;">${lastCol}</td></tr>`;
     }).join('');
     const showBtn = tableRows.length > INITIAL
         ? `<div class="text-center mt-2"><button class="btn btn-outline-primary btn-sm" onclick="document.querySelectorAll('.${extraCls}').forEach(r=>r.style.display='');this.style.display='none';"><i class="bi bi-chevron-down me-1"></i>Prikaži sve (${tableRows.length - INITIAL} preostalih)</button></div>` : '';
@@ -4938,6 +4946,7 @@ function renderActualSaborResults(seatsData, opts) {
                <i class="bi bi-info-circle me-1"></i>Zastupnici izabrani na ovim izborima. Imena nisu izračunata iz rezultata —
                preferencijsko glasovanje uvedeno je tek 2015., pa za izborne jedinice I.-XI. nisu objavljena imena kandidata.
                Zamjenici koji su mandat preuzeli tijekom saziva nisu na popisu.
+               ${hasParty ? '' : 'Objavljeni popis ovog saziva navodi samo imena, bez stranačke pripadnosti.'}
                ${short > 0 ? `Poznato je ${tableRows.length} od ${seatList.length} mandata.` : ''}
            </div>`;
     } else if (namedSeats < seatList.length) {
@@ -4952,7 +4961,7 @@ function renderActualSaborResults(seatsData, opts) {
         <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
         ${missingNote}
         <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:0.88rem;">
-            <thead><tr><th></th><th>Ime i prezime</th><th>${useRoster ? 'Stranka / klub' : 'Stranka / Koalicija'}</th><th>${useRoster ? 'Napomena' : 'Izborna jedinica'}</th></tr></thead>
+            <thead><tr><th></th><th>Ime i prezime</th>${(useRoster && !hasParty) ? '' : `<th>${useRoster ? 'Stranka / klub' : 'Stranka / Koalicija'}</th>`}<th>${useRoster ? 'Napomena' : 'Izborna jedinica'}</th></tr></thead>
             <tbody>${candRows}</tbody>
         </table></div>${showBtn}`;
 }
