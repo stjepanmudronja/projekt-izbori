@@ -290,15 +290,22 @@ def round_date_iso(er, election=None):
 # converted diaspora votes at the domestic votes-per-seat rate, which gave 5
 # seats in 2007. From 2011 on it is a fixed 3. Everything else has been stable
 # across every year we import — 14 seats per district I-X, 8 for the minorities.
-DIASPORA_SEATS_BY_YEAR = {2003: 4, 2007: 5}
+DIASPORA_SEATS_BY_YEAR = {2000: 6, 2003: 4, 2007: 5}
+
+# District XII returned 5 members under the 1999 law and 8 from 2003 on.
+MINORITY_SEATS_BY_YEAR = {2000: 5}
 
 
 def diaspora_seats(year):
     return DIASPORA_SEATS_BY_YEAR.get(year, 3)
 
 
+def minority_seats(year):
+    return MINORITY_SEATS_BY_YEAR.get(year, 8)
+
+
 def sabor_total_seats(year):
-    return 140 + diaspora_seats(year) + 8
+    return 140 + diaspora_seats(year) + minority_seats(year)
 
 
 # Cache of Sabor seat winners per election round (data is static after import).

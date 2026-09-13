@@ -4967,6 +4967,17 @@ function renderActualSaborResults(seatsData, opts) {
            </div>`;
     }
 
+    // The hemicycle reports the Sabor's full size, but only districts we hold
+    // results for can be allocated. 2000 is the case: its diaspora and
+    // minority districts returned 11 members whose results were never
+    // supplied, so saying "151 mandata" over 140 dots needs explaining.
+    if (seatList.length < totalSeats) {
+        missingNote += `<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.82rem;">
+               <i class="bi bi-exclamation-triangle me-1"></i>Prikazano je ${seatList.length} od ${totalSeats} mandata —
+               za ovu godinu nisu uvezeni rezultati svih izbornih jedinica.
+           </div>`;
+    }
+
     candEl.innerHTML = `
         <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-lines-fill me-2"></i>Zastupnici</h6>
         ${missingNote}
