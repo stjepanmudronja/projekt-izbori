@@ -2336,7 +2336,11 @@ function rankBadgeHtml(r) {
         return `<span class="badge rank-badge rank-eu" title="Zastupnik u Europskom parlamentu (saziv ${r.year}.)${escapeHtml(grp)}">🔵 Ušao u EU parlament</span>`;
     }
     if (r.won_seat) {
-        return `<span class="badge rank-badge rank-seat" title="Osvojio mandat — ušao u Sabor">🟢 Ušao u Sabor</span>`;
+        // The Županijski dom was a chamber of the Sabor, not the Sabor, and a
+        // badge reading "Ušao u Sabor" on a 1997 upper-house mandate reads as
+        // the lower house.
+        const house = /Županijski/.test(r.election_type || '') ? 'Županijski dom' : 'Sabor';
+        return `<span class="badge rank-badge rank-seat" title="Osvojio mandat — ušao u ${house}">🟢 Ušao u ${house}</span>`;
     }
     if (!r.rank) return '';
     const total = r.total_candidates_in_round || '';
