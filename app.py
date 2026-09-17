@@ -690,13 +690,14 @@ def person_detail(person_id):
         c.electoral_list.election_round.election.id for c in candidacies
     }
     memberships = (
-        db.session.query(ParliamentMember, Election, ElectionType)
+        db.session.query(ParliamentMember, Election, ElectionType, ElectoralDistrict)
         .join(Election, Election.id == ParliamentMember.election_id)
         .join(ElectionType, ElectionType.id == Election.election_type_id)
+        .outerjoin(ElectoralDistrict, ElectoralDistrict.id == ParliamentMember.district_id)
         .filter(ParliamentMember.person_id == person_id)
         .all()
     )
-    for m, election, etype in memberships:
+    for m, election, etype, mdistrict in memberships:
         if election.id in covered_elections:
             continue
         er = (
@@ -712,7 +713,10 @@ def person_detail(person_id):
             'round': er.round_number if er else 1,
             'list_name': m.party,
             'position': None,
-            'district': 'XII. IJ - nacionalne manjine' if m.minority else None,
+            # A roster published per district names one (2003's Sabor, every
+            # Županijski dom county); a national roll does not.
+            'district': (mdistrict.name if mdistrict else
+                         ('XII. IJ - nacionalne manjine' if m.minority else None)),
             'candidate_votes': 0,
             'list_votes': 0,
             'total_valid_ballots': 0,
@@ -721,6 +725,10 @@ def person_detail(person_id):
             'total_candidates_in_round': None,
             'won_seat': True,
             'mandate_only': True,
+            # Why there is no personal result differs by chamber: the Sabor
+            # had no preferential vote before 2015, while the Županijski dom
+            # was abolished in 2001 and never had one at all.
+            'mandate_reason': ('sabor' if etype.slug == 'sabor' else 'list_only'),
             'note': m.note or '',
             'eu_mep': False,
             'eu_group': None,
@@ -2258,6 +2266,14 @@ ANALYTICS_CATEGORIES = {
         'label': 'Parlamentarni izbori (Sabor)',
         'short': 'Sabor',
         'types': ['Parlamentarni izbori'],
+    },
+    # The Sabor's upper house, 1993-2001. Kept apart from 'sabor' on purpose:
+    # it is a different chamber, and merging the two would add its 63 county
+    # seats to a Zastupnički dom total and double-count 1997's electorate.
+    'zupanijski_dom': {
+        'label': 'Županijski dom Sabora',
+        'short': 'Županijski dom',
+        'types': ['Županijski dom Sabora'],
     },
     'eu': {
         'label': 'EU parlamentarni izbori',

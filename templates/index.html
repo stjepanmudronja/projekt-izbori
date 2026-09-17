@@ -1271,6 +1271,7 @@
                             <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="lokalni" id="izlCatLokalni" checked><label class="form-check-label" for="izlCatLokalni">Lokalni izbori</label></div>
                             <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="predsjednicki" id="izlCatPredsjednicki" checked><label class="form-check-label" for="izlCatPredsjednicki">Predsjednički</label></div>
                             <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="sabor" id="izlCatSabor" checked><label class="form-check-label" for="izlCatSabor">Sabor</label></div>
+                            <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="zupanijski_dom" id="izlCatZupDom" checked><label class="form-check-label" for="izlCatZupDom" title="Gornji dom Sabora, 1993.-2001.">Županijski dom</label></div>
                             <div class="form-check"><input class="form-check-input" type="checkbox" id="izlShowRound2" checked><label class="form-check-label" for="izlShowRound2">2. krug</label></div>
                         </div>
                     </div>
@@ -2175,8 +2176,7 @@ function renderMultiLineChart(panel, type) {
                             if (r.rank === 1) return `🥇 Pobjednik (1. od ${r.total})`;
                             if (r.rank === 2) return `🥈 Drugoplasirani (2. od ${r.total})`;
                             if (r.won_seat && r.mandate_only) {
-                                return '🟢 Ušao u Sabor — preferencijski glasovi uvedeni su tek 2015., '
-                                     + 'pa za ovaj mandat nema osobnog rezultata';
+                                return '🟢 Osvojio mandat — ' + mandateReasonText(r).replace(/\.$/, '');
                             }
                             if (r.won_seat) return `🟢 Ušao u Sabor`;
                             if (r.eu_mep) return `🔵 Ušao u EU parlament`;
@@ -2242,7 +2242,7 @@ function renderPersonResultsHTML(results) {
                 ${/* A mandate won before preferential voting has no personal
                       result, so this row would otherwise be an empty strip
                       under a divider. Say why instead. */ ''}
-                ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>Preferencijski glasovi uvedeni su tek 2015., pa za ovaj mandat nema osobnog rezultata.</small>` : ''}
+                ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${mandateReasonText(r)}</small>` : ''}
                 ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
                 ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
             </div>
@@ -2319,6 +2319,16 @@ function formatPct(n, decimals = 1) {
     }) + '%';
 }
 
+// A mandate with no personal vote attached. The Sabor's reason is that
+// preferential voting arrived only in 2015; the Županijski dom never had it,
+// having been abolished in 2001, so the 2015 date would make no sense there.
+function mandateReasonText(r) {
+    if (r.mandate_reason === 'sabor' || !r.mandate_reason) {
+        return 'Preferencijski glasovi uvedeni su tek 2015., pa za ovaj mandat nema osobnog rezultata.';
+    }
+    return 'Objavljeni su samo rezultati po listama, pa za ovaj mandat nema osobnog rezultata.';
+}
+
 function rankBadgeHtml(r) {
     if (!r) return '';
     if (r.eu_mep) {
@@ -2380,7 +2390,7 @@ function renderPersonResults(container, results) {
                 ${/* A mandate won before preferential voting has no personal
                       result, so this row would otherwise be an empty strip
                       under a divider. Say why instead. */ ''}
-                ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>Preferencijski glasovi uvedeni su tek 2015., pa za ovaj mandat nema osobnog rezultata.</small>` : ''}
+                ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${mandateReasonText(r)}</small>` : ''}
                 ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
                 ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
                 ${r.list_votes && r.list_votes !== r.candidate_votes ? `<small class="text-muted"><i class="bi bi-list-ul me-1"></i>Glasovi za listu: <strong>${formatNumber(r.list_votes)}</strong></small>` : ''}
