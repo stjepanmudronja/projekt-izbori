@@ -707,6 +707,11 @@
                     <i class="bi bi-people-fill"></i> Rezultati i koalicije (Sabor)
                 </a>
             </li>
+            <li>
+                <a href="#" data-module="zupanijski-dom">
+                    <i class="bi bi-bank"></i> Županijski dom (1997)
+                </a>
+            </li>
             <li><a href="#" data-module="analytics-turnout">
                 <i class="bi bi-graph-up"></i> Izlaznost
             </a></li>
@@ -1224,6 +1229,13 @@
         </div>
 
         <!-- Izlaznost (turnout) analytics -->
+        <div id="module-zupanijski-dom" class="module-panel">
+            <div class="spinner-wrapper" id="zdSpinner" style="display:none;">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div id="zdArea"></div>
+        </div>
+
         <div id="module-analytics-turnout" class="module-panel">
             <div class="card search-card p-4 mb-3">
                 <div class="row g-4 align-items-start">
@@ -1318,6 +1330,7 @@ const moduleTitles = {
     'results-eu': '<i class="bi bi-globe-europe-africa me-2"></i>EU parlamentarni izbori',
     'results-lokalni': '<i class="bi bi-building me-2"></i>Lokalni izbori',
     'sabor-analysis': '<i class="bi bi-people-fill me-2"></i>Rezultati i koalicije (Sabor)',
+    'zupanijski-dom': '<i class="bi bi-bank me-2"></i>Županijski dom Sabora (1997)',
     'analytics-turnout': '<i class="bi bi-graph-up me-2"></i>Izlaznost',
 };
 
@@ -1335,6 +1348,7 @@ const MODULE_SLUGS = {
     'results-eu': 'eu-parlamentarni-izbori',
     'results-lokalni': 'lokalni-izbori',
     'sabor-analysis': 'rezultati-koalicije-sabor',
+    'zupanijski-dom': 'zupanijski-dom',
     'analytics-turnout': 'izlaznost',
     'analytics-map': 'karta',
 };
@@ -1364,6 +1378,7 @@ function activateModule(mod, opts) {
     if (moduleTitles[mod]) moduleTitle.innerHTML = moduleTitles[mod];
 
     if (mod === 'analytics-turnout') initIzlaznost();
+    if (mod === 'zupanijski-dom') initZupanijskiDom();
     if (mod === 'sabor-analysis') initSaborAnalysis();
     if (mod === 'results-lokalni') initLokalniModule();
     else if (mod && mod.startsWith('results-')) {
@@ -6943,6 +6958,119 @@ async function loadIzlaznostData() {
     spinner.style.display = 'none';
 
     renderIzlaznostChart(data);
+}
+
+// ---- Županijski dom (upper house, 1997) ---------------------------------
+//
+// Its own module rather than a year of the Sabor page: a different chamber,
+// counties for districts, three seats each however large, and seats that the
+// DIP report states outright instead of an allocation to compute.
+let _zdLoaded = false;
+
+async function initZupanijskiDom() {
+    if (_zdLoaded) return;
+    const spinner = document.getElementById('zdSpinner');
+    const area = document.getElementById('zdArea');
+    spinner.style.display = '';
+    try {
+        const res = await fetch('/api/national/zupanijski-dom/1997');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        renderZupanijskiDom(await res.json(), area);
+        _zdLoaded = true;
+    } catch (err) {
+        area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje: ${escapeHtml(String(err))}</div>`;
+    } finally {
+        spinner.style.display = 'none';
+    }
+}
+
+function renderZupanijskiDom(d, area) {
+    const t = d.totals || {};
+    const turnoutPct = t.registered ? (t.cast / t.registered * 100) : 0;
+    const colors = {};
+    (d.parties || []).forEach((p, i) => { colors[p.name] = hemicycleColors[i % hemicycleColors.length]; });
+
+    const dateLabel = d.date
+        ? new Date(d.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : d.year;
+
+    const partyRows = (d.parties || []).map(p => `
+        <div class="d-flex align-items-center gap-2" style="font-size:0.86rem; padding:3px 0;">
+            <span style="width:13px;height:13px;border-radius:50%;background:${colors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
+            <span class="fw-semibold flex-grow-1">${escapeHtml(p.name)}</span>
+            <span class="text-muted">${p.seats}</span>
+        </div>`).join('');
+
+    const counties = (d.counties || []).map(c => {
+        const lists = c.lists.map(l => `
+            <tr${l.seats ? '' : ' class="text-muted"'}>
+                <td>${l.seats ? `<span class="badge bg-success" style="font-size:0.7rem;">${l.seats}</span>` : ''}</td>
+                <td style="font-size:0.85rem;">${escapeHtml(l.name)}</td>
+                <td class="text-end" style="font-size:0.85rem;">${formatNumber(l.votes)}</td>
+                <td class="text-end" style="font-size:0.85rem;">${formatPct(l.pct, 2)}</td>
+            </tr>`).join('');
+        const members = c.members.map(m => `
+            <div style="font-size:0.85rem;">
+                <span class="bar-label-link" data-person-name="${escapeHtml(m.name)}" title="Otvori stranicu političara: ${escapeHtml(m.name)}">${escapeHtml(m.name)}</span>
+                ${m.deputy ? `<small class="text-muted"> — zamjenik: ${escapeHtml(m.deputy)}</small>` : ''}
+            </div>`).join('');
+        return `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="fw-bold">${escapeHtml(c.name)}</span>
+                    <span class="badge bg-dark ms-2" style="font-size:0.72rem;">${c.seats} mandata</span>
+                </div>
+                <small class="text-muted">
+                    ${formatNumber(c.registered)} upisanih · ${formatNumber(c.cast)} glasovalo ·
+                    ${formatPct(c.registered ? c.cast / c.registered * 100 : 0)} izlaznost
+                </small>
+            </div>
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-hover mb-2">
+                    <thead><tr><th style="width:34px;"></th><th>Lista</th><th class="text-end">Glasovi</th><th class="text-end">%</th></tr></thead>
+                    <tbody>${lists}</tbody>
+                </table>
+            </div>
+            <div class="mt-1"><small class="text-muted fw-semibold">Izabrani zastupnici</small>${members}</div>
+        </div>`;
+    }).join('');
+
+    area.innerHTML = `
+        <div class="card p-3 mb-3">
+            <h5 class="fw-bold mb-1">Županijski dom Sabora — ${dateLabel}</h5>
+            <p class="text-muted mb-3" style="font-size:0.86rem;">
+                Gornji dom Sabora, 1993.–2001. Svaka od 21 županije birala je po
+                ${d.seats_per_county} zastupnika, neovisno o veličini, pa je izabrano
+                ${d.elected_seats}. Dom je ukinut ustavnim promjenama 2001.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">Mandati po listama</div>
+                    ${partyRows}
+                    <div class="text-muted mt-2" style="font-size:0.8rem;">
+                        Ukupno ${d.elected_seats} izabranih; dom je uz njih imao i
+                        ${d.appointed_seats} imenovanih zastupnika (${d.elected_seats + d.appointed_seats} ukupno),
+                        koje izvješće DIP-a ne navodi.
+                        <br>Mandati su prikazani po <em>listi</em> — kako ih izvješće navodi — a ne po
+                        stranačkoj pripadnosti pojedinog zastupnika; zajedničke liste zato stoje pod
+                        prvom navedenom strankom.
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">Izlaznost</div>
+                    <div style="font-size:0.86rem;">
+                        <div class="d-flex justify-content-between"><span class="text-muted">Upisanih birača</span><strong>${formatNumber(t.registered || 0)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Glasovalo</span><strong>${formatNumber(t.cast || 0)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Važećih listića</span><strong>${formatNumber(t.valid || 0)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Nevažećih listića</span><strong>${formatNumber(t.invalid || 0)}</strong></div>
+                        <div class="d-flex justify-content-between mt-1 pt-1" style="border-top:1px solid rgba(0,0,0,0.08);"><span class="text-muted">Izlaznost</span><strong>${formatPct(turnoutPct)}</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <h6 class="fw-bold mb-2"><i class="bi bi-geo-alt me-2"></i>Rezultati po županijama</h6>
+        ${counties}`;
 }
 
 function izlScopeTitle() {

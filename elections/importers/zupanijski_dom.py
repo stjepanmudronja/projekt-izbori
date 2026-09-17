@@ -133,6 +133,26 @@ class ZupanijskiDomImporter(BaseImporter):
 
     # ---- members --------------------------------------------------------
 
+    @staticmethod
+    def _match_list_name(prose, names):
+        """Resolve the report's prose list name to the stored one.
+
+        Section III writes a winning list as "A - X i B - Y", joining the last
+        pair with "i", while the vote table of section II lists the parties one
+        per line, which is stored comma-separated. Matching on the set of
+        party abbreviations sidesteps both that and any spacing difference.
+        """
+        def abbrs(text):
+            parts = text.replace(' i ', ', ').split(',')
+            return frozenset(
+                (p.split(' - ')[-1] if ' - ' in p else p).strip().upper()
+                for p in parts if p.strip())
+        want = abbrs(prose)
+        for name in names:
+            if abbrs(name) == want:
+                return name
+        return prose
+
     def _record_members(self, election, entry):
         """Store the county's 3 members as ParliamentMember rows.
 
@@ -142,8 +162,10 @@ class ZupanijskiDomImporter(BaseImporter):
         from elections.models import ParliamentMember, ElectoralDistrict
         district = ElectoralDistrict.objects.filter(
             election=election, number=int(entry['code'])).first()
+        list_names = set(self._list_names(entry['lists']).values())
         n = 0
         for seat in entry['seats']:
+            stored_list = self._match_list_name(seat['list'], list_names)
             for member in seat['elected']:
                 name = clean_candidate_name(member['name']).upper()
                 if not name:
@@ -152,7 +174,7 @@ class ZupanijskiDomImporter(BaseImporter):
                 deputy = clean_candidate_name(member['deputy']).upper()
                 ParliamentMember.objects.update_or_create(
                     election=election, person=person,
-                    defaults={'party': seat['list'], 'minority': False,
+                    defaults={'party': stored_list, 'minority': False,
                               'district': district,
                               'note': f'zamjenik: {deputy}' if deputy else ''},
                 )

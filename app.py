@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 
@@ -99,6 +101,9 @@ class ElectoralDistrict(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.Integer)
     name = db.Column(db.String)
+    # Districts are per election — the same number means a different area in
+    # different years, and 1997's are counties rather than izborne jedinice.
+    election_id = db.Column(db.Integer, db.ForeignKey('elections_election.id'))
 
 
 class ListResult(db.Model):
@@ -171,7 +176,7 @@ def index():
 SPA_ROUTES = {
     'politicar', 'stranka', 'prema-lokaciji', 'usporedba',
     'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
-    'rezultati-koalicije-sabor', 'izlaznost', 'karta',
+    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta',
 }
 
 
@@ -1663,6 +1668,109 @@ def sabor_seats(year):
         'candidates': ordered_candidates,
         'members': members,
         'districts': district_details,
+    })
+
+
+@app.route('/api/national/zupanijski-dom/<int:year>')
+def zupanijski_dom_results(year):
+    """Per-county results for the Sabor's upper house.
+
+    Nothing is allocated here. Each county returned exactly 3 members and the
+    DIP report names them, so the seats come from stored ParliamentMember rows
+    rather than a D'Hondt pass — which is why this is its own endpoint and not
+    a year of /api/national/sabor-seats.
+    """
+    etype = ElectionType.query.filter_by(slug='sabor_zupanijski').first()
+    election = (Election.query.filter_by(election_type_id=etype.id, year=year).first()
+                if etype else None)
+    if not election:
+        return jsonify({'error': 'No Županijski dom election for this year'}), 404
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+
+    members_by_district = defaultdict(list)
+    for m, prs in (db.session.query(ParliamentMember, Person)
+                   .join(Person, Person.id == ParliamentMember.person_id)
+                   .filter(ParliamentMember.election_id == election.id).all()):
+        members_by_district[m.district_id].append({
+            'name': f'{prs.first_name} {prs.last_name}'.strip(),
+            'list': m.party,
+            # The importer stores "zamjenik: X" here; the label is the UI's job.
+            'deputy': (m.note or '').replace('zamjenik:', '').strip(),
+        })
+
+    # Seats per list, per district, straight off the roster.
+    seats_by_list = defaultdict(lambda: defaultdict(int))
+    for did, rows in members_by_district.items():
+        for row in rows:
+            seats_by_list[did][row['list']] += 1
+
+    counties, totals = [], {'registered': 0, 'cast': 0, 'valid': 0, 'invalid': 0}
+    national_seats = defaultdict(int)
+    for district in (ElectoralDistrict.query
+                     .filter_by(election_id=election.id)
+                     .order_by(ElectoralDistrict.number).all()):
+        rows = (db.session.query(ElectoralList.id, ElectoralList.name,
+                                 db.func.sum(ListResult.votes))
+                .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
+                .filter(ElectoralList.district_id == district.id)
+                .group_by(ElectoralList.id, ElectoralList.name)
+                .all())
+        valid = sum(int(r[2] or 0) for r in rows)
+        # Scope by station id, resolved first. Joining ListResult here instead
+        # would emit one turnout row per list and multiply the electorate by
+        # the number of lists that stood.
+        station_ids = [sid for (sid,) in db.session.query(ListResult.polling_station_id)
+                       .filter(ListResult.electoral_list_id.in_([r[0] for r in rows]))
+                       .distinct().all()] if rows else []
+        turnout = (db.session.query(
+                        db.func.sum(TurnoutData.registered_voters),
+                        db.func.sum(TurnoutData.ballots_cast),
+                        db.func.sum(TurnoutData.valid_ballots),
+                        db.func.sum(TurnoutData.invalid_ballots))
+                   .filter(TurnoutData.election_round_id == er.id,
+                           TurnoutData.polling_station_id.in_(station_ids))
+                   .first()) if station_ids else (0, 0, 0, 0)
+        seats = seats_by_list.get(district.id, {})
+        for name, n in seats.items():
+            national_seats[name] += n
+        totals['registered'] += int(turnout[0] or 0)
+        totals['cast'] += int(turnout[1] or 0)
+        totals['valid'] += int(turnout[2] or 0)
+        totals['invalid'] += int(turnout[3] or 0)
+        counties.append({
+            'number': district.number,
+            'name': district.name,
+            'registered': int(turnout[0] or 0),
+            'cast': int(turnout[1] or 0),
+            'valid': int(turnout[2] or 0),
+            'invalid': int(turnout[3] or 0),
+            'seats': sum(seats.values()),
+            'lists': sorted(
+                [{'name': r[1], 'votes': int(r[2] or 0),
+                  'pct': round(int(r[2] or 0) / valid * 100, 2) if valid else 0,
+                  'seats': seats.get(r[1], 0)} for r in rows],
+                key=lambda x: -x['votes']),
+            'members': sorted(members_by_district.get(district.id, []),
+                              key=lambda m: m['name']),
+        })
+
+    # Group the national tally the way every other results page does: by the
+    # first-named party of the list, so a joint ticket lands under its leader.
+    grouped = defaultdict(int)
+    for name, n in national_seats.items():
+        grouped[name.split(',')[0].split(' i ')[0].strip()] += n
+
+    return jsonify({
+        'year': year,
+        'date': round_date_iso(er, election) if er else None,
+        'elected_seats': sum(national_seats.values()),
+        # The President appointed five more; they are not in the DIP report.
+        'appointed_seats': 5,
+        'seats_per_county': 3,
+        'totals': totals,
+        'parties': sorted(({'name': k, 'seats': v} for k, v in grouped.items()),
+                          key=lambda x: (-x['seats'], x['name'])),
+        'counties': counties,
     })
 
 
