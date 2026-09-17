@@ -2025,10 +2025,15 @@ function renderMultiLineChart(panel, type) {
 
     const votesKey = type === 'person' ? 'candidate_votes' : 'total_votes';
 
+    // A pre-2015 Sabor mandate has no preferential vote to plot — the ballot
+    // had none — but dropping it would erase a term served from the chart
+    // entirely. Keep it, at 0%, and say why in the tooltip.
+    const plottable = r => r[votesKey] > 0 || r.mandate_only;
+
     // Build unified X-axis labels from all items
     const allLabelsSet = new Map(); // key -> display label
     items.forEach(item => {
-        const filtered = filterResults(item.data.results, type).filter(r => r[votesKey] > 0);
+        const filtered = filterResults(item.data.results, type).filter(plottable);
         filtered.forEach(r => {
             const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
             if (!allLabelsSet.has(key)) {
@@ -2085,7 +2090,7 @@ function renderMultiLineChart(panel, type) {
     // Build one dataset per item
     const datasets = items.map((item, i) => {
         const color = compareLineColors[i % compareLineColors.length];
-        const filtered = filterResults(item.data.results, type).filter(r => r[votesKey] > 0);
+        const filtered = filterResults(item.data.results, type).filter(plottable);
 
         // Map results to unified label positions
         const resultMap = {};
@@ -2093,7 +2098,7 @@ function renderMultiLineChart(panel, type) {
         filtered.forEach(r => {
             const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
             resultMap[key] = r.vote_share || 0;
-            if (r.rank || r.won_seat || r.eu_mep) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round, won_seat: r.won_seat, eu_mep: r.eu_mep };
+            if (r.rank || r.won_seat || r.eu_mep) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round, won_seat: r.won_seat, eu_mep: r.eu_mep, mandate_only: r.mandate_only };
         });
 
         const data = labelKeys.map(k => resultMap[k] ?? null);
@@ -2124,7 +2129,10 @@ function renderMultiLineChart(panel, type) {
     });
 
     const allValues = datasets.flatMap(ds => ds.data.filter(v => v !== null));
-    const maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
+    // Someone whose only plotted points are pre-2015 mandates sits entirely at
+    // 0%; without a floor the y-axis would collapse to zero height.
+    const peak = allValues.length > 0 ? Math.max(...allValues) : 0;
+    const maxVal = peak > 0 ? peak : 100;
 
     // Wider per-election spacing + horizontal scroll, set up before chart
     // creation so Chart.js sizes to the (potentially wider) inner element.
@@ -2166,6 +2174,10 @@ function renderMultiLineChart(panel, type) {
                             if (!r) return '';
                             if (r.rank === 1) return `🥇 Pobjednik (1. od ${r.total})`;
                             if (r.rank === 2) return `🥈 Drugoplasirani (2. od ${r.total})`;
+                            if (r.won_seat && r.mandate_only) {
+                                return '🟢 Ušao u Sabor — preferencijski glasovi uvedeni su tek 2015., '
+                                     + 'pa za ovaj mandat nema osobnog rezultata';
+                            }
                             if (r.won_seat) return `🟢 Ušao u Sabor`;
                             if (r.eu_mep) return `🔵 Ušao u EU parlament`;
                             if (r.rank) return `${r.rank}. mjesto od ${r.total}`;
