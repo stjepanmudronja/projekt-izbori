@@ -13,6 +13,15 @@ lives here as a literal rather than being read from the file at import time.
 to match exactly (01 Zagrebačka … 21 Grad Zagreb). Checked on every county:
 the list votes sum to `valid_total`, `valid_total + invalid == voted`, and each
 county returns its 3 seats with 3 named members — 63 in all.
+
+Cross-checked against the party totals published for this election: all 21
+coalitions match to the vote, and the whole file sums to 2,529,412 valid of
+2,615,474 cast with 86,062 invalid — the published figures exactly.
+
+One silent correction: the report misspells the Istrian SDP list's partner as
+"Hrvatska **nardona** stranka - HNS". Transcribed faithfully it left that
+county's 13,576 votes out of the national SDP-HNS total; normalised, the total
+lands on 281,496 exactly. It is DIP's typo, not the transcription's.
 """
 
 COUNTIES = [{'code': '01',
@@ -961,7 +970,7 @@ COUNTIES = [{'code': '01',
              'pct': 44.16},
             {'n': 9,
              'parties': ['Socijaldemokratska partija Hrvatske - SDP',
-                         'Hrvatska nardona stranka - HNS'],
+                         'Hrvatska narodna stranka - HNS'],
              'holder': 'Ivica Račan',
              'votes': 13576,
              'pct': 11.09},

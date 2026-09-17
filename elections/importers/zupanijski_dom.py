@@ -22,6 +22,25 @@ How it differs, and what that means for the model:
   * **Seats are stated, not computed.** The report names the members each list
     returned, so no allocation is run: seats come from the source and the 63
     members are recorded as ParliamentMember rows against this election.
+  * **63 elected, but a 68-seat house.** The President could appoint up to five
+    further members, and did. Only the 63 elected are here — the report covers
+    the election and does not name appointees — so a chamber total of 68 must
+    not be read off this data.
+
+Published party totals agree with the transcription to the vote across all 21
+coalitions, on 2,529,412 valid of 2,615,474 cast. Two things differ from the
+summaries usually printed alongside them, both explainable:
+
+  * **Seats per party look different** because they are a different question.
+    This stores seats per *list*, as the report states them — HDZ-headed lists
+    42, HSS-headed 13, SDP-headed 4, HSLS 2, IDS 2. Summaries that attribute
+    each member to their own party instead split the joint tickets, giving
+    HDZ 40, HSS 9, HSLS 6, SDP 4, IDS 2, HSP 2. Both total 63, and the
+    HSS+HSLS pair is 15 either way; the report does not record members'
+    personal affiliations, so only the per-list figure can be derived here.
+  * **The date is 13 April 1997**, printed on all 43 pages of the report and
+    the day the simultaneous local elections were held. Some summaries say
+    1 April.
   * Every list ran a **holder** (nositelj) and every elected member a
     **zamjenik**. Holders are appended to a repeated list name the way
     `sabor_legacy` does, which matters because eight counties ran a list called
