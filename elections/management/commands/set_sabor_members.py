@@ -53,10 +53,11 @@ MEMBERS_BY_YEAR = {
     #
     # Cross-checked against the D'Hondt allocation computed from the imported
     # votes: the seats per list per district agree exactly, all eleven
-    # districts. **District III is short its four HDZ members** — the source
-    # this was transcribed from loses that block mid-name ("ć, dr. med.") —
-    # so 148 of the 152 are recorded. The allocation is what says the gap is
-    # HDZ and that it is exactly four.
+    # districts, and the national vote shares match the published ones to
+    # the decimal. District III's four HDZ members were missing from the
+    # first transcription — the source loses that block mid-name — and the
+    # allocation is what identified the gap as HDZ and as exactly four
+    # before the names were supplied. All 152 are now recorded.
     2003: [
         ('IVICA RAČAN', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, 'umro', 1),
         ('ANTUN VUJIĆ', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP', False, '', 1),
@@ -86,6 +87,10 @@ MEMBERS_BY_YEAR = {
         ('JOSIP FRIŠČIĆ', 'HRVATSKA SELJAČKA STRANKA - HSS', False, '', 2),
         ('PERO KOVAČEVIĆ', 'HRVATSKA STRANKA PRAVA - HSP', False, '', 2),
         ('ĐURĐA ADLEŠIČ', 'HRVATSKA SOCIJALNO LIBERALNA STRANKA - HSLS', False, '', 2),
+        ('IVAN JARNJAK', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 3),
+        ('VLADIMIR KUREČIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 3),
+        ('VELIMIR PLEŠA', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 3),
+        ('MARIJAN MLINARIĆ', 'HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', False, '', 3),
         ('TONINO PICULA', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
         ('DRAGICA ZGREBEC', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
         ('MIROSLAV KORENIKA', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP, LIBRA-STRANKA LIBERALNIH DEMOKRATA - LIBRA', False, '', 3),
