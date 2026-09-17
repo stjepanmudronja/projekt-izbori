@@ -295,6 +295,15 @@ DIASPORA_SEATS_BY_YEAR = {2000: 6, 2003: 4, 2007: 5}
 # District XII returned 5 members under the 1999 law and 8 from 2003 on.
 MINORITY_SEATS_BY_YEAR = {2000: 5}
 
+# Years whose imported results do not cover every electoral district, and what
+# is missing. Turnout for such a year is not the national figure — 2000 is
+# short district XI's ~400k diaspora voters — so anything presenting it as
+# "Hrvatska" has to say so, or the number reads as simply wrong against the
+# published total (4,046,488 registered against our 3,646,455).
+INCOMPLETE_COVERAGE = {
+    ('sabor', 2000): 'bez XI. i XII. IJ',
+}
+
 
 def diaspora_seats(year):
     return DIASPORA_SEATS_BY_YEAR.get(year, 3)
@@ -2340,7 +2349,11 @@ def analytics_elections():
     for i, g in enumerate(result):
         g['id'] = f"{g['category']}-{g['year']}-{g['round_number']}"
         round_suffix = f" — {g['round_number']}. krug" if g['round_number'] > 1 else ""
-        g['label'] = f"{g['category_label']} {g['year']}{round_suffix}"
+        # Display only — filters are keyed on `id`, never the label.
+        gap = INCOMPLETE_COVERAGE.get((g['category'], g['year']))
+        g['coverage_note'] = gap
+        g['label'] = (f"{g['category_label']} {g['year']}{round_suffix}"
+                      + (f" ({gap})" if gap else ""))
     return jsonify(result)
 
 
