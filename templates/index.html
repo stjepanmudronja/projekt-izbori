@@ -1161,6 +1161,7 @@
             <!-- Multi-year comparison. Replaces #saborAnalysisArea (which holds
                  the single-year hemicycle + coalition simulation) whenever 2-3
                  years are selected. -->
+            <div id="saborZupDomArea" style="display:none;"></div>
             <div id="saborCompareArea" style="display:none;"></div>
             <div id="saborAnalysisArea" style="display:none;">
                 <!-- Actual results hemicycle with candidates (collapsible) -->
@@ -4497,9 +4498,17 @@ async function initSaborAnalysis() {
     const data = await res.json();
     const sabor = (Array.isArray(data) ? data : data.categories || []).find(c => c.key === 'sabor');
     if (!sabor) { container.innerHTML = '<span class="text-muted">Nema podataka</span>'; return; }
+    // 1997 is the Županijski dom, a different chamber — offered here because
+    // it is the other house of the same parliament and this is where someone
+    // looks for a Sabor year, but set apart and never comparable with the
+    // Zastupnički dom years beside it.
     container.innerHTML = sabor.years.map(y =>
         `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}">${y}.</button>`
-    ).join('') + (sabor.years.length > 1
+    ).join('')
+        + `<span class="align-self-center text-muted mx-1" style="font-size:0.9rem;">|</span>`
+        + `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${ZUP_DOM_YEAR}"
+                   title="Županijski dom — gornji dom Sabora, 1993.-2001.">${ZUP_DOM_YEAR}. <i class="bi bi-bank ms-1"></i></button>`
+        + (sabor.years.length > 1
         ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
         : '');
     container.querySelectorAll('.sa-year-btn').forEach(btn => {
@@ -4518,12 +4527,19 @@ async function initSaborAnalysis() {
 // Year picker is additive, mirroring the EU/predsjednički pickers: clicking a
 // second year adds it to the selection (max 3) rather than replacing it.
 // Clicking an active year removes it, but the set is never allowed to empty.
+const ZUP_DOM_YEAR = 1997;
+
 function onSaborYearClick(yr) {
     const cur = (_saState.years && _saState.years.length)
         ? _saState.years.slice()
         : (_saState.year ? [_saState.year] : []);
     let next;
-    if (_sabor.compareScopes.length > 0) {
+    // A different chamber cannot be compared with the Zastupnički dom: 63
+    // county seats against 151 district ones is not a comparison, so picking
+    // either side clears the other rather than adding to it.
+    if (yr === ZUP_DOM_YEAR || cur.includes(ZUP_DOM_YEAR)) {
+        next = [yr];
+    } else if (_sabor.compareScopes.length > 0) {
         // Scope-chip comparison is active — years stay single-select, since
         // scopes × years would multiply into an unreadable grid.
         next = [yr];
@@ -4555,8 +4571,41 @@ function setSaborYears(years) {
     const addBtn = document.getElementById('saborAddCompareBtn');
     if (addBtn && sorted.length > 1) addBtn.disabled = true;
     const seq = ++_saLoadSeq;
+    const zupArea = document.getElementById('saborZupDomArea');
+    const scopeArea = document.getElementById('saborScopeArea');
+    if (sorted.length === 1 && sorted[0] === ZUP_DOM_YEAR) {
+        // Nothing to allocate, no districts to scope by, nothing to compare.
+        document.getElementById('saborAnalysisArea').style.display = 'none';
+        document.getElementById('saborCompareArea').style.display = 'none';
+        document.getElementById('saborAnalysisSpinner').style.display = 'none';
+        if (scopeArea) scopeArea.style.display = 'none';
+        if (addBtn) addBtn.disabled = true;
+        zupArea.style.display = '';
+        loadZupanijskiDomInto(zupArea, seq);
+        return;
+    }
+    if (zupArea) zupArea.style.display = 'none';
+    if (scopeArea) scopeArea.style.display = '';
     if (sorted.length > 1) loadSaborCompare(sorted, seq);
     else loadSaborAnalysis(sorted[0], seq);
+}
+
+// Renders the upper house into whichever container asked for it — the
+// standalone module and the Sabor page's 1997 button share this and the
+// renderer below, so there is one copy of each.
+let _zdCache = null;
+async function loadZupanijskiDomInto(area, seq) {
+    if (!_zdCache) {
+        area.innerHTML = '<div class="text-muted p-3">Učitavanje…</div>';
+        const res = await fetch(`/api/national/zupanijski-dom/${ZUP_DOM_YEAR}`);
+        if (!res.ok) {
+            area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje (HTTP ${res.status}).</div>`;
+            return;
+        }
+        _zdCache = await res.json();
+    }
+    if (seq !== undefined && seq !== _saLoadSeq) return;  // a newer click won
+    renderZupanijskiDom(_zdCache, area);
 }
 
 // === Sabor scope dropdowns + map + compare chips
@@ -6973,9 +7022,7 @@ async function initZupanijskiDom() {
     const area = document.getElementById('zdArea');
     spinner.style.display = '';
     try {
-        const res = await fetch('/api/national/zupanijski-dom/1997');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        renderZupanijskiDom(await res.json(), area);
+        await loadZupanijskiDomInto(area);
         _zdLoaded = true;
     } catch (err) {
         area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje: ${escapeHtml(String(err))}</div>`;
