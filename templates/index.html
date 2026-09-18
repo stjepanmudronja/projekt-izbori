@@ -1157,6 +1157,7 @@
                  the single-year hemicycle + coalition simulation) whenever 2-3
                  years are selected. -->
             <div id="saborZupDomArea" style="display:none;"></div>
+            <div id="sabor1995Area" style="display:none;"></div>
             <div id="saborCompareArea" style="display:none;"></div>
             <div id="saborAnalysisArea" style="display:none;">
                 <!-- Actual results hemicycle with candidates (collapsible) -->
@@ -4494,7 +4495,10 @@ async function initSaborAnalysis() {
     // looks for a Sabor year, but set apart and never comparable with the
     // Zastupnički dom years beside it.
     container.innerHTML = sabor.years.map(y =>
-        `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}">${y}.</button>`
+        `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}"${
+            y === SABOR_1995_YEAR
+                ? ' title="Izborni sustav iz 1995. — državna lista, 28 jednomandatnih jedinica, posebne liste i manjinske jedinice"'
+                : ''}>${y}.</button>`
     ).join('')
         + `<span class="align-self-center text-muted mx-1" style="font-size:0.9rem;">|</span>`
         + `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${ZUP_DOM_YEAR}"
@@ -4519,16 +4523,24 @@ async function initSaborAnalysis() {
 // second year adds it to the selection (max 3) rather than replacing it.
 // Clicking an active year removes it, but the set is never allowed to empty.
 const ZUP_DOM_YEAR = 1997;
+// 1995 is the same chamber as every year beside it, so it belongs in the year
+// list — but it was elected under a system nothing else here shares (one
+// countrywide list, 28 first-past-the-post districts, separate diaspora and
+// minority ballots), so it gets its own view and never enters a comparison.
+const SABOR_1995_YEAR = 1995;
 
 function onSaborYearClick(yr) {
     const cur = (_saState.years && _saState.years.length)
         ? _saState.years.slice()
         : (_saState.year ? [_saState.year] : []);
     let next;
-    // A different chamber cannot be compared with the Zastupnički dom: 63
-    // county seats against 151 district ones is not a comparison, so picking
-    // either side clears the other rather than adding to it.
-    if (yr === ZUP_DOM_YEAR || cur.includes(ZUP_DOM_YEAR)) {
+    // Neither 1997 nor 1995 can share the compare grid. 1997 is a different
+    // chamber — 63 county seats against 151 district ones is not a comparison
+    // — and 1995 is a different electoral system, with no list standing
+    // nationwide in the same sense as 2000 onward. Picking either clears the
+    // other years rather than adding to them.
+    const standalone = y => y === ZUP_DOM_YEAR || y === SABOR_1995_YEAR;
+    if (standalone(yr) || cur.some(standalone)) {
         next = [yr];
     } else if (_sabor.compareScopes.length > 0) {
         // Scope-chip comparison is active — years stay single-select, since
@@ -4564,6 +4576,21 @@ function setSaborYears(years) {
     const seq = ++_saLoadSeq;
     const zupArea = document.getElementById('saborZupDomArea');
     const scopeArea = document.getElementById('saborScopeArea');
+    const area95 = document.getElementById('sabor1995Area');
+    if (area95) area95.style.display = 'none';
+    if (sorted.length === 1 && sorted[0] === SABOR_1995_YEAR) {
+        // Nothing to allocate here either: every one of the 127 seats is
+        // stated by the DIP report, not derived from a D'Hondt pass.
+        document.getElementById('saborAnalysisArea').style.display = 'none';
+        document.getElementById('saborCompareArea').style.display = 'none';
+        document.getElementById('saborAnalysisSpinner').style.display = 'none';
+        if (zupArea) zupArea.style.display = 'none';
+        if (scopeArea) scopeArea.style.display = 'none';
+        if (addBtn) addBtn.disabled = true;
+        area95.style.display = '';
+        loadSabor1995Into(area95, seq);
+        return;
+    }
     if (sorted.length === 1 && sorted[0] === ZUP_DOM_YEAR) {
         // Nothing to allocate, no districts to scope by, nothing to compare.
         document.getElementById('saborAnalysisArea').style.display = 'none';
@@ -4597,6 +4624,21 @@ async function loadZupanijskiDomInto(area, seq) {
     }
     if (seq !== undefined && seq !== _saLoadSeq) return;  // a newer click won
     renderZupanijskiDom(_zdCache, area);
+}
+
+let _s95Cache = null;
+async function loadSabor1995Into(area, seq) {
+    if (!_s95Cache) {
+        area.innerHTML = '<div class="text-muted p-3">Učitavanje…</div>';
+        const res = await fetch('/api/national/sabor-1995');
+        if (!res.ok) {
+            area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje (HTTP ${res.status}).</div>`;
+            return;
+        }
+        _s95Cache = await res.json();
+    }
+    if (seq !== undefined && seq !== _saLoadSeq) return;  // a newer click won
+    renderSabor1995(_s95Cache, area);
 }
 
 // === Sabor scope dropdowns + map + compare chips
@@ -7092,6 +7134,161 @@ function renderZupanijskiDom(d, area) {
         </div>
         <h6 class="fw-bold mb-2"><i class="bi bi-geo-alt me-2"></i>Rezultati po županijama</h6>
         ${counties}`;
+}
+
+function renderSabor1995(d, area) {
+    const colors = {};
+    (d.parties || []).forEach((p, i) => { colors[p.name] = hemicycleColors[i % hemicycleColors.length]; });
+    const dateLabel = d.date
+        ? new Date(d.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : d.year;
+
+    const personLink = n =>
+        `<span class="bar-label-link" data-person-name="${escapeHtml(n)}" title="Otvori stranicu političara: ${escapeHtml(n)}">${escapeHtml(n)}</span>`;
+    // District coalitions are printed as "HSS,HSLS,HNS" in the report and are
+    // stored that way; breathe on them for display only.
+    const listLabel = t => escapeHtml(t).replace(/,(?=\S)/g, ', ');
+
+    const partyRows = (d.parties || []).map(p => `
+        <div class="d-flex align-items-center gap-2" style="font-size:0.86rem; padding:3px 0;">
+            <span style="width:13px;height:13px;border-radius:50%;background:${colors[p.name]};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></span>
+            <span class="fw-semibold flex-grow-1">${escapeHtml(p.name)}</span>
+            <span class="text-muted">${p.seats}</span>
+        </div>`).join('');
+
+    // A proportional contest: list table on the left, elected members grouped
+    // under the list that returned them. No personal votes existed — the
+    // ballot was for the list — so no per-member figure is shown.
+    const proportional = (sec, id, note) => {
+        const rows = (sec.lists || []).map(l => `
+            <tr${l.seats ? '' : ' class="text-muted"'}>
+                <td>${l.seats ? `<span class="badge bg-success" style="font-size:0.7rem;">${l.seats}</span>` : ''}</td>
+                <td style="font-size:0.85rem;">${escapeHtml(l.name)}</td>
+                <td class="text-end" style="font-size:0.85rem;">${formatNumber(l.votes)}</td>
+                <td class="text-end" style="font-size:0.85rem;">${formatPct(l.pct, 2)}</td>
+            </tr>`).join('');
+        const members = (sec.members_by_list || []).map(g => `
+            <div class="mb-2">
+                <div class="fw-semibold" style="font-size:0.82rem;">${escapeHtml(g.list)}
+                    <span class="badge bg-dark ms-1" style="font-size:0.68rem;">${g.seats}</span></div>
+                <div style="font-size:0.85rem;">${g.names.map(personLink).join(' · ')}</div>
+            </div>`).join('');
+        return `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="fw-bold">${escapeHtml(sec.label)}</span>
+                    <span class="badge bg-dark ms-2" style="font-size:0.72rem;">${sec.seats} mandata</span>
+                </div>
+                <small class="text-muted">
+                    ${formatNumber(sec.registered)} upisanih · ${formatNumber(sec.cast)} glasovalo ·
+                    ${formatPct(sec.registered ? sec.cast / sec.registered * 100 : 0)} izlaznost ·
+                    ${formatNumber(sec.invalid)} nevažećih
+                </small>
+            </div>
+            ${note ? `<div class="text-muted mt-1" style="font-size:0.8rem;">${note}</div>` : ''}
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-hover mb-2">
+                    <thead><tr><th style="width:34px;"></th><th>Lista</th><th class="text-end">Glasovi</th><th class="text-end">%</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <div class="mt-1"><small class="text-muted fw-semibold d-block mb-1">Izabrani zastupnici</small>${members}</div>
+        </div>`;
+    };
+
+    // A candidate contest: the top candidate takes the seat outright.
+    const race = r => {
+        const rows = (r.candidates || []).map(c => `
+            <tr${c.won ? '' : ' class="text-muted"'}>
+                <td>${c.won ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}</td>
+                <td style="font-size:0.85rem;">${personLink(c.name)}</td>
+                <td style="font-size:0.8rem;" class="text-muted">${listLabel(c.list)}</td>
+                <td class="text-end" style="font-size:0.85rem;">${formatNumber(c.votes)}</td>
+                <td class="text-end" style="font-size:0.85rem;">${formatPct(c.pct, 2)}</td>
+            </tr>`).join('');
+        return `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <span class="fw-bold">${escapeHtml(r.label)}</span>
+                    ${r.minority ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem;">${escapeHtml(r.minority)}</span>` : ''}
+                    ${r.seats && r.seats > 1 ? `<span class="badge bg-dark ms-1" style="font-size:0.7rem;">${r.seats} mandata</span>` : ''}
+                </div>
+                <small class="text-muted">
+                    ${formatNumber(r.registered)} upisanih · ${formatNumber(r.cast)} glasovalo ·
+                    ${formatPct(r.turnout_pct, 2)} izlaznost · ${formatNumber(r.invalid)} nevažećih
+                </small>
+            </div>
+            ${r.multi_vote ? `<div class="text-muted mt-1" style="font-size:0.78rem;">
+                Bira ${r.seats} zastupnika, pa jedan listić nosi do ${r.seats} glasa — zbroj glasova je
+                zato veći od broja važećih listića, a postoci se računaju od ukupnog broja glasova.</div>` : ''}
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-hover mb-0">
+                    <thead><tr><th style="width:28px;"></th><th>Kandidat</th><th>Stranka</th><th class="text-end">Glasovi</th><th class="text-end">%</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>`;
+    };
+
+    const nat = d.national || {}, dia = d.diaspora || {};
+    const totalReg = (nat.registered || 0) + (dia.registered || 0);
+    const totalCast = (nat.cast || 0) + (dia.cast || 0);
+
+    area.innerHTML = `
+        <div class="card p-3 mb-3">
+            <h5 class="fw-bold mb-1">Zastupnički dom Sabora — ${dateLabel}</h5>
+            <p class="text-muted mb-3" style="font-size:0.86rem;">
+                ${d.total_seats} zastupnika izabrano je u četiri odvojena izbora istoga dana:
+                ${nat.seats} s jedne državne liste (razmjerno, prag 5%),
+                ${dia.seats} s posebnih lista dijaspore,
+                ${(d.districts || []).length} u jednomandatnim izbornim jedinicama (pobjeđuje kandidat
+                s najviše glasova, bez drugog kruga) i
+                ${(d.minorities || []).reduce((a, m) => a + (m.seats || 0), 0)} u posebnim jedinicama
+                za nacionalne manjine. Zato ovdje nema D'Hondtove raspodjele — mandati su onakvi
+                kakvima ih izvješće Izborne komisije navodi.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">Mandati po strankama</div>
+                    ${partyRows}
+                    <div class="text-muted mt-2" style="font-size:0.8rem;">
+                        Zajedničke liste stoje pod prvom navedenom strankom, kao i drugdje na
+                        stranici. IDS je 1995. bio i dio državne liste predvođene HSS-om, pa se
+                        njegova 2 mandata u izbornim jedinicama u nekim pregledima pribrajaju
+                        toj koaliciji (16 + 2 = 18).
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">Izlaznost</div>
+                    <div style="font-size:0.86rem;">
+                        <div class="d-flex justify-content-between"><span class="text-muted">Upisanih birača</span><strong>${formatNumber(totalReg)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Glasovalo</span><strong>${formatNumber(totalCast)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">— u Hrvatskoj</span><span>${formatNumber(nat.cast || 0)} (${formatPct(nat.registered ? nat.cast / nat.registered * 100 : 0)})</span></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">— u inozemstvu</span><span>${formatNumber(dia.cast || 0)} (${formatPct(dia.registered ? dia.cast / dia.registered * 100 : 0)})</span></div>
+                        <div class="d-flex justify-content-between mt-1 pt-1" style="border-top:1px solid rgba(0,0,0,0.08);"><span class="text-muted">Izlaznost</span><strong>${formatPct(totalReg ? totalCast / totalReg * 100 : 0)}</strong></div>
+                    </div>
+                    <div class="text-muted mt-2" style="font-size:0.8rem;">
+                        Brojke su s državne liste i lista dijaspore — one zajedno pokrivaju cijeli
+                        birački popis točno jednom. Izborne jedinice broje iste birače ponovno, pa se
+                        njihove brojke prikazuju uz svaku jedinicu, ali se ne zbrajaju u ukupnu izlaznost.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="fw-bold mb-2"><i class="bi bi-list-ol me-2"></i>Državna lista</h6>
+        ${proportional(nat, 'nat', 'Jedna lista za cijelu Hrvatsku, mandati razmjerno uz izborni prag od 5%.')}
+
+        <h6 class="fw-bold mb-2"><i class="bi bi-globe-americas me-2"></i>Posebne liste — dijaspora</h6>
+        ${proportional(dia, 'dia', 'Birači izvan Hrvatske; 1995. je dijaspori pripadao utvrđen broj od 12 mandata.')}
+
+        <h6 class="fw-bold mb-2"><i class="bi bi-geo-alt me-2"></i>Izborne jedinice I.–XXVIII.</h6>
+        ${(d.districts || []).map(race).join('')}
+
+        <h6 class="fw-bold mb-2"><i class="bi bi-people me-2"></i>Posebne izborne jedinice — nacionalne manjine</h6>
+        ${(d.minorities || []).map(race).join('')}`;
 }
 
 function izlScopeTitle() {

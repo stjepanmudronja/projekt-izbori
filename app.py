@@ -307,6 +307,9 @@ MINORITY_SEATS_BY_YEAR = {2000: 5}
 # published total (4,046,488 registered against our 3,646,455).
 INCOMPLETE_COVERAGE = {
     ('sabor', 2000): 'bez XI. i XII. IJ',
+    # 1995 has no per-station export at all — DIP published only summary
+    # figures — so county, municipality and station views are empty for it.
+    ('sabor', 1995): 'samo državni zbroj',
 }
 
 
@@ -344,6 +347,24 @@ def sabor_seat_winner_candidacy_ids(er_id):
         .filter(ElectionRound.id == er_id)
         .scalar()
     )
+
+    # 1995 is not allocated, it is recorded. That year ran 28 single-member
+    # plurality districts, a countrywide list and 5 minority units — none of
+    # which this D'Hondt pass models (it would hand every district 14 seats) —
+    # and the DIP report names all 127 members, so the winners come straight
+    # off the stored ParliamentMember rows.
+    if year == 1995:
+        winner_ids = {
+            cid for (cid,) in
+            db.session.query(ParliamentMember.candidacy_id)
+            .join(Election, Election.id == ParliamentMember.election_id)
+            .join(ElectionRound, ElectionRound.election_id == Election.id)
+            .filter(ElectionRound.id == er_id,
+                    ParliamentMember.candidacy_id.isnot(None))
+            .all()
+        }
+        _SABOR_SEAT_WINNERS_CACHE[er_id] = winner_ids
+        return winner_ids
 
     districts = (
         db.session.query(ElectoralDistrict)
@@ -653,6 +674,23 @@ def person_detail(person_id):
             TurnoutData.election_round_id == er.id,
             TurnoutData.polling_station_id.in_(db.session.query(station_ids))
         ).scalar() or 0
+
+        # Fallback denominator: the votes cast in the same district. Needed for
+        # 1995, whose 28 single-member districts and 5 minority units carry no
+        # TurnoutData — the same voters are counted by the national list, so
+        # storing it there too would double the electorate (see sabor_1995.py).
+        # Summing the district's lists gives the right base for a plurality
+        # race, and for the 3-seat minority unit it reproduces the report's own
+        # denominator, which is votes cast rather than ballots.
+        if not total_valid_ballots and el.district_id:
+            total_valid_ballots = db.session.query(
+                db.func.sum(ListResult.votes)
+            ).join(
+                ElectoralList, ElectoralList.id == ListResult.electoral_list_id
+            ).filter(
+                ElectoralList.election_round_id == er.id,
+                ElectoralList.district_id == el.district_id,
+            ).scalar() or 0
 
         vote_share = round((total_votes / total_valid_ballots) * 100, 1) if total_valid_ballots > 0 else 0
 
@@ -1771,6 +1809,154 @@ def zupanijski_dom_results(year):
         'parties': sorted(({'name': k, 'seats': v} for k, v in grouped.items()),
                           key=lambda x: (-x['seats'], x['name'])),
         'counties': counties,
+    })
+
+
+SABOR_1995_NATIONAL_DISTRICT = 29
+SABOR_1995_DIASPORA_DISTRICT = 30
+SABOR_1995_ROMAN = [
+    'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+    'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
+    'XXI', 'XXII', 'XXIII', 'XXIV', 'XXV', 'XXVI', 'XXVII', 'XXVIII',
+]
+
+
+@app.route('/api/national/sabor-1995')
+def sabor_1995_results():
+    """The 1995 Zastupnički dom, which four contests elected at once.
+
+    Its own endpoint rather than a year of /api/national/sabor-seats because
+    nothing here is allocated: 80 seats came off a countrywide list, 12 off the
+    diaspora lists, 28 from single-member plurality districts and 7 from five
+    minority units, and the DIP report names every member. Running the generic
+    D'Hondt pass over this data would hand each single-member district 14
+    seats and invent a parliament that never sat.
+
+    Registered/cast/invalid for the 28 districts and 5 minority units come from
+    the transcription rather than the DB: only the national list and the
+    diaspora carry TurnoutData, because those two partition the electoral roll
+    exactly once while the other 33 contests count the same voters again.
+    """
+    from elections.importers.sabor_1995_data import (
+        DISTRICTS as D95, MINORITY_UNITS as M95, NATIONAL as N95, DIASPORA as X95,
+    )
+
+    etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
+    election = (Election.query.filter_by(election_type_id=etype.id, year=1995).first()
+                if etype else None)
+    if not election:
+        return jsonify({'error': 'No 1995 sabor election'}), 404
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+
+    districts = {d.number: d for d in ElectoralDistrict.query
+                 .filter_by(election_id=election.id).all()}
+
+    def list_votes(number):
+        d = districts.get(number)
+        if not d:
+            return []
+        rows = (db.session.query(ElectoralList.name, db.func.sum(ListResult.votes))
+                .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
+                .filter(ElectoralList.district_id == d.id)
+                .group_by(ElectoralList.name).all())
+        return [(name, int(v or 0)) for name, v in rows]
+
+    members_by_district = defaultdict(list)
+    for m, prs in (db.session.query(ParliamentMember, Person)
+                   .join(Person, Person.id == ParliamentMember.person_id)
+                   .filter(ParliamentMember.election_id == election.id).all()):
+        members_by_district[m.district_id].append({
+            'name': f'{prs.first_name} {prs.last_name}'.strip(),
+            'list': m.party,
+        })
+
+    # The report writes party names in full on the two proportional ballots
+    # ("Hrvatska demokratska zajednica - HDZ") and as bare abbreviations on the
+    # district ones ("HDZ"), so fold the short form onto the long one before
+    # tallying or HDZ lands in the table twice.
+    canon = {}
+    for name, _votes, _pct in list(N95['lists']) + list(X95['lists']):
+        first = name.split(',')[0].strip()
+        if ' - ' in first:
+            canon[first.rsplit(' - ', 1)[1].strip()] = first
+
+    def group_of(name):
+        """First-named party of a list, the grouping key used site-wide."""
+        first = name.split(',')[0].strip()
+        return canon.get(first, first)
+
+    seat_tally = defaultdict(int)
+
+    def proportional(number, source, label):
+        d = districts.get(number)
+        seats = {name: n for name, n, _names in source['seats_by_list']}
+        for name, n, _names in source['seats_by_list']:
+            seat_tally[group_of(name)] += n
+        valid = source['valid']
+        rows = sorted(
+            [{'name': name, 'votes': votes,
+              'pct': round(votes / valid * 100, 2) if valid else 0,
+              'seats': seats.get(name, 0), 'group': group_of(name)}
+             for name, votes in list_votes(number)],
+            key=lambda r: -r['votes'])
+        return {
+            'label': label,
+            'seats': sum(seats.values()),
+            'registered': source['registered'], 'cast': source['cast'],
+            'valid': valid, 'invalid': source['invalid'],
+            'lists': rows,
+            'members': [m['name'] for m in sorted(
+                members_by_district.get(d.id if d else None, []),
+                key=lambda m: m['name'])],
+            'members_by_list': [
+                {'list': name, 'seats': n, 'group': group_of(name),
+                 'names': list(names)}
+                for name, n, names in source['seats_by_list']],
+        }
+
+    def race(number, source, winners, label, extra=None):
+        valid = source['cast'] - source['invalid']
+        cands = sorted(
+            [{'name': name, 'list': party, 'group': group_of(party),
+              'votes': votes, 'pct': pct, 'won': name in set(winners)}
+             for name, party, votes, pct in source['candidates']],
+            key=lambda c: -c['votes'])
+        for name, party, _v, _p in source['candidates']:
+            if name in set(winners):
+                seat_tally[group_of(party)] += 1
+        out = {
+            'number': number, 'label': label,
+            'registered': source['registered'], 'cast': source['cast'],
+            'valid': valid, 'invalid': source['invalid'],
+            'turnout_pct': round(source['cast'] / source['registered'] * 100, 2)
+            if source['registered'] else 0,
+            'candidates': cands,
+            'winners': [c for c in cands if c['won']],
+        }
+        out.update(extra or {})
+        return out
+
+    single = [race(n, D95[n], [D95[n]['winner']], f'{SABOR_1995_ROMAN[n - 1]}. izborna jedinica')
+              for n in sorted(D95)]
+    minorities = [
+        race(n, M95[n], M95[n]['winners'],
+             f"{n}. posebna izborna jedinica{' — ' + M95[n]['name'] if M95[n]['name'] and not M95[n]['name'].startswith(str(n)) else ''}",
+             extra={'minority': M95[n]['minority'], 'seats': M95[n]['seats'],
+                    # The 5th unit elects three, so a ballot carries up to
+                    # three votes and the votes exceed the valid ballots.
+                    'multi_vote': M95[n]['seats'] > 1})
+        for n in sorted(M95)]
+
+    return jsonify({
+        'year': 1995,
+        'date': round_date_iso(er, election) if er else None,
+        'total_seats': 127,
+        'national': proportional(SABOR_1995_NATIONAL_DISTRICT, N95, 'Državna lista'),
+        'diaspora': proportional(SABOR_1995_DIASPORA_DISTRICT, X95, 'Posebne liste — dijaspora'),
+        'districts': single,
+        'minorities': minorities,
+        'parties': sorted(({'name': k, 'seats': v} for k, v in seat_tally.items()),
+                          key=lambda x: (-x['seats'], x['name'])),
     })
 
 
