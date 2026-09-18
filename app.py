@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, make_response
 from flask_sqlalchemy import SQLAlchemy
 
 from elections.importers.name_utils import normalize_person_name
@@ -165,9 +165,24 @@ class TurnoutData(db.Model):
 
 # Routes
 
+def _spa_page():
+    """Render the SPA shell, uncacheable.
+
+    All the markup and JS lives in one 350KB template that changes with every
+    feature, and Flask sets no Cache-Control on a rendered template — so the
+    browser is free to heuristically cache it and keep serving yesterday's app
+    against today's API. That is invisible and looks exactly like a missing
+    feature (a year that isn't in the picker, a button that does nothing).
+    The JSON endpoints stay cacheable; only the shell is pinned to no-store.
+    """
+    resp = make_response(render_template('index.html'))
+    resp.headers['Cache-Control'] = 'no-store, must-revalidate'
+    return resp
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return _spa_page()
 
 
 # Pretty URLs per sidebar tab — the SPA reads window.location to switch tabs.
@@ -183,7 +198,7 @@ SPA_ROUTES = {
 @app.route('/<slug>')
 def spa_route(slug):
     if slug in SPA_ROUTES:
-        return render_template('index.html')
+        return _spa_page()
     return ('Not Found', 404)
 
 
