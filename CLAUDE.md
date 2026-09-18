@@ -33,7 +33,7 @@ python manage.py import_sabor --year 2011             # routed to SaborLegacyImp
 python manage.py import_sabor --year 2003            # Sabor2003Importer (sabor_2003.py); 152-seat Sabor (4 diaspora seats)
 python manage.py import_sabor --year 2000            # Sabor2000Importer (sabor_2000.py); districts I-X only, 140 of 151 seats
 python manage.py import_zupanijski_dom               # 1997 Županijski dom (upper house) — separate chamber, own election type
-python tools/extract_scanned_pdf.py <pdf> <out-dir>  # render a scanned PDF's pages to PNG (no poppler/OCR needed)
+python tools/extract_scanned_pdf.py <pdf> <out-dir>  # render a scanned PDF's pages to PNG (no poppler/OCR needed; handles the 1995 and 1997 reports)
 python manage.py import_sabor --year 2007             # same legacy importer; 153-seat Sabor (5 diaspora seats)
 python manage.py import_sabor --district 12 --wipe-district  # re-import single district (applies to --year)
 python manage.py import_local

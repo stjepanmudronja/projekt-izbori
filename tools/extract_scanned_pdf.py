@@ -36,12 +36,24 @@ def tiff_g4(data, width, height):
 
 
 def main(pdf_path, out_dir):
+    """Find every CCITT image object and write it out as a PNG.
+
+    The dictionary's keys come in no fixed order — Ghostscript leads with
+    /Subtype, iText with /DecodeParms, whose own nested `>>` defeats any
+    attempt to match the dictionary as a whole. So each image is located by
+    its /Subtype/Image, bracketed by the enclosing `obj` and its `stream`, and
+    the fields read out of that span.
+    """
     os.makedirs(out_dir, exist_ok=True)
     blob = open(pdf_path, 'rb').read()
-    pattern = re.compile(rb'<</Subtype\s*/Image(.*?)>>\s*stream\r?\n', re.S)
+    stream_re = re.compile(rb'stream\r?\n')
     count = 0
-    for match in pattern.finditer(blob):
-        header = match.group(1)
+    for match in re.finditer(rb'/Subtype\s*/Image', blob):
+        start = blob.rfind(b'obj', 0, match.start())
+        stream = stream_re.search(blob, match.end())
+        if start < 0 or stream is None:
+            continue
+        header = blob[start:stream.start()]
         if b'CCITTFaxDecode' not in header:
             continue
         width = int(re.search(rb'/Width\s+(\d+)', header).group(1))
@@ -51,7 +63,7 @@ def main(pdf_path, out_dir):
         tif = os.path.join(out_dir, f'page{count:02d}.tif')
         png = os.path.join(out_dir, f'page{count:02d}.png')
         with open(tif, 'wb') as fh:
-            fh.write(tiff_g4(blob[match.end():match.end() + length], width, height))
+            fh.write(tiff_g4(blob[stream.end():stream.end() + length], width, height))
         subprocess.run(['sips', '-s', 'format', 'png', tif, '--out', png],
                        check=True, capture_output=True)
         os.remove(tif)
