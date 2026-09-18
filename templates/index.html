@@ -707,11 +707,6 @@
                     <i class="bi bi-people-fill"></i> Rezultati i koalicije (Sabor)
                 </a>
             </li>
-            <li>
-                <a href="#" data-module="zupanijski-dom">
-                    <i class="bi bi-bank"></i> Županijski dom (1997)
-                </a>
-            </li>
             <li><a href="#" data-module="analytics-turnout">
                 <i class="bi bi-graph-up"></i> Izlaznost
             </a></li>
@@ -1230,13 +1225,6 @@
         </div>
 
         <!-- Izlaznost (turnout) analytics -->
-        <div id="module-zupanijski-dom" class="module-panel">
-            <div class="spinner-wrapper" id="zdSpinner" style="display:none;">
-                <div class="spinner-border text-primary" role="status"></div>
-            </div>
-            <div id="zdArea"></div>
-        </div>
-
         <div id="module-analytics-turnout" class="module-panel">
             <div class="card search-card p-4 mb-3">
                 <div class="row g-4 align-items-start">
@@ -1331,7 +1319,6 @@ const moduleTitles = {
     'results-eu': '<i class="bi bi-globe-europe-africa me-2"></i>EU parlamentarni izbori',
     'results-lokalni': '<i class="bi bi-building me-2"></i>Lokalni izbori',
     'sabor-analysis': '<i class="bi bi-people-fill me-2"></i>Rezultati i koalicije (Sabor)',
-    'zupanijski-dom': '<i class="bi bi-bank me-2"></i>Županijski dom Sabora (1997)',
     'analytics-turnout': '<i class="bi bi-graph-up me-2"></i>Izlaznost',
 };
 
@@ -1349,7 +1336,6 @@ const MODULE_SLUGS = {
     'results-eu': 'eu-parlamentarni-izbori',
     'results-lokalni': 'lokalni-izbori',
     'sabor-analysis': 'rezultati-koalicije-sabor',
-    'zupanijski-dom': 'zupanijski-dom',
     'analytics-turnout': 'izlaznost',
     'analytics-map': 'karta',
 };
@@ -1379,7 +1365,6 @@ function activateModule(mod, opts) {
     if (moduleTitles[mod]) moduleTitle.innerHTML = moduleTitles[mod];
 
     if (mod === 'analytics-turnout') initIzlaznost();
-    if (mod === 'zupanijski-dom') initZupanijskiDom();
     if (mod === 'sabor-analysis') initSaborAnalysis();
     if (mod === 'results-lokalni') initLokalniModule();
     else if (mod && mod.startsWith('results-')) {
@@ -1406,6 +1391,12 @@ sidebarLinks.forEach(link => {
 // Restore the active tab from the URL on first paint and on back/forward.
 function activateModuleFromUrl() {
     const slug = (window.location.pathname || '/').replace(/^\//, '').replace(/\/$/, '');
+    // The upper house lost its own sidebar tab once the Sabor year picker
+    // offered 1997; the URL still resolves, to that year of that module.
+    if (slug === 'zupanijski-dom') {
+        izlNavigateTo('sabor', ZUP_DOM_YEAR);
+        return;
+    }
     const mod = SLUG_TO_MODULE[slug] || 'person';
     activateModule(mod, { pushState: false, focusInput: false });
 }
@@ -7014,23 +7005,6 @@ async function loadIzlaznostData() {
 // Its own module rather than a year of the Sabor page: a different chamber,
 // counties for districts, three seats each however large, and seats that the
 // DIP report states outright instead of an allocation to compute.
-let _zdLoaded = false;
-
-async function initZupanijskiDom() {
-    if (_zdLoaded) return;
-    const spinner = document.getElementById('zdSpinner');
-    const area = document.getElementById('zdArea');
-    spinner.style.display = '';
-    try {
-        await loadZupanijskiDomInto(area);
-        _zdLoaded = true;
-    } catch (err) {
-        area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje: ${escapeHtml(String(err))}</div>`;
-    } finally {
-        spinner.style.display = 'none';
-    }
-}
-
 function renderZupanijskiDom(d, area) {
     const t = d.totals || {};
     const turnoutPct = t.registered ? (t.cast / t.registered * 100) : 0;
