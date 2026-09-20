@@ -29,10 +29,38 @@ invalid == voted`, and each county returns its 3 seats with 3 named members —
 2,227,763 valid and 76,019 invalid.
 
 Seats **per list**, grouped by the list's first-named party: HDZ 37, HSLS 18,
-HSS 5, IDS 3. Summaries that credit each member's own party instead split the
-HSLS-headed joint tickets (with HNS, and in Krapinsko-zagorska with SDP too),
-which is why HSLS is often printed as 16 with HNS at 2. The report records no
-personal affiliations, so only the per-list figure is derivable here.
+HSS 5, IDS 3.
+
+**Cross-checked against the published national table, and every row matches to
+the vote** — HDZ 1,013,365 (45.5%), HSLS 486,210, HSS 258,953, IDS 76,273,
+HSLS-HNS 45,657, SDP 41,955, HSLS-HNS-SDP 35,937, HSLS-HNS-HKDU-SDP 33,246,
+HKDU 27,584, Dalmatinska akcija 26,303, RiDS-IDS 22,801, neovisne županijske
+liste 22,562, HSLS-SDP 21,478, SDP-SSH 18,312, SDU 17,413, HNS 15,363 — on
+2,227,763 valid of 2,303,782 cast. The published "ostale stranke i koalicije"
+residual of **64,351** falls out exactly as the remainder over some twenty
+small lists, which is the tightest check in the table. Three notes on it:
+
+  * The HSLS-HNS-SDP figure is the sum of **two orderings** the report prints
+    differently — Krapinsko-zagorska writes HSLS, HNS, SDP (16,957) and
+    Koprivničko-križevačka HSLS, SDP, HNS (18,980). They are one ticket; the
+    list names here preserve each county's own order, so the two are separate
+    keys in this file and only merge when grouped by party set.
+  * The published table labels the 18,312-vote ticket **"SDP-HSS"**. It is
+    not: the report names Socijalistička stranka Hrvatske - **SSH** on both
+    counties that ran it (Zadarsko-kninska and Splitsko-dalmatinska). Same
+    number, wrong partner.
+  * **Seats are counted differently there**, the same way they are for 1997:
+    HDZ 37, HSLS 16, HSS 5, IDS 3, SDS 1, HNS 1 = 63, which is seats by each
+    member's *own* party. The two that move out of HSLS's 18 are Zdravko Tomac
+    — SDP, and the nositelj of the HSLS-SDP ticket that elected him in
+    Brodsko-posavska — and one HNS member elected on an HSLS-HNS ticket. The
+    report records no personal affiliations, so which of the six members
+    elected on HSLS-HNS tickets that is cannot be told from this source, and
+    only the per-list figure is derivable here.
+
+The President could appoint **up to** five further members (the 1990
+Constitution's cap), for a 68-seat house. The report covers the election only
+and names none of them.
 """
 
 COUNTIES = [
