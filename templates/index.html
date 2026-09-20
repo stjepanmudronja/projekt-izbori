@@ -4494,11 +4494,18 @@ async function initSaborAnalysis() {
     // it is the other house of the same parliament and this is where someone
     // looks for a Sabor year, but set apart and never comparable with the
     // Zastupnički dom years beside it.
+    // 1995 stays blue: it is the Zastupnički dom, the same house as every year
+    // beside it, and greying it out the way 1997 is greyed would claim
+    // otherwise. What it does not share is the *system* — one national list
+    // plus 28 first-past-the-post districts, so no D'Hondt runs and it cannot
+    // join a comparison — and the signpost icon says that much before the
+    // click, which a hover title alone does not.
     container.innerHTML = sabor.years.map(y =>
         `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}"${
             y === SABOR_1995_YEAR
-                ? ' title="Izborni sustav iz 1995. — državna lista, 28 jednomandatnih jedinica, posebne liste i manjinske jedinice"'
-                : ''}>${y}.</button>`
+                ? ' title="Izborni sustav iz 1995. — državna lista, 28 jednomandatnih izbornih jedinica, posebne liste i manjinske jedinice. Prikazuje se zasebno i ne ulazi u usporedbu."'
+                : ''}>${y}.${
+            y === SABOR_1995_YEAR ? ' <i class="bi bi-signpost-split ms-1"></i>' : ''}</button>`
     ).join('')
         + `<span class="align-self-center text-muted mx-1" style="font-size:0.9rem;">|</span>`
         + `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${ZUP_DOM_YEAR}"
