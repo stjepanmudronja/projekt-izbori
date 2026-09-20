@@ -1,4 +1,4 @@
-"""Import the 1997 election to the Županijski dom — the Sabor's upper house.
+"""Import the 1993 and 1997 elections to the Županijski dom — the Sabor's upper house.
 
 This is a **different chamber** from every other year in the database. The
 Županijski dom existed from 1993 to 2001, sat alongside the Zastupnički dom
@@ -46,36 +46,57 @@ summaries usually printed alongside them, both explainable:
     `sabor_legacy` does, which matters because eight counties ran a list called
     only "Nezavisna županijska lista".
 
+**Both elections the house ever held are here.** 1993 was the first (7 Feb
+1993, with repeat voting at some stations on 21 Feb) and 1997 the second and
+last; the 2001 constitutional amendments abolished the chamber before a third.
+They share this importer because the report's shape is identical — turnout and
+county lists, then seats and named members with their zamjenici — so only the
+data module and the polling date differ. Two 1993 counties no longer exist
+under those names (XIII Zadarsko-kninska, XV Šibenska); the district carries
+the historical name, while the pseudo-station hangs off the county row that
+shares its code today, which is close enough for a chamber with no per-station
+data at all.
+
 The data is a hand transcription of a scanned report; see
-`zupanijski_dom_1997_data.py` for its provenance and the checks it satisfies.
+`zupanijski_dom_1993_data.py` / `zupanijski_dom_1997_data.py` for their
+provenance and the checks they satisfy.
 """
+from datetime import date
+
 from .base import BaseImporter
 from .name_utils import clean_candidate_name
-from .zupanijski_dom_1997_data import COUNTIES
+from .zupanijski_dom_1993_data import COUNTIES as COUNTIES_1993
+from .zupanijski_dom_1997_data import COUNTIES as COUNTIES_1997
 
 ELECTION_TYPE_SLUG = 'sabor_zupanijski'
 ELECTION_TYPE_NAME = 'Županijski dom Sabora'
 SEATS_PER_COUNTY = 3
 
+# Both elections the chamber ever held. The dates are printed on every page of
+# their reports; 1993's four repeat-vote counties say 21 February, but the
+# election is the 7th.
+COUNTIES_BY_YEAR = {1993: COUNTIES_1993, 1997: COUNTIES_1997}
+DATE_BY_YEAR = {1993: date(1993, 2, 7), 1997: date(1997, 4, 13)}
+
 
 class ZupanijskiDomImporter(BaseImporter):
-    YEARS = (1997,)
+    YEARS = tuple(sorted(COUNTIES_BY_YEAR))
 
     def __init__(self, year=1997, stdout=None):
         super().__init__(stdout=stdout)
         self.year = year
+        self.counties = COUNTIES_BY_YEAR[year]
 
     def run(self, only_district=None):
-        from datetime import date
         election_type = self.get_or_create_election_type(
             ELECTION_TYPE_SLUG, ELECTION_TYPE_NAME)
         election = self.get_or_create_election(
             election_type, self.year, f'{ELECTION_TYPE_NAME} {self.year}',
-            date=date(1997, 4, 13))
+            date=DATE_BY_YEAR[self.year])
         election_round = self.get_or_create_round(election, 1)
 
         members = seats = lists = 0
-        for entry in COUNTIES:
+        for entry in self.counties:
             number = int(entry['code'])
             if only_district is not None and number != only_district:
                 continue
@@ -85,7 +106,8 @@ class ZupanijskiDomImporter(BaseImporter):
 
         self.flush_all()
         self.log(f'{ELECTION_TYPE_NAME} {self.year}: {lists} lists across '
-                 f'{len(COUNTIES)} counties, {seats} seats, {members} members recorded')
+                 f'{len(self.counties)} counties, {seats} seats, '
+                 f'{members} members recorded')
 
     # ---- votes ----------------------------------------------------------
 

@@ -1395,7 +1395,7 @@ function activateModuleFromUrl() {
     // The upper house lost its own sidebar tab once the Sabor year picker
     // offered 1997; the URL still resolves, to that year of that module.
     if (slug === 'zupanijski-dom') {
-        izlNavigateTo('sabor', ZUP_DOM_YEAR);
+        izlNavigateTo('sabor', ZUP_DOM_YEARS[0]);
         return;
     }
     const mod = SLUG_TO_MODULE[slug] || 'person';
@@ -4508,8 +4508,10 @@ async function initSaborAnalysis() {
             y === SABOR_1995_YEAR ? ' <i class="bi bi-signpost-split ms-1"></i>' : ''}</button>`
     ).join('')
         + `<span class="align-self-center text-muted mx-1" style="font-size:0.9rem;">|</span>`
-        + `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${ZUP_DOM_YEAR}"
-                   title="Županijski dom — gornji dom Sabora, 1993.-2001.">${ZUP_DOM_YEAR}. <i class="bi bi-bank ms-1"></i></button>`
+        + ZUP_DOM_YEARS.map(y =>
+            `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
+                     title="Županijski dom — gornji dom Sabora, 1993.-2001.">${y}. <i class="bi bi-bank ms-1"></i></button>`
+          ).join('')
         + (sabor.years.length > 1
         ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
         : '');
@@ -4529,7 +4531,13 @@ async function initSaborAnalysis() {
 // Year picker is additive, mirroring the EU/predsjednički pickers: clicking a
 // second year adds it to the selection (max 3) rather than replacing it.
 // Clicking an active year removes it, but the set is never allowed to empty.
-const ZUP_DOM_YEAR = 1997;
+// The Županijski dom held exactly two elections, 1993 and 1997, before the
+// 2001 amendments abolished it. Both sit after the separator: they are the
+// other chamber, so they never join a Zastupnički dom comparison — but they
+// can be told apart from each other, which is why there are two buttons and
+// not one.
+const ZUP_DOM_YEARS = [1997, 1993];
+const isZupDomYear = y => ZUP_DOM_YEARS.includes(y);
 // 1995 is the same chamber as every year beside it, so it belongs in the year
 // list — but it was elected under a system nothing else here shares (one
 // countrywide list, 28 first-past-the-post districts, separate diaspora and
@@ -4546,7 +4554,7 @@ function onSaborYearClick(yr) {
     // — and 1995 is a different electoral system, with no list standing
     // nationwide in the same sense as 2000 onward. Picking either clears the
     // other years rather than adding to them.
-    const standalone = y => y === ZUP_DOM_YEAR || y === SABOR_1995_YEAR;
+    const standalone = y => isZupDomYear(y) || y === SABOR_1995_YEAR;
     if (standalone(yr) || cur.some(standalone)) {
         next = [yr];
     } else if (_sabor.compareScopes.length > 0) {
@@ -4598,7 +4606,7 @@ function setSaborYears(years) {
         loadSabor1995Into(area95, seq);
         return;
     }
-    if (sorted.length === 1 && sorted[0] === ZUP_DOM_YEAR) {
+    if (sorted.length === 1 && isZupDomYear(sorted[0])) {
         // Nothing to allocate, no districts to scope by, nothing to compare.
         document.getElementById('saborAnalysisArea').style.display = 'none';
         document.getElementById('saborCompareArea').style.display = 'none';
@@ -4606,7 +4614,7 @@ function setSaborYears(years) {
         if (scopeArea) scopeArea.style.display = 'none';
         if (addBtn) addBtn.disabled = true;
         zupArea.style.display = '';
-        loadZupanijskiDomInto(zupArea, seq);
+        loadZupanijskiDomInto(zupArea, sorted[0], seq);
         return;
     }
     if (zupArea) zupArea.style.display = 'none';
@@ -4618,19 +4626,20 @@ function setSaborYears(years) {
 // Renders the upper house into whichever container asked for it — the
 // standalone module and the Sabor page's 1997 button share this and the
 // renderer below, so there is one copy of each.
-let _zdCache = null;
-async function loadZupanijskiDomInto(area, seq) {
-    if (!_zdCache) {
+const _zdCache = {};
+async function loadZupanijskiDomInto(area, year, seq) {
+    year = year || ZUP_DOM_YEARS[0];
+    if (!_zdCache[year]) {
         area.innerHTML = '<div class="text-muted p-3">Učitavanje…</div>';
-        const res = await fetch(`/api/national/zupanijski-dom/${ZUP_DOM_YEAR}`);
+        const res = await fetch(`/api/national/zupanijski-dom/${year}`);
         if (!res.ok) {
             area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje (HTTP ${res.status}).</div>`;
             return;
         }
-        _zdCache = await res.json();
+        _zdCache[year] = await res.json();
     }
     if (seq !== undefined && seq !== _saLoadSeq) return;  // a newer click won
-    renderZupanijskiDom(_zdCache, area);
+    renderZupanijskiDom(_zdCache[year], area);
 }
 
 let _s95Cache = null;
@@ -7119,9 +7128,9 @@ function renderZupanijskiDom(d, area) {
                     <div class="fw-semibold mb-1" style="font-size:0.9rem;">Mandati po listama</div>
                     ${partyRows}
                     <div class="text-muted mt-2" style="font-size:0.8rem;">
-                        Ukupno ${d.elected_seats} izabranih; dom je uz njih imao i
-                        ${d.appointed_seats} imenovanih zastupnika (${d.elected_seats + d.appointed_seats} ukupno),
-                        koje izvješće DIP-a ne navodi.
+                        Ukupno ${d.elected_seats} izabranih; uz njih je predsjednik Republike
+                        mogao imenovati do ${d.appointed_seats} zastupnika, koje izvješće DIP-a
+                        ne navodi.
                         <br>Mandati su prikazani po <em>listi</em> — kako ih izvješće navodi — a ne po
                         stranačkoj pripadnosti pojedinog zastupnika; zajedničke liste zato stoje pod
                         prvom navedenom strankom.

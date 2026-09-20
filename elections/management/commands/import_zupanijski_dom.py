@@ -4,12 +4,13 @@ from elections.importers.zupanijski_dom import ZupanijskiDomImporter
 
 
 class Command(BaseCommand):
-    help = ('Import the Županijski dom (upper house) election. '
-            'Only 1997 is available — see elections/importers/zupanijski_dom.py.')
+    help = ('Import a Županijski dom (upper house) election. '
+            'The chamber held two: 1993 and 1997 — see '
+            'elections/importers/zupanijski_dom.py.')
 
     def add_arguments(self, parser):
         parser.add_argument('--year', type=int, default=1997,
-                            help='Election year. Only 1997 is defined.')
+                            help='Election year: 1993 or 1997.')
         parser.add_argument('--district', type=int, default=None,
                             help='Only import one county, by its 2-char county code as an int (1-21)')
 

@@ -1819,7 +1819,10 @@ def zupanijski_dom_results(year):
         'year': year,
         'date': round_date_iso(er, election) if er else None,
         'elected_seats': sum(national_seats.values()),
-        # The President appointed five more; they are not in the DIP report.
+        # The constitutional cap on presidential appointees to this chamber,
+        # the same for both its terms. How many were actually named is not in
+        # the DIP report, which covers the election only — so the UI says
+        # "up to", not "plus five".
         'appointed_seats': 5,
         'seats_per_county': 3,
         'totals': totals,
