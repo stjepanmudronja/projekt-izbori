@@ -33,12 +33,16 @@ class Command(BaseCommand):
         # fixed geo block, mixed polling stations in their own files — so it
         # subclasses the legacy importer; check it first, since it narrows.
         # 1995 shares nothing with any of them: it has no CSV export at all,
-        # only a transcribed report, and a four-contest electoral system.
+        # only a transcribed report, and a four-contest electoral system. 1992
+        # is likewise transcribed, under yet another mixed system.
+        from elections.importers.sabor_1992 import Sabor1992Importer
         from elections.importers.sabor_1995 import Sabor1995Importer
         from elections.importers.sabor_2000 import Sabor2000Importer
         from elections.importers.sabor_2003 import Sabor2003Importer
         from elections.importers.sabor_legacy import SaborLegacyImporter
-        if year in Sabor1995Importer.YEARS:
+        if year in Sabor1992Importer.YEARS:
+            importer = Sabor1992Importer(year=year, stdout=self.stdout)
+        elif year in Sabor1995Importer.YEARS:
             importer = Sabor1995Importer(year=year, stdout=self.stdout)
         elif year in Sabor2000Importer.YEARS:
             importer = Sabor2000Importer(year=year, stdout=self.stdout)

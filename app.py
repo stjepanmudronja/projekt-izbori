@@ -327,6 +327,8 @@ INCOMPLETE_COVERAGE = {
     # 1995 has no per-station export at all — DIP published only summary
     # figures — so county, municipality and station views are empty for it.
     ('sabor', 1995): 'samo državni zbroj',
+    # 1992 likewise: one decision per contest plus the list vote per unit.
+    ('sabor', 1992): 'samo državni zbroj',
 }
 
 
@@ -369,8 +371,10 @@ def sabor_seat_winner_candidacy_ids(er_id):
     # plurality districts, a countrywide list and 5 minority units — none of
     # which this D'Hondt pass models (it would hand every district 14 seats) —
     # and the DIP report names all 127 members, so the winners come straight
-    # off the stored ParliamentMember rows.
-    if year == 1995:
+    # off the stored ParliamentMember rows. 1992 is the same story under a
+    # different mix: 60 list seats, 60 single-member districts, 4 minority
+    # units and 14 members taken from the lists, all 138 named in the report.
+    if year in (1992, 1995):
         winner_ids = {
             cid for (cid,) in
             db.session.query(ParliamentMember.candidacy_id)
@@ -1976,6 +1980,143 @@ def sabor_1995_results():
         'districts': single,
         'minorities': minorities,
         'parties': sorted(({'name': k, 'seats': v} for k, v in seat_tally.items()),
+                          key=lambda x: (-x['seats'], x['name'])),
+    })
+
+
+@app.route('/api/national/sabor-1992')
+def sabor_1992_results():
+    """The 1992 Zastupnički dom: 138 members, none of them allocated here.
+
+    60 came off one countrywide list (D'Hondt, 3% threshold — the report's own
+    working, not recomputed), 60 from single-member plurality districts, 4 from
+    special units for the smaller minorities, and 13 + 1 were declared elected
+    from the lists to give the Serb community its census share and the smaller
+    minorities their guaranteed five. Every figure comes from the transcription
+    except the list vote per unit, which is also read back from the DB as a
+    check that the import landed whole.
+    """
+    from elections.importers.sabor_1992_data import (
+        LISTS, NATIONAL as N92, SERB_SEATS, EXTRA_MINORITY_SEAT,
+        DISTRICTS as D92, MINORITY_UNITS as M92, LIST_BY_UNIT, LIST_ABROAD,
+        LIST_RESIDUAL, ABBR_TO_LIST, ROMAN, person_name,
+    )
+
+    etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
+    election = (Election.query.filter_by(election_type_id=etype.id, year=1992).first()
+                if etype else None)
+    if not election:
+        return jsonify({'error': 'No 1992 sabor election'}), 404
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+
+    def display(raw):
+        return person_name(raw).title()
+
+    def group_of(party):
+        """A district ballot's nominator -> the national list it groups with.
+        Joint candidacies ("KNS - HSS") group under the first-named party."""
+        if party == 'NK':
+            return 'Nezavisni kandidat'
+        first = party.split(' - ')[0].split()[0]
+        idx = ABBR_TO_LIST.get(first)
+        return LISTS[idx] if idx is not None else first
+
+    seat_tally = defaultdict(int)
+    valid = N92['valid']
+    seats_by_idx = {idx: n for idx, n, _names in N92['seats_by_list']}
+    serb_by_idx = {idx: len(names) for idx, names in SERB_SEATS}
+    extra_idx = EXTRA_MINORITY_SEAT[0]
+    for i, name in enumerate(LISTS):
+        seat_tally[name] += (seats_by_idx.get(i, 0) + serb_by_idx.get(i, 0)
+                             + (1 if i == extra_idx else 0))
+
+    lists = sorted(
+        [{'name': name, 'votes': N92['votes'][i],
+          'pct': round(N92['votes'][i] / valid * 100, 2),
+          'seats': seats_by_idx.get(i, 0),
+          'minority_seats': serb_by_idx.get(i, 0) + (1 if i == extra_idx else 0)}
+         for i, name in enumerate(LISTS)],
+        key=lambda r: -r['votes'])
+
+    def unit_row(label, row, number=None):
+        reg, cast, inv, votes = row
+        v = cast - inv
+        return {'number': number, 'label': label, 'registered': reg, 'cast': cast,
+                'invalid': inv, 'valid': v,
+                'turnout_pct': round(cast / reg * 100, 2) if reg else None,
+                'votes': list(votes)}
+
+    units = []
+    for n, row in sorted(LIST_BY_UNIT.items()):
+        if n <= 60:
+            label = f"{ROMAN[n - 1]}. {D92[n]['name']}"
+        else:
+            label = f"{n - 60}. posebna IJ — {M92[n]['name']}"
+        units.append(unit_row(label, row, n))
+    units.append(unit_row('Inozemstvo', LIST_ABROAD))
+    res_cast, res_inv, res_votes = LIST_RESIDUAL
+    units.append(unit_row('Izvan redovitog biračkog tijela', (None, res_cast, res_inv, res_votes)))
+
+    def race(number, src, label, extra=None):
+        v = src['cast'] - src['invalid']
+        cands = sorted(
+            [{'name': display(name), 'list': party, 'group': group_of(party),
+              'votes': votes, 'pct': round(votes / v * 100, 2) if v else 0,
+              'won': name == src['winner']}
+             for name, party, votes in src['candidates']],
+            key=lambda c: -c['votes'])
+        for c in cands:
+            if c['won']:
+                seat_tally[c['group']] += 1
+        out = {
+            'number': number, 'label': label,
+            'registered': src['registered'], 'cast': src['cast'],
+            'valid': v, 'invalid': src['invalid'],
+            'turnout_pct': round(src['cast'] / src['registered'] * 100, 2)
+            if src['registered'] else 0,
+            'candidates': cands,
+            'winners': [c for c in cands if c['won']],
+        }
+        # The list ballot in the same unit, so a district can be read against
+        # how its voters split on the countrywide list.
+        if number in LIST_BY_UNIT:
+            reg, cast, inv, votes = LIST_BY_UNIT[number]
+            lv = cast - inv
+            out['list_vote'] = sorted(
+                [{'name': LISTS[i], 'votes': x, 'pct': round(x / lv * 100, 2) if lv else 0}
+                 for i, x in enumerate(votes)], key=lambda r: -r['votes'])[:4]
+        out.update(extra or {})
+        return out
+
+    districts = [race(n, D92[n], f"{ROMAN[n - 1]}. izborna jedinica — {D92[n]['name']}")
+                 for n in sorted(D92)]
+    minorities = [race(n, M92[n], f"{n - 60}. posebna izborna jedinica — {M92[n]['name']}",
+                       extra={'minority': M92[n]['minority'], 'seats': 1})
+                  for n in sorted(M92)]
+
+    return jsonify({
+        'year': 1992,
+        'date': round_date_iso(er, election) if er else None,
+        'total_seats': 138,
+        'lists': LISTS,
+        'national': {
+            'label': 'Državna lista', 'seats': N92['seats'],
+            'registered': N92['registered'], 'cast': N92['cast'],
+            'valid': valid, 'invalid': N92['invalid'],
+            'lists': lists,
+            'members_by_list': [
+                {'list': LISTS[idx], 'seats': n, 'names': [display(x) for x in names]}
+                for idx, n, names in N92['seats_by_list']],
+        },
+        'serb_seats': [{'list': LISTS[idx], 'names': [display(x) for x in names]}
+                       for idx, names in SERB_SEATS],
+        'extra_minority_seat': {'list': LISTS[extra_idx],
+                                'name': display(EXTRA_MINORITY_SEAT[1]),
+                                'community': EXTRA_MINORITY_SEAT[2]},
+        'units': units,
+        'districts': districts,
+        'minorities': minorities,
+        'parties': sorted(({'name': k, 'seats': v} for k, v in seat_tally.items() if v),
                           key=lambda x: (-x['seats'], x['name'])),
     })
 
