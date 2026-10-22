@@ -105,6 +105,10 @@ class ElectoralDistrict(db.Model):
     # Districts are per election — the same number means a different area in
     # different years, and 1997's are counties rather than izborne jedinice.
     election_id = db.Column(db.Integer, db.ForeignKey('elections_election.id'))
+    # Published per-contest electorate (1992/1995 districts) — display only.
+    registered_voters = db.Column(db.Integer)
+    ballots_cast = db.Column(db.Integer)
+    invalid_ballots = db.Column(db.Integer)
 
 
 class ListResult(db.Model):
@@ -1861,6 +1865,97 @@ SABOR_1995_ROMAN = [
 ]
 
 
+def _mixed_contests(election):
+    """Everything the 1992/1995 views need from the database, in one pass.
+
+    Returns (districts by number, candidates by district id, list votes by
+    district id, members by district id, winning candidacy ids, round 1).
+    Candidates and list votes are summed over each district's pseudo
+    station(s); members come from ParliamentMember, which is also how the
+    winners of single-member contests are known.
+    """
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+    districts = {d.number: d for d in
+                 ElectoralDistrict.query.filter_by(election_id=election.id).all()}
+    cand_rows = (
+        db.session.query(Candidacy.id, Person, ElectoralList.name, ElectoralList.district_id,
+                         db.func.coalesce(db.func.sum(CandidateResult.votes), 0))
+        .join(Person, Person.id == Candidacy.person_id)
+        .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+        .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+        .filter(ElectoralList.election_round_id == er.id)
+        .group_by(Candidacy.id, Person.id, ElectoralList.name, ElectoralList.district_id)
+        .all()
+    )
+    candidates = defaultdict(list)
+    for cid, person, list_name, district_id, votes in cand_rows:
+        full = f'{person.first_name} {person.last_name}'.strip()
+        suffix = f' - {full}'
+        party = list_name[:-len(suffix)] if list_name.endswith(suffix) else list_name
+        candidates[district_id].append({'candidacy_id': cid, 'name': full.title(),
+                                        'list': party, 'votes': int(votes)})
+    list_rows = (
+        db.session.query(ElectoralList.district_id, ElectoralList.name,
+                         ListResult.polling_station_id, db.func.sum(ListResult.votes))
+        .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
+        .filter(ElectoralList.election_round_id == er.id)
+        .group_by(ElectoralList.district_id, ElectoralList.name, ListResult.polling_station_id)
+        .all()
+    )
+    list_votes = defaultdict(lambda: defaultdict(dict))  # district -> station -> list -> votes
+    for district_id, name, station_id, votes in list_rows:
+        list_votes[district_id][station_id][name] = int(votes or 0)
+    members = defaultdict(list)
+    winners = set()
+    for m, person in (db.session.query(ParliamentMember, Person)
+                      .join(Person, Person.id == ParliamentMember.person_id)
+                      .filter(ParliamentMember.election_id == election.id).all()):
+        members[m.district_id].append({
+            'name': f'{person.first_name} {person.last_name}'.strip(),
+            'party': m.party, 'minority': m.minority, 'note': m.note or '',
+        })
+        if m.candidacy_id:
+            winners.add(m.candidacy_id)
+    return districts, candidates, list_votes, members, winners, er
+
+
+def _station_turnout(er, station_ids):
+    """Summed TurnoutData over the given stations: (registered, cast, invalid, valid)."""
+    row = (db.session.query(db.func.sum(TurnoutData.registered_voters),
+                            db.func.sum(TurnoutData.ballots_cast),
+                            db.func.sum(TurnoutData.invalid_ballots),
+                            db.func.sum(TurnoutData.valid_ballots))
+           .filter(TurnoutData.election_round_id == er.id,
+                   TurnoutData.polling_station_id.in_(list(station_ids)))
+           .one())
+    return tuple(int(x or 0) for x in row)
+
+
+def _mixed_race(d, cands, winners, group_of, label=None, extra=None):
+    """A single-member contest (or a multi-seat minority unit) from the DB.
+
+    Percentages are shares of all votes cast for candidates — for a one-seat
+    contest that is the valid ballots, and for 1995's three-seat Serbian unit
+    it is the report's own base (votes, not ballots)."""
+    total = sum(c['votes'] for c in cands)
+    rows = sorted(
+        [{'name': c['name'], 'list': c['list'], 'group': group_of(c['list']),
+          'votes': c['votes'], 'pct': round(c['votes'] / total * 100, 2) if total else 0,
+          'won': c['candidacy_id'] in winners}
+         for c in cands],
+        key=lambda c: -c['votes'])
+    reg, cast, inv = d.registered_voters or 0, d.ballots_cast or 0, d.invalid_ballots or 0
+    out = {
+        'number': d.number, 'label': label or d.name.replace(' - ', ' — '),
+        'registered': reg, 'cast': cast, 'invalid': inv, 'valid': cast - inv,
+        'turnout_pct': round(cast / reg * 100, 2) if reg else 0,
+        'candidates': rows,
+        'winners': [c for c in rows if c['won']],
+    }
+    out.update(extra or {})
+    return out
+
+
 @app.route('/api/national/sabor-1995')
 def sabor_1995_results():
     """The 1995 Zastupnički dom, which four contests elected at once.
@@ -1872,53 +1967,30 @@ def sabor_1995_results():
     D'Hondt pass over this data would hand each single-member district 14
     seats and invent a parliament that never sat.
 
-    Registered/cast/invalid for the 28 districts and 5 minority units come from
-    the transcription rather than the DB: only the national list and the
-    diaspora carry TurnoutData, because those two partition the electoral roll
-    exactly once while the other 33 contests count the same voters again.
+    Read entirely from the database. The national list and the diaspora carry
+    TurnoutData; the 28 districts and 5 minority units carry their published
+    electorate on ElectoralDistrict instead, because those contests count the
+    same voters again and must not add to the national turnout.
     """
-    from elections.importers.sabor_1995_data import (
-        DISTRICTS as D95, MINORITY_UNITS as M95, NATIONAL as N95, DIASPORA as X95,
-    )
-
     etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
     election = (Election.query.filter_by(election_type_id=etype.id, year=1995).first()
                 if etype else None)
     if not election:
         return jsonify({'error': 'No 1995 sabor election'}), 404
-    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
-
-    districts = {d.number: d for d in ElectoralDistrict.query
-                 .filter_by(election_id=election.id).all()}
-
-    def list_votes(number):
-        d = districts.get(number)
-        if not d:
-            return []
-        rows = (db.session.query(ElectoralList.name, db.func.sum(ListResult.votes))
-                .join(ListResult, ListResult.electoral_list_id == ElectoralList.id)
-                .filter(ElectoralList.district_id == d.id)
-                .group_by(ElectoralList.name).all())
-        return [(name, int(v or 0)) for name, v in rows]
-
-    members_by_district = defaultdict(list)
-    for m, prs in (db.session.query(ParliamentMember, Person)
-                   .join(Person, Person.id == ParliamentMember.person_id)
-                   .filter(ParliamentMember.election_id == election.id).all()):
-        members_by_district[m.district_id].append({
-            'name': f'{prs.first_name} {prs.last_name}'.strip(),
-            'list': m.party,
-        })
+    districts, candidates, list_votes, members, winners, er = _mixed_contests(election)
 
     # The report writes party names in full on the two proportional ballots
     # ("Hrvatska demokratska zajednica - HDZ") and as bare abbreviations on the
     # district ones ("HDZ"), so fold the short form onto the long one before
     # tallying or HDZ lands in the table twice.
     canon = {}
-    for name, _votes, _pct in list(N95['lists']) + list(X95['lists']):
-        first = name.split(',')[0].strip()
-        if ' - ' in first:
-            canon[first.rsplit(' - ', 1)[1].strip()] = first
+    for number in (SABOR_1995_NATIONAL_DISTRICT, SABOR_1995_DIASPORA_DISTRICT):
+        d = districts.get(number)
+        for station in (list_votes.get(d.id, {}) if d else {}).values():
+            for name in station:
+                first = name.split(',')[0].strip()
+                if ' - ' in first:
+                    canon[first.rsplit(' - ', 1)[1].strip()] = first
 
     def group_of(name):
         """First-named party of a list, the grouping key used site-wide."""
@@ -1927,72 +1999,67 @@ def sabor_1995_results():
 
     seat_tally = defaultdict(int)
 
-    def proportional(number, source, label):
+    def proportional(number, label):
         d = districts.get(number)
-        seats = {name: n for name, n, _names in source['seats_by_list']}
-        for name, n, _names in source['seats_by_list']:
-            seat_tally[group_of(name)] += n
-        valid = source['valid']
+        if not d:
+            return {'label': label, 'seats': 0, 'lists': [], 'members': [],
+                    'members_by_list': []}
+        stations = list_votes.get(d.id, {})
+        reg, cast, inv, valid = _station_turnout(er, stations.keys())
+        votes = defaultdict(int)
+        for per_list in stations.values():
+            for name, v in per_list.items():
+                votes[name] += v
+        by_party = defaultdict(list)
+        for m in members.get(d.id, []):
+            by_party[m['party']].append(m['name'])
+        for party, names in by_party.items():
+            seat_tally[group_of(party)] += len(names)
         rows = sorted(
-            [{'name': name, 'votes': votes,
-              'pct': round(votes / valid * 100, 2) if valid else 0,
-              'seats': seats.get(name, 0), 'group': group_of(name)}
-             for name, votes in list_votes(number)],
+            [{'name': name, 'votes': v,
+              'pct': round(v / valid * 100, 2) if valid else 0,
+              'seats': len(by_party.get(name, [])), 'group': group_of(name)}
+             for name, v in votes.items()],
             key=lambda r: -r['votes'])
         return {
             'label': label,
-            'seats': sum(seats.values()),
-            'registered': source['registered'], 'cast': source['cast'],
-            'valid': valid, 'invalid': source['invalid'],
+            'seats': sum(len(n) for n in by_party.values()),
+            'registered': reg, 'cast': cast, 'valid': valid, 'invalid': inv,
             'lists': rows,
-            'members': [m['name'] for m in sorted(
-                members_by_district.get(d.id if d else None, []),
-                key=lambda m: m['name'])],
-            'members_by_list': [
-                {'list': name, 'seats': n, 'group': group_of(name),
-                 'names': list(names)}
-                for name, n, names in source['seats_by_list']],
+            'members': sorted(m['name'] for m in members.get(d.id, [])),
+            'members_by_list': sorted(
+                ({'list': party, 'seats': len(names), 'group': group_of(party),
+                  'names': sorted(n.title() for n in names)}
+                 for party, names in by_party.items()),
+                key=lambda g: -g['seats']),
         }
 
-    def race(number, source, winners, label, extra=None):
-        valid = source['cast'] - source['invalid']
-        cands = sorted(
-            [{'name': name, 'list': party, 'group': group_of(party),
-              'votes': votes, 'pct': pct, 'won': name in set(winners)}
-             for name, party, votes, pct in source['candidates']],
-            key=lambda c: -c['votes'])
-        for name, party, _v, _p in source['candidates']:
-            if name in set(winners):
-                seat_tally[group_of(party)] += 1
-        out = {
-            'number': number, 'label': label,
-            'registered': source['registered'], 'cast': source['cast'],
-            'valid': valid, 'invalid': source['invalid'],
-            'turnout_pct': round(source['cast'] / source['registered'] * 100, 2)
-            if source['registered'] else 0,
-            'candidates': cands,
-            'winners': [c for c in cands if c['won']],
-        }
-        out.update(extra or {})
+    def race(d, extra=None):
+        out = _mixed_race(d, candidates.get(d.id, []), winners, group_of, extra=extra)
+        for c in out['winners']:
+            seat_tally[c['group']] += 1
         return out
 
-    single = [race(n, D95[n], [D95[n]['winner']], f'{SABOR_1995_ROMAN[n - 1]}. izborna jedinica')
-              for n in sorted(D95)]
-    minorities = [
-        race(n, M95[n], M95[n]['winners'],
-             f"{n}. posebna izborna jedinica{' — ' + M95[n]['name'] if M95[n]['name'] and not M95[n]['name'].startswith(str(n)) else ''}",
-             extra={'minority': M95[n]['minority'], 'seats': M95[n]['seats'],
-                    # The 5th unit elects three, so a ballot carries up to
-                    # three votes and the votes exceed the valid ballots.
-                    'multi_vote': M95[n]['seats'] > 1})
-        for n in sorted(M95)]
+    single = [race(districts[n]) for n in sorted(districts) if 1 <= n <= 28]
+    minorities = []
+    for n in sorted(districts):
+        if n < 121:
+            continue
+        d = districts[n]
+        seats = len(members.get(d.id, []))
+        minorities.append(race(d, extra={
+            'minority': d.name.split(' - ', 1)[1] if ' - ' in d.name else '',
+            'seats': seats,
+            # The 5th unit elects three, so a ballot carries up to three votes
+            # and the votes exceed the valid ballots.
+            'multi_vote': seats > 1}))
 
     return jsonify({
         'year': 1995,
         'date': round_date_iso(er, election) if er else None,
-        'total_seats': 127,
-        'national': proportional(SABOR_1995_NATIONAL_DISTRICT, N95, 'Državna lista'),
-        'diaspora': proportional(SABOR_1995_DIASPORA_DISTRICT, X95, 'Posebne liste — dijaspora'),
+        'total_seats': sum(len(v) for v in members.values()),
+        'national': proportional(SABOR_1995_NATIONAL_DISTRICT, 'Državna lista'),
+        'diaspora': proportional(SABOR_1995_DIASPORA_DISTRICT, 'Posebne liste — dijaspora'),
         'districts': single,
         'minorities': minorities,
         'parties': sorted(({'name': k, 'seats': v} for k, v in seat_tally.items()),
@@ -2008,130 +2075,131 @@ def sabor_1992_results():
     working, not recomputed), 60 from single-member plurality districts, 4 from
     special units for the smaller minorities, and 13 + 1 were declared elected
     from the lists to give the Serb community its census share and the smaller
-    minorities their guaranteed five. Every figure comes from the transcription
-    except the list vote per unit, which is also read back from the DB as a
-    check that the import landed whole.
+    minorities their guaranteed five.
+
+    Read from the database: list votes per unit from ListResult, the national
+    electorate from TurnoutData, each district's electorate from
+    ElectoralDistrict, members from ParliamentMember. The only thing taken
+    from the data module is `ABBR_TO_LIST`, the reference table tying a
+    district ballot's party abbreviation to that party's national list.
     """
-    from elections.importers.sabor_1992_data import (
-        LISTS, NATIONAL as N92, SERB_SEATS, EXTRA_MINORITY_SEAT,
-        DISTRICTS as D92, MINORITY_UNITS as M92, LIST_BY_UNIT, LIST_ABROAD,
-        LIST_RESIDUAL, ABBR_TO_LIST, ROMAN, person_name,
-    )
+    from elections.importers.sabor_1992_data import LISTS, ABBR_TO_LIST, ROMAN
 
     etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
     election = (Election.query.filter_by(election_type_id=etype.id, year=1992).first()
                 if etype else None)
     if not election:
         return jsonify({'error': 'No 1992 sabor election'}), 404
-    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
-
-    def display(raw):
-        return person_name(raw).title()
+    districts, candidates, list_votes, members, winners, er = _mixed_contests(election)
+    nat = districts.get(65)
 
     def group_of(party):
         """A district ballot's nominator -> the national list it groups with.
         Joint candidacies ("KNS - HSS") group under the first-named party."""
-        if party == 'NK':
+        if party.startswith('NK'):
             return 'Nezavisni kandidat'
         first = party.split(' - ')[0].split()[0]
         idx = ABBR_TO_LIST.get(first)
         return LISTS[idx] if idx is not None else first
 
-    seat_tally = defaultdict(int)
-    valid = N92['valid']
-    seats_by_idx = {idx: n for idx, n, _names in N92['seats_by_list']}
-    serb_by_idx = {idx: len(names) for idx, names in SERB_SEATS}
-    extra_idx = EXTRA_MINORITY_SEAT[0]
-    for i, name in enumerate(LISTS):
-        seat_tally[name] += (seats_by_idx.get(i, 0) + serb_by_idx.get(i, 0)
-                             + (1 if i == extra_idx else 0))
+    # The national result: one TurnoutData row, list votes summed over units.
+    reg, cast, inv, valid = _station_turnout(
+        er, [t.polling_station_id for t in
+             TurnoutData.query.filter_by(election_round_id=er.id).all()])
+    stations = list_votes.get(nat.id, {}) if nat else {}
+    national_votes = defaultdict(int)
+    for per_list in stations.values():
+        for name, v in per_list.items():
+            national_votes[name] += v
+    list_names = sorted(national_votes, key=lambda n: -national_votes[n])
 
-    lists = sorted(
-        [{'name': name, 'votes': N92['votes'][i],
-          'pct': round(N92['votes'][i] / valid * 100, 2),
-          'seats': seats_by_idx.get(i, 0),
-          'minority_seats': serb_by_idx.get(i, 0) + (1 if i == extra_idx else 0)}
-         for i, name in enumerate(LISTS)],
-        key=lambda r: -r['votes'])
-
-    def unit_row(label, row, number=None):
-        reg, cast, inv, votes = row
-        v = cast - inv
-        return {'number': number, 'label': label, 'registered': reg, 'cast': cast,
-                'invalid': inv, 'valid': v,
-                'turnout_pct': round(cast / reg * 100, 2) if reg else None,
-                'votes': list(votes)}
-
-    units = []
-    for n, row in sorted(LIST_BY_UNIT.items()):
-        if n <= 60:
-            label = f"{ROMAN[n - 1]}. {D92[n]['name']}"
+    nat_members = members.get(nat.id, []) if nat else []
+    seats = defaultdict(list)
+    serbs = defaultdict(list)
+    extra = None
+    for m in nat_members:
+        if not m['minority']:
+            seats[m['party']].append(m['name'].title())
+        elif m['note'].startswith('srpska'):
+            serbs[m['party']].append(m['name'].title())
         else:
-            label = f"{n - 60}. posebna IJ — {M92[n]['name']}"
-        units.append(unit_row(label, row, n))
-    units.append(unit_row('Inozemstvo', LIST_ABROAD))
-    res_cast, res_inv, res_votes = LIST_RESIDUAL
-    units.append(unit_row('Izvan redovitog biračkog tijela', (None, res_cast, res_inv, res_votes)))
+            extra = {'list': m['party'], 'name': m['name'].title(),
+                     'community': m['note'].split(' zajednica')[0]}
 
-    def race(number, src, label, extra=None):
-        v = src['cast'] - src['invalid']
-        cands = sorted(
-            [{'name': display(name), 'list': party, 'group': group_of(party),
-              'votes': votes, 'pct': round(votes / v * 100, 2) if v else 0,
-              'won': name == src['winner']}
-             for name, party, votes in src['candidates']],
-            key=lambda c: -c['votes'])
-        for c in cands:
-            if c['won']:
-                seat_tally[c['group']] += 1
-        out = {
-            'number': number, 'label': label,
-            'registered': src['registered'], 'cast': src['cast'],
-            'valid': v, 'invalid': src['invalid'],
-            'turnout_pct': round(src['cast'] / src['registered'] * 100, 2)
-            if src['registered'] else 0,
-            'candidates': cands,
-            'winners': [c for c in cands if c['won']],
-        }
+    seat_tally = defaultdict(int)
+    for name in list_names:
+        seat_tally[name] += len(seats.get(name, [])) + len(serbs.get(name, []))
+    if extra:
+        seat_tally[extra['list']] += 1
+
+    lists = [{'name': name, 'votes': national_votes[name],
+              'pct': round(national_votes[name] / valid * 100, 2) if valid else 0,
+              'seats': len(seats.get(name, [])),
+              'minority_seats': len(serbs.get(name, [])) + (1 if extra and extra['list'] == name else 0)}
+             for name in list_names]
+
+    # The list vote per unit, one pseudo station each. Station names are the
+    # importer's labels ("Državna lista - XII. IJ Bjelovar"), which carry the
+    # unit number back out.
+    roman_to_int = {r: i for i, r in enumerate(ROMAN, 1)}
+    station_names = dict(db.session.query(PollingStation.id, PollingStation.name)
+                         .filter(PollingStation.id.in_(list(stations))).all())
+    by_unit = {}
+    units = []
+    for sid in sorted(stations):
+        label = station_names.get(sid, '').replace('Državna lista - ', '', 1)
+        label = label[:1].upper() + label[1:]
+        number = None
+        head = label.split(' ', 1)[0].rstrip('.')
+        if head in roman_to_int and ' IJ ' in label:
+            number = roman_to_int[head]
+        elif 'posebna IJ' in label and head.isdigit():
+            number = 60 + int(head)
+        votes = [stations[sid].get(name, 0) for name in list_names]
+        if number:
+            by_unit[number] = votes
+        units.append({'number': number, 'label': label, 'valid': sum(votes), 'votes': votes})
+    units.sort(key=lambda u: (u['number'] is None, u['number'] or 0, u['label']))
+
+    def race(d, extra_fields=None):
+        out = _mixed_race(d, candidates.get(d.id, []), winners, group_of, extra=extra_fields)
+        for c in out['winners']:
+            seat_tally[c['group']] += 1
         # The list ballot in the same unit, so a district can be read against
         # how its voters split on the countrywide list.
-        if number in LIST_BY_UNIT:
-            reg, cast, inv, votes = LIST_BY_UNIT[number]
-            lv = cast - inv
+        unit_no = d.number if d.number <= 60 else d.number - 60
+        if unit_no in by_unit:
+            v = by_unit[unit_no]
+            total = sum(v)
             out['list_vote'] = sorted(
-                [{'name': LISTS[i], 'votes': x, 'pct': round(x / lv * 100, 2) if lv else 0}
-                 for i, x in enumerate(votes)], key=lambda r: -r['votes'])[:4]
-        out.update(extra or {})
+                [{'name': list_names[i], 'votes': x,
+                  'pct': round(x / total * 100, 2) if total else 0}
+                 for i, x in enumerate(v)], key=lambda r: -r['votes'])[:4]
         return out
 
-    districts = [race(n, D92[n], f"{ROMAN[n - 1]}. izborna jedinica — {D92[n]['name']}")
-                 for n in sorted(D92)]
-    minorities = [race(n, M92[n], f"{n - 60}. posebna izborna jedinica — {M92[n]['name']}",
-                       extra={'minority': M92[n]['minority'], 'seats': 1})
-                  for n in sorted(M92)]
+    district_rows = [race(districts[n]) for n in sorted(districts) if 1 <= n <= 60]
+    minority_rows = [race(districts[n], {'seats': 1,
+                                         'minority': districts[n].name.split(' - ', 1)[-1]})
+                     for n in sorted(districts) if n >= 121]
 
     return jsonify({
         'year': 1992,
         'date': round_date_iso(er, election) if er else None,
-        'total_seats': 138,
-        'lists': LISTS,
+        'total_seats': sum(len(v) for v in members.values()),
+        'lists': list_names,
         'national': {
-            'label': 'Državna lista', 'seats': N92['seats'],
-            'registered': N92['registered'], 'cast': N92['cast'],
-            'valid': valid, 'invalid': N92['invalid'],
+            'label': 'Državna lista', 'seats': sum(len(v) for v in seats.values()),
+            'registered': reg, 'cast': cast, 'valid': valid, 'invalid': inv,
             'lists': lists,
-            'members_by_list': [
-                {'list': LISTS[idx], 'seats': n, 'names': [display(x) for x in names]}
-                for idx, n, names in N92['seats_by_list']],
+            'members_by_list': sorted(
+                ({'list': name, 'seats': len(names), 'names': sorted(names)}
+                 for name, names in seats.items()), key=lambda g: -g['seats']),
         },
-        'serb_seats': [{'list': LISTS[idx], 'names': [display(x) for x in names]}
-                       for idx, names in SERB_SEATS],
-        'extra_minority_seat': {'list': LISTS[extra_idx],
-                                'name': display(EXTRA_MINORITY_SEAT[1]),
-                                'community': EXTRA_MINORITY_SEAT[2]},
+        'serb_seats': [{'list': name, 'names': sorted(names)} for name, names in serbs.items()],
+        'extra_minority_seat': extra,
         'units': units,
-        'districts': districts,
-        'minorities': minorities,
+        'districts': district_rows,
+        'minorities': minority_rows,
         'parties': sorted(({'name': k, 'seats': v} for k, v in seat_tally.items() if v),
                           key=lambda x: (-x['seats'], x['name'])),
     })

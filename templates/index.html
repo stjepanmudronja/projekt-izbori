@@ -7400,7 +7400,6 @@ function renderSabor1992(d, area) {
         const shown = top.reduce((a, i) => a + u.votes[i], 0);
         return `<tr>
             <td style="font-size:0.8rem; white-space:nowrap;">${escapeHtml(u.label)}</td>
-            <td class="text-end" style="font-size:0.8rem;">${u.turnout_pct != null ? formatPct(u.turnout_pct, 1) : '—'}</td>
             ${top.map(i => `<td class="text-end" style="font-size:0.8rem;">${formatPct(u.votes[i] / valid * 100, 1)}</td>`).join('')}
             <td class="text-end text-muted" style="font-size:0.8rem;">${formatPct((valid - shown) / valid * 100, 1)}</td>
         </tr>`;
@@ -7471,7 +7470,7 @@ function renderSabor1992(d, area) {
                 <div class="table-responsive mt-2" style="max-height:480px; overflow-y:auto;">
                     <table class="table table-sm table-hover mb-0">
                         <thead style="position:sticky; top:0; background:var(--bs-body-bg);"><tr>
-                            <th style="font-size:0.8rem;">Jedinica</th><th class="text-end" style="font-size:0.8rem;">Izlaznost</th>
+                            <th style="font-size:0.8rem;">Jedinica</th>
                             ${top.map(i => `<th class="text-end" style="font-size:0.8rem;">${escapeHtml(short(d.lists[i]))}</th>`).join('')}
                             <th class="text-end" style="font-size:0.8rem;">Ostali</th>
                         </tr></thead>

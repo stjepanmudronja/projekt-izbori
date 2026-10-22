@@ -135,6 +135,12 @@ class Sabor1995Importer(BaseImporter):
 
     def _import_race(self, election, er, entry, number, label, winners, minority=False):
         district = self.get_or_create_district(election, number, label)
+        # The contest's own electorate, kept on the district rather than in
+        # TurnoutData (see below) so the results view can read it back.
+        district.registered_voters = entry['registered']
+        district.ballots_cast = entry['cast']
+        district.invalid_ballots = entry['invalid']
+        district.save(update_fields=['registered_voters', 'ballots_cast', 'invalid_ballots'])
         station = self._station_for(label)
         # No turnout row on purpose: the same voters are counted again here.
         # A domestic elector cast a district ballot *and* a national-list one,
