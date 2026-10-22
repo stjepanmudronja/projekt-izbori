@@ -77,10 +77,13 @@ class Sabor1990DpvImporter(BaseImporter):
             self.create_turnout(er, station, rnd['registered'], rnd['cast'],
                                 valid, rnd['invalid'])
             names = self._list_names(rnd['candidates'])
-            for raw, _residence, party, votes in rnd['candidates']:
+            for raw, residence, party, votes in rnd['candidates']:
                 el = self.get_or_create_electoral_list(er, names[raw], district)
                 person = self.get_or_create_person(person_name(raw))
                 candidacy = self.get_or_create_candidacy(person, el, 1)
+                if candidacy.residence != residence:
+                    candidacy.residence = residence
+                    candidacy.save(update_fields=['residence'])
                 self.create_list_result(el, station, votes)
                 self.create_candidate_result(candidacy, station, votes)
                 if raw == unit['winner'] and round_no == len(unit['rounds']):

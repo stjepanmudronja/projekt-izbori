@@ -46,6 +46,7 @@ class Candidacy(db.Model):
     person_id = db.Column(db.Integer, db.ForeignKey('elections_person.id'))
     electoral_list_id = db.Column(db.Integer, db.ForeignKey('elections_electorallist.id'))
     position_on_list = db.Column(db.Integer)
+    residence = db.Column(db.String)
     electoral_list = db.relationship('ElectoralList', backref='candidacies', lazy=True)
 
 
@@ -2140,15 +2141,13 @@ def sabor_1992_results():
 def sabor_dpv_results(year):
     """The 1990 Društveno-političko vijeće: 80 single-member units, two rounds.
 
-    Every figure comes from the transcription (`sabor_1990_dpv_data`), which
-    also names each unit's winner, so nothing is computed here but the tally.
-    Seats group by the winner's first nominating party; a joint candidacy run
-    under the Koalicija narodnog sporazuma groups as KNS, the coalition it
-    stood for.
+    Read entirely from the database: candidates and votes from Candidacy /
+    CandidateResult, each unit's electorate per round from its TurnoutData row,
+    winners from ParliamentMember. Seats group by the winner's first nominating
+    party; a joint candidacy run under the Koalicija narodnog sporazuma groups
+    as KNS, the coalition it stood for.
     """
-    from elections.importers.sabor_1990_dpv_data import (
-        DISTRICTS as D90, PARTIES, ELECTION_TYPE_SLUG, party_label, person_name,
-    )
+    from elections.importers.sabor_1990_dpv_data import PARTIES, ELECTION_TYPE_SLUG
 
     etype = ElectionType.query.filter_by(slug=ELECTION_TYPE_SLUG).first()
     election = (Election.query.filter_by(election_type_id=etype.id, year=year).first()
@@ -2157,42 +2156,85 @@ def sabor_dpv_results(year):
         return jsonify({'error': 'No Društveno-političko vijeće election for this year'}), 404
     rounds = {er.round_number: er for er in
               ElectionRound.query.filter_by(election_id=election.id).all()}
+    round_by_id = {er.id: n for n, er in rounds.items()}
+    districts = {d.id: d for d in
+                 ElectoralDistrict.query.filter_by(election_id=election.id).all()}
 
-    def group_of(abbrs):
-        parts = abbrs.split(',')
-        key = 'KNS' if parts[-1] == 'KNS' else parts[0]
-        return PARTIES.get(key, key)
+    rows = (
+        db.session.query(Candidacy, Person, ElectoralList,
+                         CandidateResult.polling_station_id,
+                         db.func.coalesce(db.func.sum(CandidateResult.votes), 0))
+        .join(Person, Person.id == Candidacy.person_id)
+        .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+        .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
+        .filter(ElectoralList.election_round_id.in_(round_by_id))
+        .group_by(Candidacy.id, Person.id, ElectoralList.id,
+                  CandidateResult.polling_station_id)
+        .all()
+    )
+    turnout = {(t.election_round_id, t.polling_station_id): t for t in
+               TurnoutData.query.filter(TurnoutData.election_round_id.in_(round_by_id)).all()}
+    winners = {m.candidacy_id for m in
+               ParliamentMember.query.filter_by(election_id=election.id).all()}
+
+    def base_list(list_name, person):
+        """The stored list name carries the candidate as a suffix where a
+        label repeated in one round; the party is what is left."""
+        full = f'{person.first_name} {person.last_name}'.strip()
+        suffix = f' - {full}'
+        return list_name[:-len(suffix)] if list_name.endswith(suffix) else list_name
+
+    def group_of(label):
+        if label.endswith(' - KNS'):
+            return PARTIES['KNS']
+        first = label.split(', ')[0]
+        return PARTIES.get(first, first)
+
+    # (district_id, round) -> {'station': id, 'candidates': [...]}
+    contests = defaultdict(lambda: {'station': None, 'candidates': []})
+    for cand, person, el, station_id, votes in rows:
+        key = (el.district_id, round_by_id[el.election_round_id])
+        contests[key]['station'] = contests[key]['station'] or station_id
+        label = base_list(el.name, person)
+        contests[key]['candidates'].append({
+            'name': f'{person.first_name} {person.last_name}'.strip().title(),
+            'person_id': person.id,
+            'residence': cand.residence or '',
+            'list': label, 'group': group_of(label),
+            'votes': int(votes), 'won': cand.id in winners,
+        })
 
     seat_tally = defaultdict(int)
-    totals = {n: {'registered': 0, 'cast': 0, 'invalid': 0, 'valid': 0} for n in (1, 2)}
+    totals = {n: {'registered': 0, 'cast': 0, 'invalid': 0, 'valid': 0} for n in rounds}
     units = []
-    for number, unit in sorted(D90.items()):
+    for d in sorted(districts.values(), key=lambda d: d.number):
         out_rounds = []
-        for rn, rnd in enumerate(unit['rounds'], 1):
-            valid = sum(c[3] for c in rnd['candidates'])
-            t = totals[rn]
-            t['registered'] += rnd['registered']; t['cast'] += rnd['cast']
-            t['invalid'] += rnd['invalid']; t['valid'] += valid
-            last = rn == len(unit['rounds'])
-            cands = sorted(
-                [{'name': person_name(name).title(), 'residence': res,
-                  'list': party_label(party), 'group': group_of(party),
-                  'votes': votes, 'pct': round(votes / valid * 100, 2) if valid else 0,
-                  'won': last and name == unit['winner']}
-                 for name, res, party, votes in rnd['candidates']],
-                key=lambda c: -c['votes'])
+        for rn in sorted(rounds):
+            c = contests.get((d.id, rn))
+            if not c:
+                continue
+            t = turnout.get((rounds[rn].id, c['station']))
+            valid = sum(x['votes'] for x in c['candidates'])
+            reg = t.registered_voters if t else 0
+            cast = t.ballots_cast if t else 0
+            inv = t.invalid_ballots if t else 0
+            for k, v in (('registered', reg), ('cast', cast), ('invalid', inv), ('valid', valid)):
+                totals[rn][k] += v
+            for x in c['candidates']:
+                x['pct'] = round(x['votes'] / valid * 100, 2) if valid else 0
             out_rounds.append({
                 'round': rn,
-                'date': rounds[rn].date.isoformat() if rn in rounds and rounds[rn].date else None,
-                'registered': rnd['registered'], 'cast': rnd['cast'],
-                'invalid': rnd['invalid'], 'valid': valid,
-                'turnout_pct': round(rnd['cast'] / rnd['registered'] * 100, 2),
-                'candidates': cands,
+                'date': rounds[rn].date.isoformat() if rounds[rn].date else None,
+                'registered': reg, 'cast': cast, 'invalid': inv, 'valid': valid,
+                'turnout_pct': round(cast / reg * 100, 2) if reg else None,
+                'candidates': sorted(c['candidates'], key=lambda x: -x['votes']),
             })
-        winner = next(c for c in out_rounds[-1]['candidates'] if c['won'])
-        seat_tally[winner['group']] += 1
-        units.append({'number': number, 'name': unit['name'],
-                      'label': f"{number}. izborna jedinica — {unit['name']}",
+        winner = next((x for r in out_rounds for x in r['candidates'] if x['won']), None)
+        if winner:
+            seat_tally[winner['group']] += 1
+        name = d.name.split(' - ', 1)[1] if ' - ' in d.name else d.name
+        units.append({'number': d.number, 'name': name,
+                      'label': f'{d.number}. izborna jedinica — {name}',
                       'winner': winner, 'decided_in_round': len(out_rounds),
                       'rounds': out_rounds})
 

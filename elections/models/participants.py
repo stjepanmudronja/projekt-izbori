@@ -49,6 +49,9 @@ class Candidacy(models.Model):
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='candidacies')
     electoral_list = models.ForeignKey(ElectoralList, on_delete=models.CASCADE, related_name='candidacies')
     position_on_list = models.IntegerField()
+    # The candidate's place of residence as the result printed it. Only the
+    # 1990 report gives one ("IVAN TORMAŠ, BELI MANASTIR"); blank elsewhere.
+    residence = models.CharField(max_length=100, blank=True, default='')
 
     class Meta:
         verbose_name_plural = 'candidacies'
