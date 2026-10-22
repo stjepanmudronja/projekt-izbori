@@ -337,7 +337,19 @@ INCOMPLETE_COVERAGE = {
     # 1990: one figure per unit and round; the 2. krug covers only the 51
     # units that needed one.
     ('sabor_dpv', 1990): 'samo zbroj po izbornim jedinicama',
+    ('sabor_vo', 1990): 'samo zbroj po izbornim jedinicama',
 }
+
+# The 1990 Sabor's chambers, each its own election type: key (as in the URL)
+# -> slug, ElectionType.name and the chamber's short title. All are single-
+# member units decided by majority over up to two rounds, with every winner
+# stored as a ParliamentMember, so they share one endpoint and one seat rule.
+SABOR_1990_CHAMBERS = {
+    'dpv': ('sabor_dpv', 'Društveno-političko vijeće Sabora', 'Društveno-političko vijeće'),
+    'vo': ('sabor_vo', 'Vijeće općina Sabora', 'Vijeće općina'),
+}
+SABOR_1990_SLUGS = {slug for slug, _n, _t in SABOR_1990_CHAMBERS.values()}
+SABOR_1990_TYPE_NAMES = {name for _s, name, _t in SABOR_1990_CHAMBERS.values()}
 
 
 def diaspora_seats(year):
@@ -389,9 +401,10 @@ def sabor_seat_winner_candidacy_ids(er_id):
         .filter(ElectionRound.id == er_id)
         .scalar()
     )
-    # The 1990 Društveno-političko vijeće is plurality too (80 single-member
-    # units, two rounds), and its 80 winners are stored the same way.
-    if year in (1992, 1995) or etype_slug == 'sabor_dpv':
+    # The 1990 chambers are majority races in single-member units (80 for the
+    # Društveno-političko vijeće, 115 for the Vijeće općina), and their
+    # winners are stored the same way.
+    if year in (1992, 1995) or etype_slug in SABOR_1990_SLUGS:
         winner_ids = {
             cid for (cid,) in
             db.session.query(ParliamentMember.candidacy_id)
@@ -534,9 +547,9 @@ def person_detail(person_id):
     # Sabor / EU and lokalni list-races (Vijeće, Skupština) are intentionally
     # excluded — they're seat-allocation races where "vote count" doesn't
     # cleanly map to a winner.
-    # The 1990 Društveno-političko vijeće is a head-to-head race per unit and
-    # per round, so it ranks like a presidential round within its district.
-    RANK_BY_DISTRICT = {'Predsjednički izbori', 'Društveno-političko vijeće Sabora'}
+    # The 1990 chambers are a head-to-head race per unit and per round, so
+    # they rank like a presidential round within its district.
+    RANK_BY_DISTRICT = {'Predsjednički izbori'} | SABOR_1990_TYPE_NAMES
     RANK_BY_MUNI = {'Gradonačelnik', 'Načelnik'}
     RANK_BY_COUNTY = {'Župan'}
     LOKALNI_EXEC = RANK_BY_MUNI | RANK_BY_COUNTY
@@ -670,7 +683,7 @@ def person_detail(person_id):
         c.electoral_list.election_round_id
         for c in candidacies
         if c.electoral_list.election_round.election.election_type.name
-        in ('Parlamentarni izbori', 'Društveno-političko vijeće Sabora')
+        in {'Parlamentarni izbori'} | SABOR_1990_TYPE_NAMES
     }
     sabor_winner_ids = set()
     for rid in sabor_round_ids:
@@ -2220,21 +2233,31 @@ def sabor_1992_results():
 
 @app.route('/api/national/sabor-dpv/<int:year>')
 def sabor_dpv_results(year):
-    """The 1990 Društveno-političko vijeće: 80 single-member units, two rounds.
+    return sabor_1990_results('dpv', year)
+
+
+@app.route('/api/national/sabor-1990/<chamber>/<int:year>')
+def sabor_1990_results(chamber, year):
+    """A 1990 chamber — the Društveno-političko vijeće (80 units) or the
+    Vijeće općina (115) — elected in single-member units over two rounds.
 
     Read entirely from the database: candidates and votes from Candidacy /
-    CandidateResult, each unit's electorate per round from its TurnoutData row,
-    winners from ParliamentMember. Seats group by the winner's first nominating
-    party; a joint candidacy run under the Koalicija narodnog sporazuma groups
-    as KNS, the coalition it stood for.
+    CandidateResult, each unit's electorate per round from its TurnoutData row
+    (or, for a unit whose voters are counted elsewhere too, from its
+    ElectoralDistrict), winners from ParliamentMember. Seats group by the
+    winner's first nominating party; a joint candidacy run under the Koalicija
+    narodnog sporazuma groups as KNS, the coalition it stood for.
     """
-    from elections.importers.sabor_1990_dpv_data import PARTIES, ELECTION_TYPE_SLUG
+    from elections.importers.sabor_1990_vo_data import PARTIES
 
-    etype = ElectionType.query.filter_by(slug=ELECTION_TYPE_SLUG).first()
+    if chamber not in SABOR_1990_CHAMBERS:
+        return jsonify({'error': f'Unknown 1990 chamber: {chamber}'}), 404
+    slug, _type_name, title = SABOR_1990_CHAMBERS[chamber]
+    etype = ElectionType.query.filter_by(slug=slug).first()
     election = (Election.query.filter_by(election_type_id=etype.id, year=year).first()
                 if etype else None)
     if not election:
-        return jsonify({'error': 'No Društveno-političko vijeće election for this year'}), 404
+        return jsonify({'error': f'No {title} election for this year'}), 404
     rounds = {er.round_number: er for er in
               ElectionRound.query.filter_by(election_id=election.id).all()}
     round_by_id = {er.id: n for n, er in rounds.items()}
@@ -2292,11 +2315,15 @@ def sabor_dpv_results(year):
                 continue
             t = turnout.get((rounds[rn].id, c['station']))
             valid = sum(x['votes'] for x in c['candidates'])
-            reg = t.registered_voters if t else 0
-            cast = t.ballots_cast if t else 0
-            inv = t.invalid_ballots if t else 0
-            for k, v in (('registered', reg), ('cast', cast), ('invalid', inv), ('valid', valid)):
-                totals[rn][k] += v
+            # No turnout row means the unit's voters are counted in other
+            # units too: show its own electorate, keep it out of the totals.
+            overlapping = t is None and d.registered_voters is not None
+            reg = t.registered_voters if t else (d.registered_voters or 0)
+            cast = t.ballots_cast if t else (d.ballots_cast or 0)
+            inv = t.invalid_ballots if t else (d.invalid_ballots or 0)
+            if not overlapping:
+                for k, v in (('registered', reg), ('cast', cast), ('invalid', inv), ('valid', valid)):
+                    totals[rn][k] += v
             for x in c['candidates']:
                 x['pct'] = round(x['votes'] / valid * 100, 2) if valid else 0
             out_rounds.append({
@@ -2304,6 +2331,7 @@ def sabor_dpv_results(year):
                 'date': rounds[rn].date.isoformat() if rounds[rn].date else None,
                 'registered': reg, 'cast': cast, 'invalid': inv, 'valid': valid,
                 'turnout_pct': round(cast / reg * 100, 2) if reg else None,
+                'overlapping': overlapping,
                 'candidates': sorted(c['candidates'], key=lambda x: -x['votes']),
             })
         winner = next((x for r in out_rounds for x in r['candidates'] if x['won']), None)
@@ -2317,7 +2345,9 @@ def sabor_dpv_results(year):
 
     return jsonify({
         'year': year,
-        'chamber': 'Društveno-političko vijeće',
+        'chamber': title,
+        'chamber_key': chamber,
+        'chambers': [{'key': k, 'title': t} for k, (_s, _n, t) in SABOR_1990_CHAMBERS.items()],
         'total_seats': len(units),
         'runoffs': sum(1 for u in units if u['decided_in_round'] == 2),
         'round_totals': totals,
@@ -2942,6 +2972,14 @@ ANALYTICS_CATEGORIES = {
         'label': 'Društveno-političko vijeće Sabora (1990.)',
         'short': 'DPV Sabora',
         'types': ['Društveno-političko vijeće Sabora'],
+    },
+    # Its council of municipalities, elected the same day. Its 115 units are
+    # not a partition: the city-wide Zagreb unit's voters also voted in their
+    # own Zagreb općina, so that unit carries no turnout row (see sabor_1990.py).
+    'sabor_vo': {
+        'label': 'Vijeće općina Sabora (1990.)',
+        'short': 'Vijeće općina',
+        'types': ['Vijeće općina Sabora'],
     },
     'eu': {
         'label': 'EU parlamentarni izbori',

@@ -1,4 +1,9 @@
-"""Import the 1990 election to the Društveno-političko vijeće of the Sabor.
+"""Import the 1990 elections to the Društveno-političko vijeće and the Vijeće
+općina of the Sabor.
+
+Both chambers share one shape, so one importer serves both, picked by
+`chamber` ('dpv' or 'vo'); everything below is said of the DPV and holds for
+the Vijeće općina (`sabor_vo`, 115 units) too, except where noted.
 
 The 1990 Sabor had three chambers, elected separately; this is the
 "socio-political council" every adult voted for. It gets its own ElectionType
@@ -15,7 +20,10 @@ CandidateResult — which is what puts them in cross-election search.
 
 **Turnout is stored per unit per round.** Unlike 1992 and 1995, the units
 partition the electorate exactly once, so summing them gives the national
-figure. There is still no per-station data, so each unit is one pseudo station
+figure. The one exception is the Vijeće općina's city-wide Zagreb unit, whose
+voters also voted in their own Zagreb općina; units listed in the data
+module's `OVERLAPPING_UNITS` keep their electorate on the ElectoralDistrict
+instead, as 1992/1995 do. There is still no per-station data, so each unit is one pseudo station
 under county `99 REPUBLIKA HRVATSKA (sažetak)`. Valid ballots are taken as the
 sum of the candidates, which can fall short of `cast - invalid` — see the data
 module for why the report's own figures leave that gap.
@@ -27,10 +35,11 @@ this chamber instead of running D'Hondt.
 from collections import Counter
 from datetime import date
 
+from . import sabor_1990_dpv_data, sabor_1990_vo_data
 from .base import BaseImporter
-from .sabor_1990_dpv_data import (
-    DISTRICTS, PARTIES, ELECTION_TYPE_SLUG, ELECTION_TYPE_NAME, party_label, person_name,
-)
+from .sabor_1990_dpv_data import party_label, person_name
+
+CHAMBERS = {'dpv': sabor_1990_dpv_data, 'vo': sabor_1990_vo_data}
 
 ROUND_DATES = {1: date(1990, 4, 22), 2: date(1990, 5, 6)}
 
@@ -38,30 +47,32 @@ SYNTH_COUNTY_CODE = '99'
 SYNTH_COUNTY_NAME = 'REPUBLIKA HRVATSKA (sažetak)'
 
 
-class Sabor1990DpvImporter(BaseImporter):
+class Sabor1990Importer(BaseImporter):
     YEARS = (1990,)
 
-    def __init__(self, year=1990, stdout=None):
+    def __init__(self, chamber='dpv', year=1990, stdout=None):
         super().__init__(stdout=stdout)
         self.year = year
+        self.data = CHAMBERS[chamber]
 
     def run(self, only_district=None):
-        etype = self.get_or_create_election_type(ELECTION_TYPE_SLUG, ELECTION_TYPE_NAME)
+        data = self.data
+        etype = self.get_or_create_election_type(data.ELECTION_TYPE_SLUG, data.ELECTION_TYPE_NAME)
         election = self.get_or_create_election(
-            etype, self.year, f'{ELECTION_TYPE_NAME} {self.year}', date=ROUND_DATES[1])
+            etype, self.year, f'{data.ELECTION_TYPE_NAME} {self.year}', date=ROUND_DATES[1])
         rounds = {n: self.get_or_create_round(election, n) for n in ROUND_DATES}
         self.county = self.get_or_create_county(SYNTH_COUNTY_CODE, SYNTH_COUNTY_NAME)
 
         members = 0
-        for number, unit in sorted(DISTRICTS.items()):
+        for number, unit in sorted(data.DISTRICTS.items()):
             if only_district is not None and number != only_district:
                 continue
             members += self._import_unit(election, rounds, number, unit)
 
         self.flush_all()
-        runoffs = sum(1 for u in DISTRICTS.values() if len(u['rounds']) > 1)
-        self.log(f'{ELECTION_TYPE_NAME} {self.year}: {members} members recorded '
-                 f'({len(DISTRICTS)} units, {runoffs} decided in round 2)')
+        runoffs = sum(1 for u in data.DISTRICTS.values() if len(u['rounds']) > 1)
+        self.log(f'{data.ELECTION_TYPE_NAME} {self.year}: {members} members recorded '
+                 f'({len(data.DISTRICTS)} units, {runoffs} decided in round 2)')
 
     def _import_unit(self, election, rounds, number, unit):
         label = f"{number}. izborna jedinica - {unit['name']}"
@@ -70,12 +81,26 @@ class Sabor1990DpvImporter(BaseImporter):
             self.county, f'{label.upper()} (SAŽETAK)', 'sažetak')
         station = self.get_or_create_polling_station(muni, '001', label, 'sažetak', '')
 
+        # A unit whose voters are counted elsewhere too (the Vijeće općina's
+        # city-wide Zagreb unit) keeps its electorate on the district only, as
+        # 1992/1995 do, so turnout totals never count those voters twice.
+        overlapping = number in getattr(self.data, 'OVERLAPPING_UNITS', ())
+        if overlapping:
+            if len(unit['rounds']) != 1:
+                raise ValueError(f'unit {number}: an overlapping unit must have one round')
+            rnd = unit['rounds'][0]
+            district.registered_voters = rnd['registered']
+            district.ballots_cast = rnd['cast']
+            district.invalid_ballots = rnd['invalid']
+            district.save(update_fields=['registered_voters', 'ballots_cast', 'invalid_ballots'])
+
         deciding = None
         for round_no, rnd in enumerate(unit['rounds'], 1):
             er = rounds[round_no]
             valid = sum(v for _n, _res, _p, v in rnd['candidates'])
-            self.create_turnout(er, station, rnd['registered'], rnd['cast'],
-                                valid, rnd['invalid'])
+            if not overlapping:
+                self.create_turnout(er, station, rnd['registered'], rnd['cast'],
+                                    valid, rnd['invalid'])
             names = self._list_names(rnd['candidates'])
             for raw, residence, party, votes in rnd['candidates']:
                 el = self.get_or_create_electoral_list(er, names[raw], district)
@@ -95,15 +120,15 @@ class Sabor1990DpvImporter(BaseImporter):
         self._record_member(election, unit['winner'], party_label(party), district, candidacy)
         return 1
 
-    @staticmethod
-    def _list_names(candidates):
+    def _list_names(self, candidates):
         """Candidate -> stored list name: the nominating party, with the
         candidate appended where a label repeats in the same round (two HDZ
         candidates stood in several units, and independents often)."""
         counts = Counter(party for _n, _r, party, _v in candidates)
         out = {}
         for raw, _res, party, _v in candidates:
-            label = PARTIES[party] if party in PARTIES else party_label(party)
+            parties = self.data.PARTIES
+            label = parties[party] if party in parties else party_label(party)
             out[raw] = f'{label} - {person_name(raw)}' if counts[party] > 1 else label
         return out
 
