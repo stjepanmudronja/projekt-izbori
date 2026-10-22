@@ -1865,6 +1865,20 @@ SABOR_1995_ROMAN = [
 ]
 
 
+def _strip_holder(list_name, person_full_name):
+    """A list name with its candidate appended (" - IVAN HORVAT", added where
+    one party ran several candidates in a contest) -> the party alone.
+
+    Compared hyphen-insensitively: the list carries the name as the report
+    spelled it ("ANTE-JOZO RAMIĆ"), the Person row may have matched an
+    existing un-hyphenated spelling ("ANTE JOZO RAMIĆ")."""
+    if ' - ' not in list_name:
+        return list_name
+    head, tail = list_name.rsplit(' - ', 1)
+    norm = lambda x: ' '.join(x.replace('-', ' ').upper().split())
+    return head if norm(tail) == norm(person_full_name) else list_name
+
+
 def _mixed_contests(election):
     """Everything the 1992/1995 views need from the database, in one pass.
 
@@ -1890,8 +1904,7 @@ def _mixed_contests(election):
     candidates = defaultdict(list)
     for cid, person, list_name, district_id, votes in cand_rows:
         full = f'{person.first_name} {person.last_name}'.strip()
-        suffix = f' - {full}'
-        party = list_name[:-len(suffix)] if list_name.endswith(suffix) else list_name
+        party = _strip_holder(list_name, full)
         candidates[district_id].append({'candidacy_id': cid, 'name': full.title(),
                                         'list': party, 'votes': int(votes)})
     list_rows = (
@@ -2246,11 +2259,7 @@ def sabor_dpv_results(year):
                ParliamentMember.query.filter_by(election_id=election.id).all()}
 
     def base_list(list_name, person):
-        """The stored list name carries the candidate as a suffix where a
-        label repeated in one round; the party is what is left."""
-        full = f'{person.first_name} {person.last_name}'.strip()
-        suffix = f' - {full}'
-        return list_name[:-len(suffix)] if list_name.endswith(suffix) else list_name
+        return _strip_holder(list_name, f'{person.first_name} {person.last_name}'.strip())
 
     def group_of(label):
         if label.endswith(' - KNS'):
