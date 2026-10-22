@@ -1274,6 +1274,7 @@
                             <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="predsjednicki" id="izlCatPredsjednicki" checked><label class="form-check-label" for="izlCatPredsjednicki">Predsjednički</label></div>
                             <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="sabor" id="izlCatSabor" checked><label class="form-check-label" for="izlCatSabor">Sabor</label></div>
                             <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="zupanijski_dom" id="izlCatZupDom" checked><label class="form-check-label" for="izlCatZupDom" title="Gornji dom Sabora, 1993.-2001.">Županijski dom</label></div>
+                            <div class="form-check"><input class="form-check-input izl-filter-cat" type="checkbox" value="sabor_dpv" id="izlCatDpv" checked><label class="form-check-label" for="izlCatDpv" title="Društveno-političko vijeće, jedno od tri vijeća Sabora 1990.">DPV 1990</label></div>
                             <div class="form-check"><input class="form-check-input" type="checkbox" id="izlShowRound2" checked><label class="form-check-label" for="izlShowRound2">2. krug</label></div>
                         </div>
                     </div>
@@ -2347,7 +2348,8 @@ function rankBadgeHtml(r) {
         // The Županijski dom was a chamber of the Sabor, not the Sabor, and a
         // badge reading "Ušao u Sabor" on a 1997 upper-house mandate reads as
         // the lower house.
-        const house = /Županijski/.test(r.election_type || '') ? 'Županijski dom' : 'Sabor';
+        const house = /Županijski/.test(r.election_type || '') ? 'Županijski dom'
+            : /Društveno-političko/.test(r.election_type || '') ? 'DPV Sabora' : 'Sabor';
         return `<span class="badge rank-badge rank-seat" title="Osvojio mandat — ušao u ${house}">🟢 Ušao u ${house}</span>`;
     }
     if (!r.rank) return '';
@@ -4513,6 +4515,10 @@ async function initSaborAnalysis() {
             `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
                      title="Županijski dom — gornji dom Sabora, 1993.-2001.">${y}. <i class="bi bi-bank ms-1"></i></button>`
           ).join('')
+        + DPV_YEARS.map(y =>
+            `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
+                     title="Društveno-političko vijeće — jedno od tri vijeća Sabora iz 1990.; 80 jednomandatnih jedinica, dva kruga.">${y}. <i class="bi bi-columns-gap ms-1"></i></button>`
+          ).join('')
         + (sabor.years.length > 1
         ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
         : '');
@@ -4539,6 +4545,11 @@ async function initSaborAnalysis() {
 // not one.
 const ZUP_DOM_YEARS = [1997, 1993];
 const isZupDomYear = y => ZUP_DOM_YEARS.includes(y);
+// The 1990 Sabor had three chambers elected separately; only the
+// Društveno-političko vijeće is imported. A different chamber again, so it is
+// standalone like the Županijski dom, with its own icon.
+const DPV_YEARS = [1990];
+const isDpvYear = y => DPV_YEARS.includes(y);
 // 1995 and 1992 are the same chamber as every year beside them, so they belong
 // in the year list — but each was elected under a mixed system nothing else
 // here shares (a countrywide list plus first-past-the-post districts, with
@@ -4561,7 +4572,7 @@ function onSaborYearClick(yr) {
     // is not a comparison — and the second a different electoral system each,
     // with no list standing nationwide in the same sense as 2000 onward.
     // Picking any of them clears the other years rather than adding to them.
-    const standalone = y => isZupDomYear(y) || isSaborMixedYear(y);
+    const standalone = y => isZupDomYear(y) || isSaborMixedYear(y) || isDpvYear(y);
     if (standalone(yr) || cur.some(standalone)) {
         next = [yr];
     } else if (_sabor.compareScopes.length > 0) {
@@ -4600,6 +4611,18 @@ function setSaborYears(years) {
     const scopeArea = document.getElementById('saborScopeArea');
     const area95 = document.getElementById('sabor1995Area');
     if (area95) area95.style.display = 'none';
+    if (sorted.length === 1 && isDpvYear(sorted[0])) {
+        // Plurality in 80 single-member units: nothing to allocate either.
+        document.getElementById('saborAnalysisArea').style.display = 'none';
+        document.getElementById('saborCompareArea').style.display = 'none';
+        document.getElementById('saborAnalysisSpinner').style.display = 'none';
+        if (zupArea) zupArea.style.display = 'none';
+        if (scopeArea) scopeArea.style.display = 'none';
+        if (addBtn) addBtn.disabled = true;
+        area95.style.display = '';
+        loadSaborDpvInto(area95, sorted[0], seq);
+        return;
+    }
     if (sorted.length === 1 && isSaborMixedYear(sorted[0])) {
         // Nothing to allocate here either: every seat (127 in 1995, 138 in
         // 1992) is stated by the DIP report, not derived from a D'Hondt pass.
@@ -4647,6 +4670,21 @@ async function loadZupanijskiDomInto(area, year, seq) {
     }
     if (seq !== undefined && seq !== _saLoadSeq) return;  // a newer click won
     renderZupanijskiDom(_zdCache[year], area);
+}
+
+const _dpvCache = {};
+async function loadSaborDpvInto(area, year, seq) {
+    if (!_dpvCache[year]) {
+        area.innerHTML = '<div class="text-muted p-3">Učitavanje…</div>';
+        const res = await fetch(`/api/national/sabor-dpv/${year}`);
+        if (!res.ok) {
+            area.innerHTML = `<div class="alert alert-danger">Neuspješno učitavanje (HTTP ${res.status}).</div>`;
+            return;
+        }
+        _dpvCache[year] = await res.json();
+    }
+    if (seq !== undefined && seq !== _saLoadSeq) return;  // a newer click won
+    renderSaborDpv(_dpvCache[year], area);
 }
 
 const _mixedCache = {};
@@ -7448,6 +7486,78 @@ function renderSabor1992(d, area) {
 
         <h6 class="fw-bold mb-2"><i class="bi bi-people me-2"></i>Posebne izborne jedinice — nacionalne manjine</h6>
         ${(d.minorities || []).map(mixedRaceCard).join('')}`;
+}
+
+function renderSaborDpv(d, area) {
+    const t1 = (d.round_totals || {})['1'] || {};
+    const fmtDate = iso => iso
+        ? new Date(iso).toLocaleDateString('hr-HR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : '';
+    const roundTable = r => `
+        <div class="mt-2">
+            ${r.round === 2 ? `<div class="fw-semibold" style="font-size:0.82rem;">2. krug${r.date ? ' — ' + fmtDate(r.date) : ''}</div>` : ''}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-1">
+                    <thead><tr><th style="width:28px;"></th><th>Kandidat</th><th>Predlagatelj</th><th class="text-end">Glasovi</th><th class="text-end">%</th></tr></thead>
+                    <tbody>${r.candidates.map(c => `
+                        <tr${c.won ? '' : ' class="text-muted"'}>
+                            <td>${c.won ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}</td>
+                            <td style="font-size:0.85rem;">${mixedPersonLink(c.name)} <span class="text-muted" style="font-size:0.75rem;">${escapeHtml(c.residence || '')}</span></td>
+                            <td style="font-size:0.8rem;" class="text-muted">${escapeHtml(c.list)}</td>
+                            <td class="text-end" style="font-size:0.85rem;">${formatNumber(c.votes)}</td>
+                            <td class="text-end" style="font-size:0.85rem;">${formatPct(c.pct, 2)}</td>
+                        </tr>`).join('')}</tbody>
+                </table>
+            </div>
+            <small class="text-muted">${formatNumber(r.registered)} upisanih · ${formatNumber(r.cast)} glasovalo ·
+                ${formatPct(r.turnout_pct, 2)} izlaznost · ${formatNumber(r.invalid)} nevažećih</small>
+        </div>`;
+    const unitCard = u => `
+        <div class="card result-card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <span class="fw-bold">${escapeHtml(u.label)}</span>
+                ${u.decided_in_round === 2 ? '<span class="badge bg-secondary" style="font-size:0.7rem;">odlučeno u 2. krugu</span>' : ''}
+            </div>
+            ${u.rounds.map(roundTable).join('')}
+        </div>`;
+
+    area.innerHTML = `
+        <div class="card p-3 mb-3">
+            <h5 class="fw-bold mb-1">Društveno-političko vijeće Sabora — ${d.year}.</h5>
+            <p class="text-muted mb-3" style="font-size:0.86rem;">
+                Sabor iz ${d.year}. imao je tri vijeća, birana odvojeno; ovo je Društveno-političko vijeće,
+                za koje su glasovali svi birači. ${d.total_seats} zastupnika izabrano je u isto toliko
+                jednomandatnih jedinica: kandidat s većinom glasova izabran je u 1. krugu, a ondje gdje ga
+                nije bilo glasovanje je ponovljeno i izabran je prvi u 2. krugu (${d.runoffs} jedinica).
+                Vijeće općina i Vijeće udruženog rada ovdje još nisu uneseni.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">Mandati po strankama</div>
+                    ${mixedPartyRows(d)}
+                    <div class="text-muted mt-2" style="font-size:0.8rem;">
+                        Zajednički kandidat stoji pod prvom navedenom strankom; kandidati Koalicije narodnog
+                        sporazuma pod koalicijom.
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">Izlaznost (1. krug)</div>
+                    <div style="font-size:0.86rem;">
+                        <div class="d-flex justify-content-between"><span class="text-muted">Upisanih birača</span><strong>${formatNumber(t1.registered)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Glasovalo</span><strong>${formatNumber(t1.cast)}</strong></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Nevažećih listića</span><span>${formatNumber(t1.invalid)}</span></div>
+                        <div class="d-flex justify-content-between mt-1 pt-1" style="border-top:1px solid rgba(0,0,0,0.08);"><span class="text-muted">Izlaznost</span><strong>${formatPct(t1.registered ? t1.cast / t1.registered * 100 : 0)}</strong></div>
+                    </div>
+                    <div class="text-muted mt-2" style="font-size:0.8rem;">
+                        Glasovi kandidata u izvješću ponegdje su nešto manji od broja glasovalih umanjenog za
+                        nevažeće listiće; razlika je u samom izvješću, pa se važećim glasovima smatra zbroj
+                        glasova kandidata.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <h6 class="fw-bold mb-2"><i class="bi bi-geo-alt me-2"></i>Izborne jedinice 1.–${d.total_seats}.</h6>
+        ${(d.units || []).map(unitCard).join('')}`;
 }
 
 function izlScopeTitle() {

@@ -23,8 +23,9 @@ and the named winner leads the deciding round. Unlike 1992 they often fall
 *short* of it — by 0 to a few hundred, never the other way — because "glasalo
 je N birača" counts voters signed off at the polling place, and the report
 never accounts for every one of those as a ballot. The gap is the report's,
-not the transcription's: units 4, 10 and 11 were re-read off zoomed crops of
-the scan and the digits stand. Valid votes are therefore taken as the sum of
+not the transcription's: units 4, 10, 11 and 80 were re-read off zoomed crops
+of the scan and the digits stand. Korčula (80) round 1 is the outlier at 1,246
+(4% of the vote); every other gap is under 2%. Valid votes are therefore taken as the sum of
 the candidates, and the gap is kept visible rather than spread onto anyone.
 """
 
@@ -950,8 +951,8 @@ DISTRICTS = {
             ('Pero Vičan', 'Dubrovnik', 'SKH-SDP', 11218),
         ]},
     ], 'winner': 'Hrvoje Kačić'},
-    # 47, 60 and 74 are missing from the main report; they are printed in the
-    # supplement (`…_dopunski_izvjestaj.pdf`, pages 2-4).
+    # 47, 60, 74 and 80 are missing from the main report; they are printed in the
+    # supplement (`…_dopunski_izvjestaj.pdf`, pages 2-5).
     47: {'name': 'Sisak I', 'rounds': [
         {'registered': 31137, 'cast': 25556, 'invalid': 700, 'candidates': [
             ('Ivan Bobetko', 'Zagreb', 'HDZ', 10964),
@@ -994,4 +995,44 @@ DISTRICTS = {
             ('Velimir Terzić', 'Split', 'HSLS,KNS', 4337),
         ]},
     ], 'winner': 'Ante Roje'},
+    # Round 1 prints "Kalođera", round 2 "Kalogjera"; the same person.
+    80: {'name': 'Korčula', 'rounds': [
+        {'registered': 37471, 'cast': 30882, 'invalid': 1108, 'candidates': [
+            ('Vicko Dabelić', 'Orebić', 'NK', 1794),
+            ('Dušan Kalogjera', 'Korčula', 'SKH-SDP,SSH', 11758),
+            ('Vicko Krajančić', 'Čara', 'HDZ', 9332),
+            ('Ante Vukasović', 'Zagreb', 'HDS,KNS', 5644),
+        ]},
+        {'registered': 37183, 'cast': 29093, 'invalid': 1803, 'candidates': [
+            ('Dušan Kalogjera', 'Korčula', 'SKH-SDP,SSH', 13308),
+            ('Vicko Krajančić', 'Čara', 'HDZ', 13982),
+        ]},
+    ], 'winner': 'Vicko Krajančić'},
 }
+
+
+# ---- shared with app.py, which cannot import the Django-bound importer ----
+
+import re  # noqa: E402
+
+from .sabor_1992_data import person_name as _person_name_1992  # noqa: E402
+
+ELECTION_TYPE_SLUG = 'sabor_dpv'
+ELECTION_TYPE_NAME = 'Društveno-političko vijeće Sabora'
+
+# 1990 writes titles without the dot ("Dr Franjo Tuđman", "Mr Mato Arlović"),
+# which `clean_candidate_name` does not recognise as a title.
+_UNDOTTED_TITLE = re.compile(r'^(dr|mr)\s+', re.I)
+
+
+def person_name(raw):
+    return _person_name_1992(_UNDOTTED_TITLE.sub('', raw))
+
+
+def party_label(abbrs):
+    """'HKDS,HDS,SDSH,KNS' -> 'HKDS, HDS, SDSH - KNS', the report's own reading:
+    nominating parties, then the coalition they ran under."""
+    parts = abbrs.split(',')
+    if len(parts) > 1 and parts[-1] == 'KNS':
+        return f"{', '.join(parts[:-1])} - KNS"
+    return ', '.join(parts)
