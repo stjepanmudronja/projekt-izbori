@@ -4507,18 +4507,19 @@ async function initSaborAnalysis() {
         `<button class="btn btn-outline-primary btn-sm sa-year-btn" data-year="${y}">${y}.</button>`
     ).join('')
         + `<span class="align-self-center text-muted mx-1" style="font-size:0.9rem;">|</span>`
-        + SABOR_MIXED_YEARS.filter(y => sabor.years.includes(y)).map(y =>
-            `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
-                     title="${SABOR_MIXED_TITLES[y]} Prikazuje se zasebno i ne ulazi u usporedbu.">${y}. <i class="bi bi-signpost-split ms-1"></i></button>`
-          ).join('')
-        + ZUP_DOM_YEARS.map(y =>
-            `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
-                     title="Županijski dom — gornji dom Sabora, 1993.-2001.">${y}. <i class="bi bi-bank ms-1"></i></button>`
-          ).join('')
-        + DPV_YEARS.map(y =>
-            `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
-                     title="Društveno-političko vijeće — jedno od tri vijeća Sabora iz 1990.; 80 jednomandatnih jedinica, dva kruga.">${y}. <i class="bi bi-columns-gap ms-1"></i></button>`
-          ).join('')
+        // One run, newest first like the blue years, whatever the reason each
+        // stands apart; the icon tells the chamber or system.
+        + [
+            ...SABOR_MIXED_YEARS.filter(y => sabor.years.includes(y)).map(y => [y,
+                `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
+                     title="${SABOR_MIXED_TITLES[y]} Prikazuje se zasebno i ne ulazi u usporedbu.">${y}. <i class="bi bi-signpost-split ms-1"></i></button>`]),
+            ...ZUP_DOM_YEARS.map(y => [y,
+                `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
+                     title="Županijski dom — gornji dom Sabora, 1993.-2001.">${y}. <i class="bi bi-bank ms-1"></i></button>`]),
+            ...DPV_YEARS.map(y => [y,
+                `<button class="btn btn-outline-secondary btn-sm sa-year-btn" data-year="${y}"
+                     title="Društveno-političko vijeće — jedno od tri vijeća Sabora iz 1990.; 80 jednomandatnih jedinica, dva kruga.">${y}. <i class="bi bi-columns-gap ms-1"></i></button>`]),
+          ].sort((a, b) => b[0] - a[0]).map(([, html]) => html).join('')
         + (sabor.years.length > 1
         ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
         : '');
