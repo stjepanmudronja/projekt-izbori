@@ -210,6 +210,41 @@ def spa_route(slug):
     return ('Not Found', 404)
 
 
+def person_labels(persons):
+    """Person id -> the label that tells namesakes apart, for persons whose
+    name another Person row shares (see `split_persons`).
+
+    A carved-off namesake carries its curated `disambiguation`; the unlabelled
+    row every import matches is labelled by the years it holds instead, so
+    "Ante Jelavić (2024.)" reads beside "Ante Jelavić (Split, 1990.)". A person
+    with no namesake gets no entry.
+    """
+    names = {p.normalized_name for p in persons}
+    if not names:
+        return {}
+    shared = {n for n, count in (
+        db.session.query(Person.normalized_name, db.func.count(Person.id))
+        .filter(Person.normalized_name.in_(names))
+        .group_by(Person.normalized_name).all()) if count > 1}
+    labels = {}
+    for p in persons:
+        if p.normalized_name not in shared:
+            continue
+        if p.disambiguation:
+            labels[p.id] = p.disambiguation
+            continue
+        years = sorted({y for (y,) in (
+            db.session.query(Election.year)
+            .join(ElectionRound, ElectionRound.election_id == Election.id)
+            .join(ElectoralList, ElectoralList.election_round_id == ElectionRound.id)
+            .join(Candidacy, Candidacy.electoral_list_id == ElectoralList.id)
+            .filter(Candidacy.person_id == p.id).distinct())})
+        if years:
+            labels[p.id] = (f'{years[0]}.' if years[0] == years[-1]
+                            else f'{years[0]}.–{years[-1]}.')
+    return labels
+
+
 @app.route('/api/search')
 def search():
     q = request.args.get('q', '').strip()
@@ -230,8 +265,10 @@ def search():
             .limit(20)
             .all()
         )
+        labels = person_labels(persons)
         return jsonify([
-            {'id': p.id, 'name': f'{p.first_name} {p.last_name}'}
+            {'id': p.id, 'name': f'{p.first_name} {p.last_name}',
+             'label': labels.get(p.id, '')}
             for p in persons
         ])
     elif search_type == 'party':
@@ -840,6 +877,7 @@ def person_detail(person_id):
         'id': person.id,
         'first_name': person.first_name,
         'last_name': person.last_name,
+        'label': person_labels([person]).get(person.id, ''),
         'results': results,
     })
 
@@ -1637,6 +1675,7 @@ def sabor_seats(year):
             cand_rows = (
                 db.session.query(
                     Candidacy.id,
+                    Candidacy.person_id,
                     Person.first_name,
                     Person.last_name,
                     Candidacy.position_on_list,
@@ -1645,7 +1684,8 @@ def sabor_seats(year):
                 .join(Person, Person.id == Candidacy.person_id)
                 .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
                 .filter(Candidacy.electoral_list_id == list_id)
-                .group_by(Candidacy.id, Person.first_name, Person.last_name, Candidacy.position_on_list)
+                .group_by(Candidacy.id, Candidacy.person_id, Person.first_name,
+                          Person.last_name, Candidacy.position_on_list)
                 .all()
             )
 
@@ -1676,6 +1716,7 @@ def sabor_seats(year):
             for c in chosen:
                 all_candidates.append({
                     'name': f"{c.first_name} {c.last_name}",
+                    'person_id': c.person_id,
                     'party': group,
                     'district': dist.name,
                 })
@@ -1746,6 +1787,7 @@ def sabor_seats(year):
     ))
     members = [{
         'name': f'{prs.first_name} {prs.last_name}'.strip(),
+        'person_id': prs.id,
         'party': m.party,
         'minority': bool(m.minority),
         'note': m.note or '',
@@ -1786,6 +1828,7 @@ def zupanijski_dom_results(year):
                    .filter(ParliamentMember.election_id == election.id).all()):
         members_by_district[m.district_id].append({
             'name': f'{prs.first_name} {prs.last_name}'.strip(),
+            'person_id': prs.id,
             'list': m.party,
             # The importer stores "zamjenik: X" here; the label is the UI's job.
             'deputy': (m.note or '').replace('zamjenik:', '').strip(),
@@ -1920,6 +1963,7 @@ def _mixed_contests(election):
         full = f'{person.first_name} {person.last_name}'.strip()
         party = _strip_holder(list_name, full)
         candidates[district_id].append({'candidacy_id': cid, 'name': full.title(),
+                                        'person_id': person.id,
                                         'list': party, 'votes': int(votes)})
     list_rows = (
         db.session.query(ElectoralList.district_id, ElectoralList.name,
@@ -1966,7 +2010,8 @@ def _mixed_race(d, cands, winners, group_of, label=None, extra=None):
     it is the report's own base (votes, not ballots)."""
     total = sum(c['votes'] for c in cands)
     rows = sorted(
-        [{'name': c['name'], 'list': c['list'], 'group': group_of(c['list']),
+        [{'name': c['name'], 'person_id': c['person_id'],
+          'list': c['list'], 'group': group_of(c['list']),
           'votes': c['votes'], 'pct': round(c['votes'] / total * 100, 2) if total else 0,
           'won': c['candidacy_id'] in winners}
          for c in cands],
@@ -2577,6 +2622,7 @@ def eu_seats(year):
     cand_q = (
         db.session.query(
             Candidacy.id,
+            Candidacy.person_id,
             Person.first_name,
             Person.last_name,
             Candidacy.position_on_list,
@@ -2593,7 +2639,7 @@ def eu_seats(year):
         .filter(ElectoralList.election_round_id == er.id)
     )
     cand_rows = (
-        cand_q.group_by(Candidacy.id, Person.first_name, Person.last_name,
+        cand_q.group_by(Candidacy.id, Candidacy.person_id, Person.first_name, Person.last_name,
                         Candidacy.position_on_list, ElectoralList.id, ElectoralList.name)
         .all()
     )
@@ -2643,6 +2689,7 @@ def eu_seats(year):
     for r in cand_rows:
         candidates.append({
             'candidacy_id': r.id,
+            'person_id': r.person_id,
             'name': f"{r.first_name} {r.last_name}",
             'party': primary_party(r.list_name),
             'list_name': r.list_name,

@@ -1455,6 +1455,9 @@ async function fetchResults(input, q) {
         div.className = 'dropdown-item-custom';
         if (item.municipality) {
             div.innerHTML = `${item.name} <small class="text-muted">— ${item.municipality}</small>`;
+        } else if (item.label) {
+            // A namesake: the label is what tells the rows apart.
+            div.innerHTML = `${escapeHtml(item.name)} <small class="text-muted">(${escapeHtml(item.label)})</small>`;
         } else {
             div.textContent = item.name;
         }
@@ -1482,7 +1485,7 @@ const compareLineColors = [
 const compareMaxItems = { person: 10, party: 10 };
 
 function getCompareName(type, data) {
-    if (type === 'person') return `${data.first_name} ${data.last_name}`;
+    if (type === 'person') return `${data.first_name} ${data.last_name}${data.label ? ` (${data.label})` : ''}`;
     return data.short_name || data.name;
 }
 
@@ -3859,7 +3862,7 @@ function renderEuView(slot) {
         for (let i = 0; i < p.seats; i++) {
             // Find the next unassigned winner from this party
             const c = winnersInOrder.find(x => !x._used && (state.merges[x.party] || x.party) === p.name);
-            if (c) { c._used = true; seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name }); }
+            if (c) { c._used = true; seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name, person_id: c.person_id }); }
             else seatList.push({ party: p.name, color: partyColors[p.name], candidate: p.name });
             candIdx++;
         }
@@ -3955,7 +3958,7 @@ function renderEuView(slot) {
             ? '<span class="badge bg-success-subtle text-success ms-2" style="font-size:0.65rem;">izabran</span>'
             : '<span class="badge bg-light text-muted ms-2" style="font-size:0.65rem;">nije izabran</span>';
         // Clickable candidate name → that politician's page (same fuzzy-search hop as bar labels)
-        const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(c.name)}" title="Otvori stranicu političara: ${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`;
+        const nameHtml = personLinkHtml(c.name, c.person_id);
         return `<tr style="${dim}">
             <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${nameHtml}${winnerBadge}</td>
             <td class="text-muted" style="font-size:0.85rem;">${escapeHtml(partyShort)}</td>
@@ -4154,6 +4157,7 @@ function renderHemicycle(saborData) {
                 party: p.name,
                 color: partyColors[p.name],
                 candidate: cand.name || p.name,
+                person_id: cand.person_id,
                 district: cand.district || '',
             });
             candIdx++;
@@ -4210,7 +4214,7 @@ function renderCandidateList(container, seatList) {
         const color = state.partyColors[group] || s.color;
         const hidden = i >= INITIAL_SHOW ? ' style="display:none;" class="seat-cand-extra"' : '';
         // Clickable candidate name (same fuzzy-search hop as bar-label-link)
-        const nameHtml = `<span class="bar-label-link" data-person-name="${escapeHtml(s.candidate)}" title="Otvori stranicu političara: ${escapeHtml(s.candidate)}">${escapeHtml(s.candidate)}</span>`;
+        const nameHtml = personLinkHtml(s.candidate, s.person_id);
         return `<tr${hidden}>
             <td style="width:30px;" class="text-muted text-end pe-2">${i + 1}.</td>
             <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;"></span>${nameHtml}</td>
@@ -5047,7 +5051,7 @@ function renderActualSaborResults(seatsData, opts) {
             // `candidate` stays null when the seat has no known holder (pre-2015
             // years publish no candidate names for districts I-XI), so the
             // table can show a placeholder instead of echoing the party name.
-            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || null, district: c.district || '' });
+            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || null, person_id: c.person_id, district: c.district || '' });
             candIdx++;
         }
     });
@@ -5122,7 +5126,6 @@ function renderActualSaborResults(seatsData, opts) {
     }
 
     const tableRows = useRoster ? members : seatList;
-    const nameLink = n => `<span class="bar-label-link" data-person-name="${escapeHtml(n)}" title="Otvori stranicu političara: ${escapeHtml(n)}">${escapeHtml(n)}</span>`;
     const candRows = tableRows.map((row, i) => {
         const hidden = i >= INITIAL ? ` style="display:none;" class="${extraCls}"` : '';
         const color = useRoster ? rosterColors[row.party] : row.color;
@@ -5133,7 +5136,7 @@ function renderActualSaborResults(seatsData, opts) {
         // linking it would fire a politician search for a party name.
         const name = useRoster ? row.name : row.candidate;
         const nameHtml = name
-            ? nameLink(name)
+            ? personLinkHtml(name, row.person_id)
             : `<span class="text-muted fst-italic" title="Imena kandidata nisu objavljena za ovu izbornu godinu">nije objavljeno</span>`;
         const noteCell = `${row.minority ? '<span class="badge bg-secondary" style="font-size:0.7rem;">nacionalne manjine</span> ' : ''}${escapeHtml(row.note || '')}`;
         const lastCols = useRoster
@@ -7147,7 +7150,7 @@ function renderZupanijskiDom(d, area) {
             </tr>`).join('');
         const members = c.members.map(m => `
             <div style="font-size:0.85rem;">
-                <span class="bar-label-link" data-person-name="${escapeHtml(m.name)}" title="Otvori stranicu političara: ${escapeHtml(m.name)}">${escapeHtml(m.name)}</span>
+                ${personLinkHtml(m.name, m.person_id)}
                 ${m.deputy ? `<small class="text-muted"> — zamjenik: ${escapeHtml(m.deputy)}</small>` : ''}
             </div>`).join('');
         return `
@@ -7210,8 +7213,7 @@ function renderZupanijskiDom(d, area) {
 }
 
 // Shared by the 1992 and 1995 views, the two mixed-system Sabor years.
-const mixedPersonLink = n =>
-    `<span class="bar-label-link" data-person-name="${escapeHtml(n)}" title="Otvori stranicu političara: ${escapeHtml(n)}">${escapeHtml(n)}</span>`;
+const mixedPersonLink = (n, id) => personLinkHtml(n, id);
 // District coalitions are printed as "HSS,HSLS,HNS" in the 1995 report and are
 // stored that way; breathe on them for display only.
 const mixedListLabel = t => escapeHtml(t).replace(/,(?=\S)/g, ', ');
@@ -7239,7 +7241,7 @@ function mixedRaceCard(r) {
     const rows = (r.candidates || []).map(c => `
         <tr${c.won ? '' : ' class="text-muted"'}>
             <td>${c.won ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}</td>
-            <td style="font-size:0.85rem;">${mixedPersonLink(c.name)}</td>
+            <td style="font-size:0.85rem;">${mixedPersonLink(c.name, c.person_id)}</td>
             <td style="font-size:0.8rem;" class="text-muted">${mixedListLabel(c.list)}</td>
             <td class="text-end" style="font-size:0.85rem;">${formatNumber(c.votes)}</td>
             <td class="text-end" style="font-size:0.85rem;">${formatPct(c.pct, 2)}</td>
@@ -7527,7 +7529,7 @@ function renderSabor1990(d, area) {
                     <tbody>${r.candidates.map(c => `
                         <tr${c.won ? '' : ' class="text-muted"'}>
                             <td>${c.won ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}</td>
-                            <td style="font-size:0.85rem;">${mixedPersonLink(c.name)} <span class="text-muted" style="font-size:0.75rem;">${escapeHtml(c.residence || '')}</span></td>
+                            <td style="font-size:0.85rem;">${mixedPersonLink(c.name, c.person_id)} <span class="text-muted" style="font-size:0.75rem;">${escapeHtml(c.residence || '')}</span></td>
                             <td style="font-size:0.8rem;" class="text-muted">${escapeHtml(c.list)}</td>
                             <td class="text-end" style="font-size:0.85rem;">${formatNumber(c.votes)}</td>
                             <td class="text-end" style="font-size:0.85rem;">${formatPct(c.pct, 2)}</td>
@@ -7974,11 +7976,25 @@ document.addEventListener('click', (e) => {
     const link = e.target.closest('.bar-label-link');
     if (!link) return;
     const name = link.dataset.personName;
-    if (name) navigateToPerson(name);
+    if (name) navigateToPerson(name, link.dataset.personId);
 });
 
-async function navigateToPerson(name) {
+// A politician link. With the person's id it opens that row directly, which
+// matters for namesakes (see split_persons): a name search would land on
+// whichever "Ante Jelavić" sorts first.
+function personLinkHtml(name, personId) {
+    const idAttr = personId ? ` data-person-id="${personId}"` : '';
+    return `<span class="bar-label-link" data-person-name="${escapeHtml(name)}"${idAttr} title="Otvori stranicu političara: ${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+}
+
+async function navigateToPerson(name, personId) {
     if (!activateModule('person', { pushState: true, focusInput: false })) return;
+    if (personId) {
+        _compareItems.person = [];
+        renderCompareTags('person');
+        await loadDetail('person', parseInt(personId, 10));
+        return;
+    }
     try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(name)}&type=person`);
         const list = await res.json();
