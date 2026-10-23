@@ -130,16 +130,29 @@ KNOWN_DISTINCT = [
      'sabor 2024: Stranka Ivana Pernara in VII. IJ while the Radnička fronta '
      'candidate headed its X. IJ list'),
 
-    # --- Same party in two districts of one round. Not proof on its own (one
-    # person might be listed twice), so each needs evidence of its own.
-    # Both halves are labelled where the person stood only in that election,
-    # since the unlabelled row's year span could not tell them apart.
+    # --- Same party in two districts of one round. The election law lets a
+    # candidate stand in one electoral district at a time, so these are two
+    # people as surely as the cross-party pairs above. Both halves are
+    # labelled where the person stood only in that election, since the
+    # unlabelled row's year span could not tell them apart.
     ('IVANA JURIĆ', 'V. IJ, 2015.', [('sabor', 2015, 5)],
      'sabor 2015, U ime obitelji: #4 in V. IJ as plain "IVANA JURIĆ" while #14 in '
      'VII. IJ is "IVANA JURIĆ, dipl. ing." on the same party\'s list, which writes '
      'titles throughout (Excel, CSV and DB agree)'),
     ('IVANA JURIĆ', 'dipl. ing., VII. IJ, 2015.', [('sabor', 2015, 7)],
      'the titled half of the pair above'),
+    ('JOSIP BABOK', 'HSGO, II. IJ 2020., III. IJ 2024.',
+     [('sabor', 2020, 2), ('sabor', 2024, 3)],
+     'HSGO lists carry a Josip Babok in two districts in 2020 (II. #10, VII. #1) '
+     'and 2024 (III. #1, VI. #1). Each list also carries a female Babok, and '
+     'they pair the listings: Janja Babok stands with the party leader every '
+     'time (HBPS II. 2016, VII. 2020, EU 2024, VI. 2024), Nada Babok with this '
+     'one (II. 2020 #12, III. 2024 #11)'),
+    ('MIRA TUPEK', 'II. IJ, 2024.', [('sabor', 2024, 2)],
+     'Umirovljenici zajedno 2024: #8 in II. IJ and #14 in V. IJ; one district '
+     'per candidate, and neither stood in any other election'),
+    ('MIRA TUPEK', 'V. IJ, 2024.', [('sabor', 2024, 5)],
+     'the V. IJ half of the pair above'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
@@ -271,7 +284,7 @@ class Command(BaseCommand):
 
         sections = [
             ('Same round, different parties — two people', same_round_diff),
-            ('Same round, same party in two districts — one person listed twice?',
+            ('Same round, same party in two districts — two people (one district per candidate)',
              same_round_same),
             ('1990: different places of residence', residence),
             (f'A gap of {GAP_YEARS}+ years between elections', gap),
