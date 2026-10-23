@@ -129,6 +129,17 @@ KNOWN_DISTINCT = [
     ('ZORAN RADMAN', 'Stranka Ivana Pernara, 2024.', [('sabor', 2024, 7)],
      'sabor 2024: Stranka Ivana Pernara in VII. IJ while the Radnička fronta '
      'candidate headed its X. IJ list'),
+
+    # --- Same party in two districts of one round. Not proof on its own (one
+    # person might be listed twice), so each needs evidence of its own.
+    # Both halves are labelled where the person stood only in that election,
+    # since the unlabelled row's year span could not tell them apart.
+    ('IVANA JURIĆ', 'V. IJ, 2015.', [('sabor', 2015, 5)],
+     'sabor 2015, U ime obitelji: #4 in V. IJ as plain "IVANA JURIĆ" while #14 in '
+     'VII. IJ is "IVANA JURIĆ, dipl. ing." on the same party\'s list, which writes '
+     'titles throughout (Excel, CSV and DB agree)'),
+    ('IVANA JURIĆ', 'dipl. ing., VII. IJ, 2015.', [('sabor', 2015, 7)],
+     'the titled half of the pair above'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
@@ -161,6 +172,8 @@ class Command(BaseCommand):
                       if any(self._matches(c, sel) for sel in selectors)
                       and c.person.disambiguation != label]
             if not picked:
+                if not dry_run:
+                    self._drop_empty(normalized)
                 continue
             self.stdout.write(f'  {name} -> "{label}": {len(picked)} candidacy(ies)\n     {evidence}')
             for c in picked:
@@ -213,11 +226,18 @@ class Command(BaseCommand):
                         .values_list('election_id', flat=True))
             seats.filter(election_id__in=taken).delete()
             seats.update(person=target)
-            # A row left with nothing (a namesake emptied by a relabel) goes.
-            for person in Person.objects.filter(normalized_name=normalized).exclude(pk=target.pk):
-                if (person.disambiguation and not person.candidacies.exists()
-                        and not person.parliament_memberships.exists()):
-                    person.delete()
+            Command._drop_empty(normalized)
+
+    @staticmethod
+    def _drop_empty(normalized):
+        """Delete same-named rows left holding nothing: a namesake emptied by a
+        relabel, or the unlabelled row once every candidacy is carved off
+        (a re-import recreates it empty, as it finds each candidacy on its
+        namesake, so this also runs when there is nothing left to move)."""
+        for person in Person.objects.filter(normalized_name=normalized):
+            if (not person.candidacies.exists()
+                    and not person.parliament_memberships.exists()):
+                person.delete()
 
     # ---- --suggest -----------------------------------------------------
 
