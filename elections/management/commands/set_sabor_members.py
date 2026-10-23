@@ -629,21 +629,24 @@ def _find_person(normalized):
     different people, so a loose match is safe here. Prefer a row that already
     has candidacies: that is the one carrying election data to attach to.
     """
-    person = Person.objects.filter(normalized_name=normalized).first()
+    # Unlabelled rows only: a labelled namesake (`split_persons`) is never
+    # what a bare roster name means.
+    person = Person.objects.filter(normalized_name=normalized, disambiguation='').first()
     if person:
         return person
     loose = normalized.replace('-', ' ')
     matches = list(
         Person.objects
         .annotate(loose_name=Replace('normalized_name', Value('-'), Value(' ')))
-        .filter(loose_name=loose)
+        .filter(loose_name=loose, disambiguation='')
     )
     matches.sort(key=lambda q: -q.candidacies.count())
     if matches:
         return matches[0]
 
     canonical = _ALIAS_BY_VARIANT.get(normalized)
-    return Person.objects.filter(normalized_name=canonical).first() if canonical else None
+    return (Person.objects.filter(normalized_name=canonical, disambiguation='').first()
+            if canonical else None)
 
 
 def _minority_winners(round_ids):

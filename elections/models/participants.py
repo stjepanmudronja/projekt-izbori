@@ -5,6 +5,10 @@ class Person(models.Model):
     first_name = models.CharField(max_length=200)
     last_name = models.CharField(max_length=200)
     normalized_name = models.CharField(max_length=400, db_index=True)
+    # Tells apart two people who share a name ("Split, 1990."). Blank for the
+    # catch-all row every import matches by name; a labelled row is one that
+    # `split_persons` carved off it, and importers never match it by name.
+    disambiguation = models.CharField(max_length=120, blank=True, default='')
 
     class Meta:
         indexes = [

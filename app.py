@@ -20,6 +20,7 @@ class Person(db.Model):
     first_name = db.Column(db.String)
     last_name = db.Column(db.String)
     normalized_name = db.Column(db.String)
+    disambiguation = db.Column(db.String)
     candidacies = db.relationship('Candidacy', backref='person', lazy=True)
 
 

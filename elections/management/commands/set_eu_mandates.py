@@ -3,7 +3,7 @@ from django.db import transaction
 
 from elections.models import (
     ElectionType, Election, ElectionRound, ElectoralList, Candidacy,
-    Person, ElectedMandate,
+    ElectedMandate,
 )
 
 # Croatian MEPs actually seated, by EP-election year. Curated by hand because
@@ -121,14 +121,14 @@ class Command(BaseCommand):
         kept_candidacy_ids = []
         with transaction.atomic():
             for norm_name, group in meps:
-                person = Person.objects.filter(normalized_name=norm_name).first()
-                candidacy = None
-                if person:
-                    candidacy = (
-                        Candidacy.objects
-                        .filter(person=person, electoral_list__election_round_id__in=round_ids)
-                        .first()
-                    )
+                # By name, not Person row: a namesake `split_persons` carved
+                # off still holds the candidacy this mandate belongs to.
+                candidacy = (
+                    Candidacy.objects
+                    .filter(person__normalized_name=norm_name,
+                            electoral_list__election_round_id__in=round_ids)
+                    .first()
+                )
                 if not candidacy:
                     self.stderr.write(self.style.WARNING(f'  MISSING candidacy for {norm_name}'))
                     missing += 1

@@ -102,7 +102,7 @@ class Sabor1992Importer(BaseImporter):
         if normalized not in self._person_cache and '-' in normalized:
             loose = (Person.objects
                      .annotate(loose=Replace('normalized_name', Value('-'), Value(' ')))
-                     .filter(loose=normalized.replace('-', ' ')).first())
+                     .filter(loose=normalized.replace('-', ' '), disambiguation='').first())
             if loose:
                 self._person_cache[normalized] = loose
         return super().get_or_create_person(full_name)
@@ -195,7 +195,10 @@ class Sabor1992Importer(BaseImporter):
     def _record_member(self, election, raw_name, party, district,
                        candidacy=None, minority=False, note=''):
         from elections.models import ParliamentMember
-        person = self.get_or_create_person(person_name(raw_name))
+        # The candidacy's person, which may be a namesake `split_persons`
+        # carved off; looking the name up again would find the catch-all row.
+        person = (candidacy.person if candidacy is not None
+                  else self.get_or_create_person(person_name(raw_name)))
         ParliamentMember.objects.update_or_create(
             election=election, person=person,
             defaults={'party': party, 'minority': minority,

@@ -104,7 +104,8 @@ class Command(BaseCommand):
                 if (person.normalized_name or '').replace('-', ' ') != loose:
                     continue
                 display = f'{person.first_name} {person.last_name}'.replace('-', ' ')
-                target = Person.objects.filter(normalized_name=loose).first()
+                target = Person.objects.filter(
+                    normalized_name=loose, disambiguation=person.disambiguation).first()
                 self.stdout.write(
                     f"  {person.normalized_name} (id={person.pk}) -> {display}"
                     f"\n     {evidence}"
@@ -147,12 +148,15 @@ class Command(BaseCommand):
         candidacies survives, so the merge repoints as little as possible and
         keeps the spelling the most source files actually use.
         """
+        # Keyed on the label too: namesakes `split_persons` told apart share a
+        # name by definition, and must not be merged back as a "variant".
         by_loose = defaultdict(list)
         for person in Person.objects.all():
-            by_loose[(person.normalized_name or '').replace('-', ' ')].append(person)
+            loose = (person.normalized_name or '').replace('-', ' ')
+            by_loose[(loose, person.disambiguation)].append(person)
 
         merged = 0
-        for loose, group in by_loose.items():
+        for (loose, _label), group in by_loose.items():
             if len(group) < 2:
                 continue
             # Most candidacies first, so the merge repoints as little as
@@ -184,7 +188,8 @@ class Command(BaseCommand):
     @staticmethod
     def _find(full_name):
         first, _, last = full_name.partition(' ')
-        return Person.objects.filter(first_name=first, last_name=last).first()
+        return Person.objects.filter(
+            first_name=first, last_name=last, disambiguation='').first()
 
     def _suggest(self):
         """Find persons differing only by an extra name token.

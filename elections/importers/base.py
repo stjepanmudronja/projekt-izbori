@@ -139,9 +139,11 @@ class BaseImporter:
         normalized = normalize_person_name(full_name)
         if normalized not in self._person_cache:
             first_name, last_name = parse_person_name(full_name.strip())
-            try:
-                person = Person.objects.get(normalized_name=normalized)
-            except Person.DoesNotExist:
+            # Only the unlabelled row: a labelled one is a namesake that
+            # `split_persons` carved off, and must not catch new candidacies.
+            person = Person.objects.filter(
+                normalized_name=normalized, disambiguation='').first()
+            if person is None:
                 person = Person.objects.create(
                     first_name=first_name,
                     last_name=last_name,
@@ -163,6 +165,13 @@ class BaseImporter:
         return obj
 
     def get_or_create_candidacy(self, person, electoral_list, position):
+        # On a re-import the candidacy may already hang off a namesake that
+        # `split_persons` moved it to; keep it there rather than create a twin.
+        existing = Candidacy.objects.filter(
+            electoral_list=electoral_list, position_on_list=position,
+            person__normalized_name=person.normalized_name).first()
+        if existing:
+            return existing
         obj, _ = Candidacy.objects.get_or_create(
             person=person,
             electoral_list=electoral_list,

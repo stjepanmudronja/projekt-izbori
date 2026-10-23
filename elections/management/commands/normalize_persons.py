@@ -14,16 +14,17 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run']
 
-        # Group persons by normalized name
+        # Group persons by normalized name — and label, so namesakes that
+        # `split_persons` told apart are never folded back together.
         groups = defaultdict(list)
         for person in Person.objects.all().order_by('id'):
-            groups[person.normalized_name].append(person)
+            groups[(person.normalized_name, person.disambiguation)].append(person)
 
         duplicates = {k: v for k, v in groups.items() if len(v) > 1}
         self.stdout.write(f"Found {len(duplicates)} groups of duplicate persons\n")
 
         merged_count = 0
-        for normalized, persons in sorted(duplicates.items()):
+        for (normalized, _label), persons in sorted(duplicates.items()):
             canonical = persons[0]  # keep the first (oldest) entry
             dupes = persons[1:]
 

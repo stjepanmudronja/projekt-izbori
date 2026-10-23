@@ -38,7 +38,9 @@ class Command(BaseCommand):
                 if cleaned_norm == p.normalized_name:
                     continue  # nothing to strip
 
-                target = Person.objects.filter(normalized_name=cleaned_norm).exclude(id=p.id).first()
+                target = Person.objects.filter(
+                    normalized_name=cleaned_norm, disambiguation=p.disambiguation,
+                ).exclude(id=p.id).first()
                 if target:
                     cand_count = p.candidacies.count()
                     self.stdout.write(
