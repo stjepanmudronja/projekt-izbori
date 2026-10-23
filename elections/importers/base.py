@@ -6,7 +6,9 @@ from elections.models import (
     Person, Party, ElectoralList, Candidacy,
     TurnoutData, ListResult, CandidateResult,
 )
-from .name_utils import normalize_person_name, parse_person_name, normalize_municipality_name
+from .name_utils import (
+    normalize_person_name, parse_person_name, normalize_municipality_name, split_birth_year,
+)
 
 
 BATCH_SIZE = 5000
@@ -136,21 +138,27 @@ class BaseImporter:
     # --- Participant helpers ---
 
     def get_or_create_person(self, full_name):
-        normalized = normalize_person_name(full_name)
-        if normalized not in self._person_cache:
-            first_name, last_name = parse_person_name(full_name.strip())
-            # Only the unlabelled row: a labelled one is a namesake that
-            # `split_persons` carved off, and must not catch new candidacies.
+        # A birth-year suffix ("rođ. 1962.") is DIP telling namesakes apart:
+        # it becomes the person's label, and the name stays searchable.
+        bare, label = split_birth_year(full_name.strip())
+        normalized = normalize_person_name(bare)
+        key = (normalized, label) if label else normalized
+        if key not in self._person_cache:
+            first_name, last_name = parse_person_name(bare)
+            # Unlabelled names match only the unlabelled row: a labelled one is
+            # a namesake that `split_persons` carved off, and must not catch
+            # new candidacies.
             person = Person.objects.filter(
-                normalized_name=normalized, disambiguation='').first()
+                normalized_name=normalized, disambiguation=label).first()
             if person is None:
                 person = Person.objects.create(
                     first_name=first_name,
                     last_name=last_name,
                     normalized_name=normalized,
+                    disambiguation=label,
                 )
-            self._person_cache[normalized] = person
-        return self._person_cache[normalized]
+            self._person_cache[key] = person
+        return self._person_cache[key]
 
     def get_or_create_party(self, name, short_name=''):
         obj, _ = Party.objects.get_or_create(name=name, defaults={'short_name': short_name})

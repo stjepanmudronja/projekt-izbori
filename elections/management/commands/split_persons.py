@@ -32,8 +32,10 @@ from collections import defaultdict
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from elections.importers.name_utils import normalize_person_name
-from elections.models import Candidacy, ParliamentMember, Person
+from elections.importers.name_utils import (
+    normalize_person_name, parse_person_name, split_birth_year,
+)
+from elections.models import Candidacy, County, Municipality, ParliamentMember, Person
 
 
 # (name, label, selectors, evidence). A selector is (election type slug, year,
@@ -153,6 +155,45 @@ KNOWN_DISTINCT = [
      'per candidate, and neither stood in any other election'),
     ('MIRA TUPEK', 'V. IJ, 2024.', [('sabor', 2024, 5)],
      'the V. IJ half of the pair above'),
+
+    # --- Lokalni: a candidate's list is scoped to its race by an
+    # ElectoralDistrict numbered by the Municipality's primary key, so the
+    # district number here is a municipality id (named in each comment).
+    ('ANTE MARTINOVIĆ', 'Kukljica, 2021.', [('local_mayor', 2021, 298)],  # 298 Kukljica
+     'načelnik 2021 round 1 in both Kukljica and Sukošan (Zadarska); one race '
+     'per candidate, and neither stood in another election'),
+    ('ANTE MARTINOVIĆ', 'Sukošan, 2021.', [('local_mayor', 2021, 313)],  # 313 Sukošan
+     'the Sukošan half of the pair above'),
+    ('MILAN KNEŽEVIĆ', 'Donji Lapac', [('local_mayor', 2025, 225)],  # 225 Donji Lapac
+     'načelnik 2025 in both Donji Lapac (Ličko-senjska, both rounds) and Petlovac '
+     '(Osječko-baranjska); the Petlovac one also ran there in 2021'),
+    ('MILAN KNEŽEVIĆ', 'Petlovac', [('local_mayor', 2021, 347), ('local_mayor', 2025, 347)],  # 347 Petlovac
+     'the Petlovac half of the pair above, 2021 and 2025'),
+
+    # Two executive races on one lokalni polling day: a candidate runs in one
+    # race only, whatever its type (načelnik, gradonačelnik, zamjenik). The
+    # one carved off is the side with no other elections behind it.
+    ('TOMISLAV KLARIĆ', 'Brtonigla, 2021.', [('local_mayor', 2021, None, 'TOMISLAV')],
+     '2021: načelnik of Brtonigla (Istarska) while the HDZ Tomislav Klarić ran '
+     'for gradonačelnik of Bakar, as again in 2025 (Sabor HDZ VII./VIII. IJ)'),
+    ('IVAN MILETIĆ', 'Otočac, 2025.', [('local_city_mayor', 2025, None, 'IVAN')],
+     '2025: gradonačelnik of Otočac while the Lovinac načelnik candidate of 2021 '
+     'ran in Lovinac again'),
+    ('IVANA MARKOVIĆ', 'Čeminac, 2025.', [('local_mayor', 2025, None, 'IVANA')],
+     '2025: načelnica of Čeminac (Osječko-baranjska) while the SDP Ivana Marković '
+     'of Supetar (2021, 2025; Sabor X. IJ) ran in Supetar'),
+    ('BARBARA KNEŽEVIĆ', 'Draž', [('local_mayor', 2021, None, 'BARBARA'),
+                                  ('local_mayor', 2025, None, 'BARBARA')],
+     '2021: načelnica of Draž while the Domovinski pokret Barbara Knežević ran '
+     'for gradonačelnica of Zaprešić (and župan of Zagrebačka in 2025); Draž again 2025'),
+    ('IVAN VIDOVIĆ', 'Biskupija, 2025.', [('local_deputy_mayor', 2025, None, 'IVAN')],
+     '2025: zamjenik načelnika of Biskupija (Šibensko-kninska) while the Most '
+     'Ivan Vidović (EU 2024, Sabor VIII. IJ) ran for gradonačelnik of Umag'),
+    ('EDI PASTROVICCHIO', 'Bale, 2021.', [('local_mayor', 2021, None, 'EDI')],
+     '2021: načelnik of Bale and gradonačelnik of Vodnjan on the same day; '
+     'neither stood in another election'),
+    ('EDI PASTROVICCHIO', 'Vodnjan, 2021.', [('local_city_mayor', 2021, None, 'EDI')],
+     'the Vodnjan half of the pair above'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
@@ -161,6 +202,13 @@ KNOWN_SAME = {
 }
 
 GAP_YEARS = 15
+
+# Lokalni types whose candidates are people (council lists are party tickets),
+# split by the level of the race; their lists' district number is the primary
+# key of that municipality or county (see LocalImporter._race_district).
+LOCAL_MUNI_RACES = {'local_mayor', 'local_city_mayor', 'local_deputy_mayor',
+                    'local_deputy_city_mayor'}
+LOCAL_COUNTY_RACES = {'local_county_prefect', 'local_deputy_county_prefect'}
 
 
 class Command(BaseCommand):
@@ -178,6 +226,7 @@ class Command(BaseCommand):
             return
 
         dry_run = options['dry_run']
+        self._label_birth_years(dry_run)
         moved = 0
         for name, label, selectors, evidence in KNOWN_DISTINCT:
             normalized = normalize_person_name(name)
@@ -197,6 +246,34 @@ class Command(BaseCommand):
 
         action = 'Would move' if dry_run else 'Moved'
         self.stdout.write(self.style.SUCCESS(f'{action} {moved} candidacy(ies) to namesakes'))
+
+    def _label_birth_years(self, dry_run):
+        """Move a birth-year suffix out of a stored name into its label.
+
+        DIP appends "rođ. 1962." where two candidates share a name, and older
+        imports kept it in the surname ("RADOŠ rođ. 1962."), which hid the
+        person from a plain-name search. The importer now splits it off on the
+        way in; this converts rows stored before that.
+        """
+        for person in Person.objects.filter(disambiguation='', normalized_name__iregex=r'ROD\.?\s*[0-9]{4}'):
+            full = f'{person.first_name} {person.last_name}'
+            bare, label = split_birth_year(full)
+            if not label:
+                continue
+            normalized = normalize_person_name(bare)
+            twin = Person.objects.filter(normalized_name=normalized, disambiguation=label).first()
+            self.stdout.write(f'  {full} -> {bare} ({label})' + (f' merged into id={twin.pk}' if twin else ''))
+            if dry_run:
+                continue
+            if twin:
+                from .merge_person_aliases import Command as Merge
+                Merge._absorb(twin, person)
+            else:
+                person.first_name, person.last_name = parse_person_name(bare)
+                person.normalized_name = normalized
+                person.disambiguation = label
+                person.save(update_fields=['first_name', 'last_name', 'normalized_name',
+                                           'disambiguation'])
 
     @staticmethod
     def _candidacies(normalized):
@@ -261,11 +338,11 @@ class Command(BaseCommand):
                                   'electoral_list__election_round__election__election_type')):
             by_person[c.person].append(c)
 
-        same_round_diff, same_round_same, residence, gap = [], [], [], []
+        same_round_diff, same_round_same, residence, gap, places = [], [], [], [], []
         for person, cands in by_person.items():
             rounds = defaultdict(list)
             for c in cands:
-                rounds[c.electoral_list.election_round_id].append(c)
+                rounds[self._polling_key(c)].append(c)
             clashes = [cs for cs in rounds.values() if len(cs) > 1]
             if clashes:
                 parties = [{self._party(c) for c in cs} for cs in clashes]
@@ -274,9 +351,16 @@ class Command(BaseCommand):
                 continue
             if self._name(person) in KNOWN_SAME:
                 continue
-            places = {c.residence.upper() for c in cands if c.residence}
-            if len(places) > 1:
+            homes = {c.residence.upper() for c in cands if c.residence}
+            if len(homes) > 1:
                 residence.append(person)
+                continue
+            munis = {c.electoral_list.district.number for c in cands
+                     if c.electoral_list.district
+                     and c.electoral_list.election_round.election.election_type.slug
+                     in LOCAL_MUNI_RACES}
+            if len(munis) > 1:
+                places.append(person)
                 continue
             years = sorted({c.electoral_list.election_round.election.year for c in cands})
             if any(b - a >= GAP_YEARS for a, b in zip(years, years[1:])):
@@ -287,6 +371,7 @@ class Command(BaseCommand):
             ('Same round, same party in two districts — two people (one district per candidate)',
              same_round_same),
             ('1990: different places of residence', residence),
+            ('Lokalni: executive races in different municipalities', places),
             (f'A gap of {GAP_YEARS}+ years between elections', gap),
         ]
         for title, persons in sections:
@@ -298,6 +383,20 @@ class Command(BaseCommand):
                     self.stdout.write(f'     {self._describe(c)}')
 
     @staticmethod
+    def _polling_key(c):
+        """What "the same round" means for a clash. Lokalni races of every
+        type share one polling day, and a candidate runs in one race only, so
+        a načelnik in one place and a gradonačelnik or zamjenik in another on
+        that day are two people too; other types clash within their round."""
+        er = c.electoral_list.election_round
+        slug = er.election.election_type.slug
+        if slug.startswith('local') and slug not in ('local_municipal_council',
+                                                     'local_city_council',
+                                                     'local_county_assembly'):
+            return ('local', er.election.year, er.round_number)
+        return er.id
+
+    @staticmethod
     def _sort_key(c):
         er = c.electoral_list.election_round
         return (er.election.year, er.election.election_type.slug, er.round_number)
@@ -307,11 +406,27 @@ class Command(BaseCommand):
         name = candidacy.electoral_list.name.split('\n', 1)[0]
         return name.split(',', 1)[0].strip().upper()
 
+    _places = None
+
+    @classmethod
+    def _place(cls, slug, number):
+        if cls._places is None:
+            cls._places = {
+                'muni': dict(Municipality.objects.values_list('pk', 'name')),
+                'county': dict(County.objects.values_list('pk', 'name')),
+            }
+        if slug in LOCAL_MUNI_RACES:
+            return cls._places['muni'].get(number, number)
+        if slug in LOCAL_COUNTY_RACES:
+            return cls._places['county'].get(number, number)
+        return f'd{number}'
+
     @classmethod
     def _describe(cls, c):
         el = c.electoral_list
         er = el.election_round
-        where = f'd{el.district.number}' if el.district else '-'
+        slug = er.election.election_type.slug
+        where = cls._place(slug, el.district.number) if el.district else '-'
         residence = f'  [{c.residence}]' if c.residence else ''
         return (f'{er.election.election_type.slug} {er.election.year} r{er.round_number} '
                 f'{where} #{c.position_on_list}  {cls._party(c)[:60]}{residence}')

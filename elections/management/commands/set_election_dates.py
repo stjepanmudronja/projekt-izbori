@@ -46,7 +46,12 @@ ELECTION_DATES = {
 
 # Every lokalni type shares one polling day; the runoff for executive offices
 # (mayor, prefect) is two weeks later. Councils are decided in one round.
-LOCAL_DATES = {2025: {1: date(2025, 5, 18), 2: date(2025, 6, 1)}}
+# 2021's round 3 is the one repeat vote: Kraljevec na Sutli's načelnik, after
+# none of the three in its runoff won a majority (Hina, 14 June 2021).
+LOCAL_DATES = {
+    2021: {1: date(2021, 5, 16), 2: date(2021, 5, 30), 3: date(2021, 6, 13)},
+    2025: {1: date(2025, 5, 18), 2: date(2025, 6, 1)},
+}
 
 
 class Command(BaseCommand):

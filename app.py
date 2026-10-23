@@ -2790,6 +2790,14 @@ LOKALNI_COUNTY_KIND_TO_TYPE = {
 }
 
 
+@app.route('/api/lokalni/years')
+def lokalni_years():
+    """Years with lokalni results, newest first — the module's year picker."""
+    years = (db.session.query(Election.year).join(ElectionType)
+             .filter(ElectionType.slug.like('local%')).distinct().all())
+    return jsonify(sorted((y for (y,) in years), reverse=True))
+
+
 @app.route('/api/lokalni/station-results')
 def lokalni_station_results():
     """Local-election list/candidate results.
@@ -2871,6 +2879,7 @@ def lokalni_station_results():
         )
     list_rows = (
         db.session.query(
+            ElectoralList.id,
             ElectoralList.name,
             db.func.coalesce(db.func.sum(ListResult.votes), 0).label('votes'),
         )
@@ -2884,8 +2893,15 @@ def lokalni_station_results():
         .all()
     )
     total = sum(r.votes or 0 for r in list_rows)
+    # Executive races have one candidate per list; their person id lets a bar
+    # open that exact person, where a name search could pick a namesake.
+    person_by_list = dict(
+        db.session.query(Candidacy.electoral_list_id, Candidacy.person_id)
+        .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+        .filter(ElectoralList.election_round_id == er.id).all())
     items = [{
         'name': r.name,
+        'person_id': person_by_list.get(r.id),
         'votes': int(r.votes or 0),
         'votes_pct': (r.votes / total * 100.0) if total else 0.0,
     } for r in list_rows]

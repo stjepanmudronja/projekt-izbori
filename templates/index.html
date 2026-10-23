@@ -1075,7 +1075,12 @@
                             </div>
                         </div>
                         <div class="d-flex justify-content-between align-items-center mt-3">
-                            <small class="text-muted">Lokalni izbori 2025.</small>
+                            <!-- Filled from /api/lokalni/years. The buttons carry
+                                 results-year-btn + data-year so izlNavigateTo can
+                                 pick a year the way it does in the other modules. -->
+                            <div id="lokYearPicker" class="d-flex align-items-center gap-2 flex-wrap">
+                                <small class="text-muted">Lokalni izbori</small>
+                            </div>
                             <!-- Round 2 is additive (shows krug 1 + 2), not an
                                  alternative to krug 1, so this is a switch
                                  rather than a two-button group. Matches the
@@ -1083,7 +1088,7 @@
                             <div id="lokRoundToggle" class="d-none">
                                 <div class="form-check form-switch mb-0">
                                     <input class="form-check-input" type="checkbox" role="switch" id="lokShowRound2">
-                                    <label class="form-check-label small" for="lokShowRound2">Prikaži 2. krug</label>
+                                    <label class="form-check-label small" for="lokShowRound2">Prikaži drugi krug</label>
                                 </div>
                             </div>
                         </div>
@@ -2716,7 +2721,7 @@ function buildBarChart(idx) {
         // bar represents a single (unmerged) person.
         const isClickablePerson = data.kind === 'person' && it.origNames && it.origNames.length === 1;
         const labelHtml = isClickablePerson
-            ? `<div class="bar-label bar-label-link" data-person-name="${it.name.replace(/"/g, '&quot;')}" title="Otvori stranicu političara: ${it.name.replace(/"/g, '&quot;')}">${displayName}</div>`
+            ? `<div class="bar-label bar-label-link" data-person-name="${it.name.replace(/"/g, '&quot;')}"${it.personId ? ` data-person-id="${it.personId}"` : ''} title="Otvori stranicu političara: ${it.name.replace(/"/g, '&quot;')}">${displayName}</div>`
             : `<div class="bar-label">${displayName}</div>`;
 
         return `
@@ -6335,7 +6340,7 @@ const IZL_COMPARE_PALETTE = [
 ];
 
 // === Lokalni izbori — per-station results module ===
-const lok = { initialized: false, currentRound: 1, mapPaths: [], compareScopes: [] };
+const lok = { initialized: false, year: null, currentRound: 1, mapPaths: [], compareScopes: [] };
 const LOK_COUNTY_KINDS = new Set(['zupan', 'zup_skupstina']);
 // Kinds whose ElectoralLists are 1:1 with a candidate (head-of-executive
 // races), so each bar label is a person name and links to that person's page.
@@ -6366,6 +6371,7 @@ async function initLokalniModule() {
     }
 
     loadLokCroatiaMap().catch(e => console.warn('lok map load failed', e));
+    await initLokYearPicker();
 
     selC.addEventListener('change', onLokCountyChange);
     selM.addEventListener('change', onLokMuniChange);
@@ -6378,6 +6384,27 @@ async function initLokalniModule() {
     document.getElementById('lokShowRound2').addEventListener('change', (e) => {
         lok.currentRound = e.target.checked ? 2 : 1;
         loadLokResults();
+    });
+}
+
+// One button per year with lokalni results, newest selected. Picking a year
+// keeps the chosen place and race and reloads them for that year.
+async function initLokYearPicker() {
+    const picker = document.getElementById('lokYearPicker');
+    const res = await fetch('/api/lokalni/years');
+    const years = res.ok ? await res.json() : [];
+    if (!years.length) return;
+    lok.year = years[0];
+    picker.insertAdjacentHTML('beforeend', years.map(y =>
+        `<button type="button" class="btn btn-outline-primary btn-sm results-year-btn${y === lok.year ? ' active' : ''}" data-year="${y}">${y}.</button>`
+    ).join(''));
+    picker.querySelectorAll('.results-year-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            lok.year = parseInt(btn.dataset.year, 10);
+            picker.querySelectorAll('.results-year-btn').forEach(b =>
+                b.classList.toggle('active', b === btn));
+            loadLokResults();
+        });
     });
 }
 
@@ -6613,9 +6640,13 @@ async function loadLokResults() {
     area.style.display = 'none';
     spinner.style.display = '';
 
-    const roundsToFetch = lok.currentRound === 2 ? [1, 2] : [1];
+    // The switch shows every later round: the runoff, and in 2021 also the
+    // one repeat vote (Kraljevec na Sutli's načelnik went to a third round).
+    // Rounds the race doesn't have are dropped once rounds_available is known.
+    const roundsToFetch = lok.currentRound === 2 ? [1, 2, 3] : [1];
     const fetchOne = async (sc, rn) => {
         const params = new URLSearchParams({ kind: sc.kind, round: rn });
+        if (lok.year) params.set('year', lok.year);
         if (sc.type === 'station') params.set('station_id', sc.id);
         else if (sc.type === 'county') params.set('county_id', sc.id);
         else params.set('municipality_id', sc.id);
@@ -6655,6 +6686,11 @@ async function loadLokResults() {
     // for election N" warning, because the fetch above already went out with
     // the previous kind's round selection.
     blocks.forEach(b => { b.results = b.results.filter(r => avail.includes(r.round)); });
+    // A later round exists for the whole race type, not for every place: most
+    // municipalities elected their načelnik in round 1, and only Kraljevec na
+    // Sutli had a third. Drop a later round with no votes in this scope rather
+    // than draw an empty card.
+    blocks.forEach(b => { b.results = b.results.filter(r => r.error || r.round === 1 || r.total_votes > 0); });
 
     // Single mode (no chips): just stack the round cards as before.
     const compareMode = lok.compareScopes.length > 0;
@@ -6708,11 +6744,11 @@ function renderLokResultCard(data) {
     window._electionBarData[chartId] = {
         kind: barKind,
         original: items.map((it, i) => ({
-            name: it.name, votes: it.votes,
+            name: it.name, votes: it.votes, personId: it.person_id,
             color: palette[i % palette.length], origNames: [it.name],
         })),
         current: items.map((it, i) => ({
-            name: it.name, votes: it.votes,
+            name: it.name, votes: it.votes, personId: it.person_id,
             color: palette[i % palette.length], origNames: [it.name],
         })),
         validBallots: (data.turnout && data.turnout.valid_ballots) || data.total_votes || 0,

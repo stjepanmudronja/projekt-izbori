@@ -46,6 +46,26 @@ def clean_candidate_name(raw):
 # ("JOZO RADOŠ, rođ. 1962."). Not a title, but equally not part of the name.
 _BIRTH_YEAR_RE = re.compile(r',\s*ro[đd]\.?\s*\d{4}\.?\s*$', re.IGNORECASE)
 
+# The same disambiguator as a whole suffix, in every shape the files use:
+# "JOZO RADOŠ, rođ. 1962.", "MILJENKO MARIĆ; rođ. 1970.", "IVAN PAVUSA rođ.1962."
+# (clean_candidate_name has already dropped the comma by the time most names
+# reach the importer).
+_BIRTH_SUFFIX_RE = re.compile(r'[,;]?\s*ro[đd]\.?\s*(\d{4})\.?\s*$', re.IGNORECASE)
+
+
+def split_birth_year(name):
+    """("JOZO RADOŠ", "rođ. 1962.") from "JOZO RADOŠ, rođ. 1962.", else (name, '').
+
+    The suffix tells namesakes apart, so it belongs in Person.disambiguation:
+    kept in the name it hides the person from a plain-name search and from
+    every other election they stood in.
+    """
+    m = _BIRTH_SUFFIX_RE.search(name or '')
+    if not m:
+        return name, ''
+    return name[:m.start()].strip(), f'rođ. {m.group(1)}.'
+
+
 # A personal-name token: letters only, optionally hyphenated or apostrophed.
 _NAME_TOKEN_RE = re.compile(r"^[^\W\d_]+(?:[-'][^\W\d_]+)*$", re.UNICODE)
 
