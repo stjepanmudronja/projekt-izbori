@@ -41,6 +41,7 @@ GEO_COLS = 13  # columns 0-12
 YEAR_ROUNDS = {
     2025: {1: 'krug-1', 2: 'krug-2'},
     2017: {1: 'rezultati1krug', 2: 'rezultati2krug'},
+    2013: {1: 'krug-1', 2: 'krug-2'},
     2021: {1: '1_krug_rezultati', 2: '2_krug_rezultati', 3: '3_krug_rezultati'},
 }
 

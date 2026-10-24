@@ -199,14 +199,40 @@ KNOWN_DISTINCT = [
     ('DARKO HORVAT', 'Gornji Mihaljevec, 2017.', [('local_mayor', 2017, 541)],  # 541 Gornji Mihaljevec
      '2017: načelnik of Gornji Mihaljevec while "Darko Horvat, dipl. ing. el." '
      'ran for župan of Međimurska — the HDZ electrical engineer of III. IJ'),
-    ('IVAN VRKIĆ', 'Obrovac, 2017.', [('local_city_mayor', 2017, 289)],  # 289 Obrovac
-     '2017: gradonačelnik of Obrovac (Zadarska) while the Osijek candidate (both '
-     'rounds; HNS IV. IJ in 2020) ran in Osijek'),
+    ('IVAN VRKIĆ', 'Obrovac', [('local_city_mayor', 2013, 289),
+                               ('local_city_mayor', 2017, 289)],  # 289 Obrovac
+     '2013 and 2017: gradonačelnik of Obrovac (Zadarska) while the Osijek '
+     'candidate (both rounds both years; HNS IV. IJ in 2020) ran in Osijek'),
     ('IVO MILIĆ', 'Nuštar, 2017.', [('local_mayor', 2017, 402)],  # 402 Nuštar
      '2017: načelnik of Nuštar ("Ivo Milić, bacc. ing. techn. inf.") and '
      'gradonačelnik of Trogir on the same day; neither stood in another election'),
     ('IVO MILIĆ', 'Trogir, 2017.', [('local_city_mayor', 2017, 425)],  # 425 Trogir
      'the Trogir half of the pair above'),
+    ('IVAN KOVAČIĆ', 'Veliko Trojstvo', [('local_mayor', 2013, 182), ('local_mayor', 2017, 182),
+                                         ('local_mayor', 2021, 182)],  # 182 Veliko Trojstvo
+     '2013: načelnik of Veliko Trojstvo (Bjelovarsko-bilogorska) and of Krapinske '
+     'Toplice while "dr. sc. Ivan Kovačić" ran for gradonačelnik of Omiš — the '
+     'Most X. IJ candidate; Veliko Trojstvo again in 2017 and 2021'),
+    ('IVAN KOVAČIĆ', 'Krapinske Toplice, 2013.', [('local_mayor', 2013, 52)],  # 52 Krapinske Toplice
+     'the Krapinske Toplice third of the 2013 triple above'),
+    ('IVAN VUKOVIĆ', 'Rakovica, 2013.', [('local_mayor', 2013, 102)],  # 102 Rakovica
+     '2013: načelnik of Rakovica while "mr. sc. Ivan Vuković" ran for '
+     'gradonačelnik of Ogulin, as he did for župan of Karlovačka in 2017 '
+     '(Pametno, SDP VII. IJ)'),
+    ('DARKO HORVAT', 'Breznica, 2013.', [('local_mayor', 2013, 116)],  # 116 Breznica
+     '2013: načelnik of Breznica (Zagrebačka) while the HDZ Darko Horvat ran for '
+     'župan of Međimurska, as in 2017'),
+    ('IGOR RUBEŠA', 'Viškovo, 2013.', [('local_mayor', 2013, 218)],  # 218 Viškovo
+     '2013: načelnik of Viškovo (Primorsko-goranska) while the Pisarovina '
+     'candidate of 2013, 2017 and 2021 ran in Pisarovina'),
+    ('IVAN MARUNICA', 'Feričanci, 2013.', [('local_mayor', 2013, 339)],  # 339 Feričanci
+     '2013: načelnik of Feričanci and of Hrvace on the same day; neither stood '
+     'in another election'),
+    ('IVAN MARUNICA', 'Hrvace, 2013.', [('local_mayor', 2013, 437)],  # 437 Hrvace
+     'the Hrvace half of the pair above'),
+    ('MILAN GRAHOVAC', 'Kneževi Vinogradi, 2013.', [('local_deputy_mayor', 2013, 342)],  # 342
+     '2013: zamjenik načelnika of Kneževi Vinogradi (Osječko-baranjska) while the '
+     'Đulovac načelnik candidate of 2013 and 2017 ran in Đulovac'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
