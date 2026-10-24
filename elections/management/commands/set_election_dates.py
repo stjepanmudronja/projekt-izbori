@@ -49,6 +49,8 @@ ELECTION_DATES = {
 # 2021's round 3 is the one repeat vote: Kraljevec na Sutli's načelnik, after
 # none of the three in its runoff won a majority (Hina, 14 June 2021).
 LOCAL_DATES = {
+    # Councils and assemblies only; mayors were not yet elected directly.
+    2005: {1: date(2005, 5, 15)},
     # Round 3: Zlatar-Bistrica and Udbina načelnik, whose runoffs tied.
     2009: {1: date(2009, 5, 17), 2: date(2009, 5, 31), 3: date(2009, 6, 14)},
     2013: {1: date(2013, 5, 19), 2: date(2013, 6, 2)},

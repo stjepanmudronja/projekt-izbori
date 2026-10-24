@@ -379,6 +379,7 @@ INCOMPLETE_COVERAGE = {
     # Lokalni 2009 exists only as DIP's PDF report: one figure per
     # municipality (and per county for its own contests), no stations.
     ('lokalni', 2009): 'samo zbroj po gradu/općini',
+    ('lokalni', 2005): 'samo zbroj po gradu/općini',
 }
 
 # The 1990 Sabor's chambers, each its own election type: key (as in the URL)
@@ -2859,6 +2860,11 @@ def lokalni_station_results():
         eq = eq.filter_by(year=year)
     election = eq.order_by(Election.year.desc()).first()
     if not election:
+        # Before 2009 mayors and župani were chosen by the councils, so 2005
+        # has only vijeća and skupštine.
+        if year and int(year) < 2009 and kind in ('nacelnik', 'zupan'):
+            return jsonify({'error': f'{type_name}: {year}. nije bilo neposrednih izbora — '
+                                     'načelnike, gradonačelnike i župane neposredno se bira od 2009.'}), 404
         return jsonify({'error': f'no election for type "{type_name}" year={year}'}), 404
 
     er = ElectionRound.query.filter_by(election_id=election.id, round_number=round_num).first()

@@ -36,17 +36,19 @@ from .local_2009_parse import parse_text, check, list_name
 from .name_utils import clean_candidate_name, normalize_municipality_name
 
 YEAR = 2009
-TEXT_DIR = LocalImporter.DATA_DIR / '2009' / 'text'
 
 # Display names per slug, as the Excel importer names the elections.
 DISPLAY = {slug: name for slug, name, _ in SHEET_TYPE_MAP.values()}
 
-# Genitive forms the stem match cannot reach (a vowel drops: OZALJ -> OZLJA).
-GENITIVE = {'OZLJA': 'OZALJ'}
+# Headings the stem match cannot reach: a genitive that drops a vowel
+# (OZALJ -> OZLJA), and 2005's former name of Martijanec and spaced hyphen in
+# Kaštelir-Labinci (which would otherwise read as a bilingual " - ").
+UNIT_ALIASES = {'OZLJA': 'OZALJ', 'DONJI MARTIJANEC': 'MARTIJANEC',
+                'KAŠTELIR - LABINCI': 'KAŠTELIR-LABINCI'}
 
 
 def _words(name):
-    name = GENITIVE.get(name, name)
+    name = UNIT_ALIASES.get(name, name)
     # Bilingual Istrian names ("POREČ - PARENZO") and bracketed
     # disambiguators ("OTOKA (VINKOVCI)") match on their Croatian base.
     base = re.sub(r'\s*\(.*\)', '', name.split(' - ')[0])
@@ -67,24 +69,31 @@ def _stem_match(a, b):
 
 
 class Local2009Importer(BaseImporter):
+    """Also the base of `Local2005Importer`, which reads the same report
+    shape for an earlier year and overrides only `year` and `_parse`."""
+
+    year = YEAR
 
     def __init__(self, stdout=None):
         super().__init__(stdout=stdout)
         self.matched = {}
 
+    def _parse(self, code, text):
+        """[(contest, problems)] for one county's text dump."""
+        return [(c, check(c)) for c in parse_text(text)[1]]
+
     def run(self):
-        files = sorted(TEXT_DIR.glob('i_06_*.txt'))
+        text_dir = LocalImporter.DATA_DIR / str(self.year) / 'text'
+        files = sorted(text_dir.glob('i_06_*.txt'))
         if not files:
             raise RuntimeError(
-                f'No text dumps in {TEXT_DIR}. Build tools/pdf_text '
+                f'No text dumps in {text_dir}. Build tools/pdf_text '
                 '(swiftc -O tools/pdf_text.swift -o tools/pdf_text) and run it '
-                'on each 2009/*.pdf into that folder.')
+                f'on each {self.year}/*.pdf into that folder.')
         contests = []
         for path in files:
             code = path.stem.split('_')[2]
-            _title, parsed = parse_text(path.read_text())
-            for c in parsed:
-                problems = check(c)
+            for c, problems in self._parse(code, path.read_text()):
                 if problems:
                     raise RuntimeError(f'{path.name} {c["slug"]} r{c["round"]} '
                                        f'{c["unit"]}: {"; ".join(problems)}')
@@ -152,7 +161,7 @@ class Local2009Importer(BaseImporter):
     def _import_contest(self, code, c):
         slug = c['slug']
         election_type = self.get_or_create_election_type(slug, DISPLAY[slug], parent_slug='local')
-        election = self.get_or_create_election(election_type, YEAR, f'{DISPLAY[slug]} {YEAR}')
+        election = self.get_or_create_election(election_type, self.year, f'{DISPLAY[slug]} {self.year}')
         election_round = self.get_or_create_round(election, c['round'])
         station, number, name = self._place(code, c)
 
