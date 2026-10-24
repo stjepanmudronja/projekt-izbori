@@ -376,6 +376,9 @@ INCOMPLETE_COVERAGE = {
     # units that needed one.
     ('sabor_dpv', 1990): 'samo zbroj po izbornim jedinicama',
     ('sabor_vo', 1990): 'samo zbroj po izbornim jedinicama',
+    # Lokalni 2009 exists only as DIP's PDF report: one figure per
+    # municipality (and per county for its own contests), no stations.
+    ('lokalni', 2009): 'samo zbroj po gradu/općini',
 }
 
 # The 1990 Sabor's chambers, each its own election type: key (as in the URL)

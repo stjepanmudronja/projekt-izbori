@@ -215,10 +215,11 @@ KNOWN_DISTINCT = [
      'Most X. IJ candidate; Veliko Trojstvo again in 2017 and 2021'),
     ('IVAN KOVAČIĆ', 'Krapinske Toplice, 2013.', [('local_mayor', 2013, 52)],  # 52 Krapinske Toplice
      'the Krapinske Toplice third of the 2013 triple above'),
-    ('IVAN VUKOVIĆ', 'Rakovica, 2013.', [('local_mayor', 2013, 102)],  # 102 Rakovica
-     '2013: načelnik of Rakovica while "mr. sc. Ivan Vuković" ran for '
-     'gradonačelnik of Ogulin, as he did for župan of Karlovačka in 2017 '
-     '(Pametno, SDP VII. IJ)'),
+    ('IVAN VUKOVIĆ', 'Rakovica', [('local_mayor', 2009, 102),
+                                  ('local_mayor', 2013, 102)],  # 102 Rakovica
+     '2009 and 2013: načelnik of Rakovica while "mr. sc. Ivan Vuković, dipl. '
+     'ing." ran for gradonačelnik of Ogulin — both SDP in 2009 — as he did for '
+     'župan of Karlovačka in 2017 (Pametno, SDP VII. IJ)'),
     ('DARKO HORVAT', 'Breznica, 2013.', [('local_mayor', 2013, 116)],  # 116 Breznica
      '2013: načelnik of Breznica (Zagrebačka) while the HDZ Darko Horvat ran for '
      'župan of Međimurska, as in 2017'),
@@ -233,6 +234,33 @@ KNOWN_DISTINCT = [
     ('MILAN GRAHOVAC', 'Kneževi Vinogradi, 2013.', [('local_deputy_mayor', 2013, 342)],  # 342
      '2013: zamjenik načelnika of Kneževi Vinogradi (Osječko-baranjska) while the '
      'Đulovac načelnik candidate of 2013 and 2017 ran in Đulovac'),
+
+    # 2009 prints each executive candidate's nominating parties, which the
+    # Excel years do not, so the evidence below names them.
+    ('LUKA ZUBČIĆ', 'Belišće, 2009.', [('local_city_mayor', 2009, 321)],  # 321 Belišće
+     '2009: "mr. sc. Luka Zubčić" for gradonačelnik of Belišće (HDZ, HSLS, HSP, '
+     'HSS) and an independent Luka Zubčić for načelnik of Posedarje (Zadarska)'),
+    ('LUKA ZUBČIĆ', 'Posedarje, 2009.', [('local_mayor', 2009, 305)],  # 305 Posedarje
+     'the Posedarje half of the pair above'),
+    ('JOSIP HORVAT', 'Krapina, 2009.', [('local_city_mayor', 2009, 37)],  # 37 Krapina
+     '2009: three Josip Horvats on one polling day — gradonačelnik of Krapina '
+     '(HDZ), of Delnice (SDP, HNS) and načelnik of Beretinec (independent). '
+     'Which, if any, is the HSR Sabor candidate of 2016/2020 is not settled'),
+    ('JOSIP HORVAT', 'Delnice, 2009.', [('local_city_mayor', 2009, 188)],  # 188 Delnice
+     'the Delnice third of the triple above'),
+    ('JOSIP HORVAT', 'Beretinec, 2009.', [('local_mayor', 2009, 115)],  # 115 Beretinec
+     'the Beretinec third of the triple above, both rounds'),
+    ('JOSIP TOMIĆ', 'Fužine, 2009.', [('local_mayor', 2009, 202)],  # 202 Fužine
+     '2009: "Josip Tomić, dipl. theol." for načelnik of Fužine (HSS, HNS; both '
+     'rounds) and an independent for načelnik of Dugi Rat'),
+    ('JOSIP TOMIĆ', 'Dugi Rat, 2009.', [('local_mayor', 2009, 434)],  # 434 Dugi Rat
+     'the Dugi Rat half of the pair above'),
+    ('STJEPAN ŽIVKOVIĆ', 'Drenje, 2009.', [('local_mayor', 2009, 335)],  # 335 Drenje
+     '2009: načelnik of Drenje (HDZ) while the HSS Stjepan Živković ran in '
+     'Magadenovac, as again 2013-2021'),
+    ('ŽELJKO VILJEVAC', 'Gradina, 2009.', [('local_mayor', 2009, 238)],  # 238 Gradina
+     '2009: "Željko Viljevac, dipl. ing." for načelnik of Gradina (HSP, HSU) '
+     'while the HDSSB-HSS Željko Viljevac ran in Viljevo, as again 2013-2017'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but

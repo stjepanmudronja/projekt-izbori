@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 
 from elections.importers.local import LocalImporter, YEAR_ROUNDS
+from elections.importers.local_2009 import Local2009Importer
 from elections.models import Election, Person
 
 
@@ -9,7 +10,7 @@ class Command(BaseCommand):
     help = 'Import local election results from Excel files'
 
     def add_arguments(self, parser):
-        parser.add_argument('--year', type=int, default=2025, choices=sorted(YEAR_ROUNDS))
+        parser.add_argument('--year', type=int, default=2025, choices=sorted([*YEAR_ROUNDS, 2009]))
         parser.add_argument('--wipe', action='store_true',
                             help="Delete that year's local elections first, then import from scratch")
 
@@ -25,7 +26,11 @@ class Command(BaseCommand):
             count, _ = elections.delete()
             self.stdout.write(f'Wiped local {year}: {count} rows')
 
-        LocalImporter(year=year, stdout=self.stdout).run()
+        if year == 2009:
+            # PDF report only, no Excel: see local_2009.py.
+            Local2009Importer(stdout=self.stdout).run()
+        else:
+            LocalImporter(year=year, stdout=self.stdout).run()
 
         if touched:
             empty = (Person.objects.filter(pk__in=touched)
