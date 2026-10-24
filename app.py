@@ -380,6 +380,7 @@ INCOMPLETE_COVERAGE = {
     # municipality (and per county for its own contests), no stations.
     ('lokalni', 2009): 'samo zbroj po gradu/općini',
     ('lokalni', 2005): 'samo zbroj po gradu/općini',
+    ('lokalni', 2001): 'samo zbroj po gradu/općini',
 }
 
 # The 1990 Sabor's chambers, each its own election type: key (as in the URL)

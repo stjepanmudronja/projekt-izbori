@@ -41,10 +41,13 @@ YEAR = 2009
 DISPLAY = {slug: name for slug, name, _ in SHEET_TYPE_MAP.values()}
 
 # Headings the stem match cannot reach: a genitive that drops a vowel
-# (OZALJ -> OZLJA), and 2005's former name of Martijanec and spaced hyphen in
-# Kaštelir-Labinci (which would otherwise read as a bilingual " - ").
+# (OZALJ -> OZLJA), 2005's former name of Martijanec and spaced hyphen in
+# Kaštelir-Labinci (which would otherwise read as a bilingual " - "), and
+# 2001's ć for č and bare "VINODOLSKA".
 UNIT_ALIASES = {'OZLJA': 'OZALJ', 'DONJI MARTIJANEC': 'MARTIJANEC',
-                'KAŠTELIR - LABINCI': 'KAŠTELIR-LABINCI'}
+                'KAŠTELIR - LABINCI': 'KAŠTELIR-LABINCI',
+                'BUDINŠĆINA': 'BUDINŠČINA', 'KONJŠĆINA': 'KONJŠČINA',
+                'VINODOLSKA': 'VINODOLSKA OPĆINA'}
 
 
 def _words(name):
@@ -73,6 +76,10 @@ class Local2009Importer(BaseImporter):
     shape for an earlier year and overrides only `year` and `_parse`."""
 
     year = YEAR
+    text_glob = 'i_06_*.txt'
+
+    def _county_code(self, path):
+        return path.stem.split('_')[2]
 
     def __init__(self, stdout=None):
         super().__init__(stdout=stdout)
@@ -84,7 +91,7 @@ class Local2009Importer(BaseImporter):
 
     def run(self):
         text_dir = LocalImporter.DATA_DIR / str(self.year) / 'text'
-        files = sorted(text_dir.glob('i_06_*.txt'))
+        files = sorted(text_dir.glob(self.text_glob))
         if not files:
             raise RuntimeError(
                 f'No text dumps in {text_dir}. Build tools/pdf_text '
@@ -92,7 +99,7 @@ class Local2009Importer(BaseImporter):
                 f'on each {self.year}/*.pdf into that folder.')
         contests = []
         for path in files:
-            code = path.stem.split('_')[2]
+            code = self._county_code(path)
             for c, problems in self._parse(code, path.read_text()):
                 if problems:
                     raise RuntimeError(f'{path.name} {c["slug"]} r{c["round"]} '

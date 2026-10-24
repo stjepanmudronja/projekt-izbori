@@ -50,6 +50,7 @@ ELECTION_DATES = {
 # none of the three in its runoff won a majority (Hina, 14 June 2021).
 LOCAL_DATES = {
     # Councils and assemblies only; mayors were not yet elected directly.
+    2001: {1: date(2001, 5, 20)},
     2005: {1: date(2005, 5, 15)},
     # Round 3: Zlatar-Bistrica and Udbina načelnik, whose runoffs tied.
     2009: {1: date(2009, 5, 17), 2: date(2009, 5, 31), 3: date(2009, 6, 14)},
