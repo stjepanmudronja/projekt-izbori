@@ -1,3 +1,4 @@
+import hashlib
 import openpyxl
 from pathlib import Path
 from .base import BaseImporter
@@ -34,8 +35,12 @@ GEO_COLS = 13  # columns 0-12
 # 2021 also ships CSV copies of every workbook, which are not read; its third
 # round is the single repeat mayoral vote in Kraljevec na Sutli (13 June 2021),
 # held because no candidate of the three in its round-2 runoff won a majority.
+# 2017 shares 2021's layout; its round-2 Zagreb folder holds the city workbook
+# twice (Excel/21.xlsx and ZUP_21/21.xlsx, byte-identical), so files are
+# de-duplicated by content.
 YEAR_ROUNDS = {
     2025: {1: 'krug-1', 2: 'krug-2'},
+    2017: {1: 'rezultati1krug', 2: 'rezultati2krug'},
     2021: {1: '1_krug_rezultati', 2: '2_krug_rezultati', 3: '3_krug_rezultati'},
 }
 
@@ -90,7 +95,16 @@ class LocalImporter(BaseImporter):
                 continue
             self.log(f"Importing local elections {self.year} round {round_num}...")
             # "~$…" files are Excel lock files left beside an open workbook.
-            files = sorted(p for p in round_path.rglob('*.xlsx') if not p.name.startswith('~$'))
+            files, seen = [], set()
+            for p in sorted(round_path.rglob('*.xlsx')):
+                if p.name.startswith('~$'):
+                    continue
+                digest = hashlib.md5(p.read_bytes()).hexdigest()
+                if digest in seen:
+                    self.log(f"  Skipping {p.relative_to(round_path)}: duplicate of an earlier file")
+                    continue
+                seen.add(digest)
+                files.append(p)
             self.log(f"  Found {len(files)} files")
             for i, filepath in enumerate(files):
                 self._import_file(filepath, round_num)

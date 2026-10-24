@@ -167,8 +167,9 @@ KNOWN_DISTINCT = [
     ('MILAN KNEŽEVIĆ', 'Donji Lapac', [('local_mayor', 2025, 225)],  # 225 Donji Lapac
      'načelnik 2025 in both Donji Lapac (Ličko-senjska, both rounds) and Petlovac '
      '(Osječko-baranjska); the Petlovac one also ran there in 2021'),
-    ('MILAN KNEŽEVIĆ', 'Petlovac', [('local_mayor', 2021, 347), ('local_mayor', 2025, 347)],  # 347 Petlovac
-     'the Petlovac half of the pair above, 2021 and 2025'),
+    ('MILAN KNEŽEVIĆ', 'Petlovac', [('local_mayor', 2017, 347), ('local_mayor', 2021, 347),
+                                    ('local_mayor', 2025, 347)],  # 347 Petlovac
+     'the Petlovac half of the pair above, 2017, 2021 and 2025'),
 
     # Two executive races on one lokalni polling day: a candidate runs in one
     # race only, whatever its type (načelnik, gradonačelnik, zamjenik). The
@@ -189,11 +190,23 @@ KNOWN_DISTINCT = [
     ('IVAN VIDOVIĆ', 'Biskupija, 2025.', [('local_deputy_mayor', 2025, None, 'IVAN')],
      '2025: zamjenik načelnika of Biskupija (Šibensko-kninska) while the Most '
      'Ivan Vidović (EU 2024, Sabor VIII. IJ) ran for gradonačelnik of Umag'),
-    ('EDI PASTROVICCHIO', 'Bale, 2021.', [('local_mayor', 2021, None, 'EDI')],
+    ('EDI PASTROVICCHIO', 'Bale', [('local_mayor', 2017, None, 'EDI'),
+                                   ('local_mayor', 2021, None, 'EDI')],
      '2021: načelnik of Bale and gradonačelnik of Vodnjan on the same day; '
-     'neither stood in another election'),
+     'the Bale one also ran there in 2017, the Vodnjan one nowhere else'),
     ('EDI PASTROVICCHIO', 'Vodnjan, 2021.', [('local_city_mayor', 2021, None, 'EDI')],
      'the Vodnjan half of the pair above'),
+    ('DARKO HORVAT', 'Gornji Mihaljevec, 2017.', [('local_mayor', 2017, 541)],  # 541 Gornji Mihaljevec
+     '2017: načelnik of Gornji Mihaljevec while "Darko Horvat, dipl. ing. el." '
+     'ran for župan of Međimurska — the HDZ electrical engineer of III. IJ'),
+    ('IVAN VRKIĆ', 'Obrovac, 2017.', [('local_city_mayor', 2017, 289)],  # 289 Obrovac
+     '2017: gradonačelnik of Obrovac (Zadarska) while the Osijek candidate (both '
+     'rounds; HNS IV. IJ in 2020) ran in Osijek'),
+    ('IVO MILIĆ', 'Nuštar, 2017.', [('local_mayor', 2017, 402)],  # 402 Nuštar
+     '2017: načelnik of Nuštar ("Ivo Milić, bacc. ing. techn. inf.") and '
+     'gradonačelnik of Trogir on the same day; neither stood in another election'),
+    ('IVO MILIĆ', 'Trogir, 2017.', [('local_city_mayor', 2017, 425)],  # 425 Trogir
+     'the Trogir half of the pair above'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
