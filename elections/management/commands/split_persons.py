@@ -261,6 +261,9 @@ KNOWN_DISTINCT = [
     ('ŽELJKO VILJEVAC', 'Gradina, 2009.', [('local_mayor', 2009, 238)],  # 238 Gradina
      '2009: "Željko Viljevac, dipl. ing." for načelnik of Gradina (HSP, HSU) '
      'while the HDSSB-HSS Željko Viljevac ran in Viljevo, as again 2013-2017'),
+    ('FRANJO TUĐMAN', 'Luka, 1997.', [('local_council_ward', 1997, 2402)],  # Luka, ward II
+     '1997: an HDZ candidate in a single-member ward of the Luka općinsko '
+     'vijeće — a namesake, not the President, who stood for no local office'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but

@@ -47,7 +47,13 @@ DISPLAY = {slug: name for slug, name, _ in SHEET_TYPE_MAP.values()}
 UNIT_ALIASES = {'OZLJA': 'OZALJ', 'DONJI MARTIJANEC': 'MARTIJANEC',
                 'KAŠTELIR - LABINCI': 'KAŠTELIR-LABINCI',
                 'BUDINŠĆINA': 'BUDINŠČINA', 'KONJŠĆINA': 'KONJŠČINA',
-                'VINODOLSKA': 'VINODOLSKA OPĆINA'}
+                'VINODOLSKA': 'VINODOLSKA OPĆINA',
+                # 1997: names since reordered, and OCR's D for Đ / l for I.
+                'HUM BREZNIČKI': 'BREZNIČKI HUM', 'MOSLAVINA PODRAVSKA': 'PODRAVSKA MOSLAVINA',
+                'SVETA NEDJELJA': 'SVETA NEDELJA', 'DURMANEC': 'ĐURMANEC', 'SVETI DURD': 'SVETI ĐURĐ',
+                'ĐURDEVCA': 'ĐURĐEVAC', 'DELEKOVEC': 'ĐELEKOVEC', 'DULOVAC': 'ĐULOVAC',
+                'VELIKI GRDEVAC': 'VELIKI GRĐEVAC', 'ČADAVICA': 'ČAĐAVICA', 'ĐURDENOVAC': 'ĐURĐENOVAC',
+                'SATNICA DAKOVAČKA': 'SATNICA ĐAKOVAČKA', 'LVANKOVO': 'IVANKOVO'}
 
 
 def _words(name):
@@ -188,4 +194,6 @@ class Local2009Importer(BaseImporter):
                 self.create_candidate_result(candidacy, station, e['votes'])
             else:
                 el_list = self.get_or_create_electoral_list(election_round, list_name(e))
-            self.create_list_result(el_list, station, e['votes'])
+            # 1997 prints a few lists with no count; they stand, unscored.
+            if e.get('votes') is not None:
+                self.create_list_result(el_list, station, e['votes'])

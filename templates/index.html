@@ -1055,10 +1055,12 @@
                                     <optgroup label="Županijska razina">
                                         <option value="zupan">Župan</option>
                                         <option value="zup_skupstina">Županijska skupština</option>
+                                        <option value="zup_skupstina_ij">Županijska skupština — izborne jedinice (1997.)</option>
                                     </optgroup>
                                     <optgroup label="Gradska / općinska razina">
                                         <option value="vijece">Gradsko / Općinsko vijeće</option>
                                         <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
+                                        <option value="vijece_ij">Gradsko / Općinsko vijeće — izborne jedinice (1997.)</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -6341,7 +6343,10 @@ const IZL_COMPARE_PALETTE = [
 
 // === Lokalni izbori — per-station results module ===
 const lok = { initialized: false, year: null, currentRound: 1, mapPaths: [], compareScopes: [] };
-const LOK_COUNTY_KINDS = new Set(['zupan', 'zup_skupstina']);
+const LOK_COUNTY_KINDS = new Set(['zupan', 'zup_skupstina', 'zup_skupstina_ij']);
+// 1997's single-member wards (izborne jedinice): each ward is its own race,
+// shown as one card per ward rather than one bar chart, and not comparable.
+const LOK_WARD_KINDS = new Set(['vijece_ij', 'zup_skupstina_ij']);
 // Kinds whose ElectoralLists are 1:1 with a candidate (head-of-executive
 // races), so each bar label is a person name and links to that person's page.
 // vijece / zup_skupstina lists are party tickets and aren't person-linkable.
@@ -6349,6 +6354,7 @@ const LOK_PERSON_KINDS = new Set(['nacelnik', 'zupan']);
 const LOK_KIND_LABELS = {
     vijece: 'Vijeće', nacelnik: 'Načelnik',
     zupan: 'Župan', zup_skupstina: 'Žup. skupština',
+    vijece_ij: 'Vijeće (izb. jedinice)', zup_skupstina_ij: 'Žup. skupština (izb. jedinice)',
 };
 
 async function initLokalniModule() {
@@ -6461,7 +6467,7 @@ function lokUpdateAddBtn() {
     const cId = document.getElementById('lokSelCounty').value;
     const mId = document.getElementById('lokSelMuni').value;
     const k = document.getElementById('lokSelKind').value;
-    if (!k) { btn.disabled = true; return; }
+    if (!k || LOK_WARD_KINDS.has(k)) { btn.disabled = true; return; }
     btn.disabled = LOK_COUNTY_KINDS.has(k) ? !cId : !mId;
 }
 
@@ -6604,6 +6610,49 @@ function onLokStationChange() {
     if (selK.value) loadLokResults();
 }
 
+// 1997 wards: one card per izborna jedinica with its candidates.
+async function loadLokWards(sc) {
+    const empty = document.getElementById('lokEmpty');
+    const area = document.getElementById('lokResultsArea');
+    const spinner = document.getElementById('lokSpinner');
+    empty.style.display = 'none';
+    area.style.display = 'none';
+    spinner.style.display = '';
+    document.getElementById('lokRoundToggle').classList.add('d-none');
+    const params = new URLSearchParams({ year: lok.year || 1997 });
+    params.set(sc.type === 'county' ? 'county_id' : 'municipality_id', sc.id);
+    const res = await fetch('/api/lokalni/wards?' + params.toString());
+    const data = await res.json().catch(() => ({}));
+    spinner.style.display = 'none';
+    area.style.display = '';
+    if (!res.ok) {
+        area.innerHTML = `<div class="alert alert-warning">${escapeHtml(data.error || `HTTP ${res.status}`)}</div>`;
+        return;
+    }
+    if (!data.wards.length) {
+        area.innerHTML = '<div class="alert alert-info">Za ovo mjesto nema izbornih jedinica (sva su mjesta dodijeljena po listama).</div>';
+        return;
+    }
+    const fmt = n => (n ?? 0).toLocaleString('hr-HR');
+    area.innerHTML = `
+        <div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>
+            ${escapeHtml(data.election_type)} ${data.year}. — dio vijeća biran je u jednomandatnim izbornim jedinicama
+            (relativnom većinom), uz mjesta dodijeljena po listama.</div>
+        <div class="row g-3">${data.wards.map(w => `
+            <div class="col-md-6"><div class="card h-100"><div class="card-body">
+                <h6 class="card-title mb-1">${escapeHtml(w.name)}</h6>
+                ${w.registered_voters ? `<div class="text-muted small mb-2">Birača ${fmt(w.registered_voters)},
+                    glasovalo ${fmt(w.ballots_cast)}, nevažećih ${fmt(w.invalid_ballots)}</div>` : ''}
+                <table class="table table-sm mb-0"><tbody>${w.candidates.map(c => `
+                    <tr class="${c.winner ? 'fw-semibold' : ''}">
+                        <td>${c.winner ? '<i class="bi bi-check-circle-fill text-success me-1" title="Izabran(a)"></i>' : ''}${personLinkHtml(c.name, c.person_id)}</td>
+                        <td class="text-muted small">${escapeHtml(c.party)}</td>
+                        <td class="text-end">${w.unopposed && c.votes == null ? '<span class="text-muted small">jedini kandidat</span>' : fmt(c.votes)}</td>
+                        <td class="text-end text-muted small">${c.votes_pct != null ? c.votes_pct.toFixed(2) + ' %' : ''}</td>
+                    </tr>`).join('')}</tbody></table>
+            </div></div></div>`).join('')}</div>`;
+}
+
 async function loadLokResults() {
     const empty = document.getElementById('lokEmpty');
     const area = document.getElementById('lokResultsArea');
@@ -6633,6 +6682,7 @@ async function loadLokResults() {
                 ? { type: 'station', id: parseInt(stationId, 10), kind }
                 : { type: 'municipality', id: parseInt(muniId, 10), kind };
         }
+        if (LOK_WARD_KINDS.has(kind)) return loadLokWards(sc);
         targets.push({ scope: sc, prefix: '' });
     }
 

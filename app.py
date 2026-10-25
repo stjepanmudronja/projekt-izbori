@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 
 from flask import Flask, render_template, jsonify, request
@@ -365,6 +366,14 @@ MINORITY_SEATS_BY_YEAR = {2000: 5}
 # short district XI's ~400k diaspora voters — so anything presenting it as
 # "Hrvatska" has to say so, or the number reads as simply wrong against the
 # published total (4,046,488 registered against our 3,646,455).
+# 1997's mixed system: besides the list part, each council and county
+# assembly had single-member wards, stored as their own election types so
+# ward votes never add into a list total (see local_1997.py).
+LOKALNI_WARD_TYPES = {
+    'vijece_ij': 'Vijeće — izborne jedinice',
+    'zup_skupstina_ij': 'Županijska skupština — izborne jedinice',
+}
+
 INCOMPLETE_COVERAGE = {
     ('sabor', 2000): 'bez XI. i XII. IJ',
     # 1995 has no per-station export at all — DIP published only summary
@@ -381,6 +390,7 @@ INCOMPLETE_COVERAGE = {
     ('lokalni', 2009): 'samo zbroj po gradu/općini',
     ('lokalni', 2005): 'samo zbroj po gradu/općini',
     ('lokalni', 2001): 'samo zbroj po gradu/općini',
+    ('lokalni', 1997): 'samo zbroj po gradu/općini',
 }
 
 # The 1990 Sabor's chambers, each its own election type: key (as in the URL)
@@ -592,7 +602,7 @@ def person_detail(person_id):
     # cleanly map to a winner.
     # The 1990 chambers are a head-to-head race per unit and per round, so
     # they rank like a presidential round within its district.
-    RANK_BY_DISTRICT = {'Predsjednički izbori'} | SABOR_1990_TYPE_NAMES
+    RANK_BY_DISTRICT = {'Predsjednički izbori'} | SABOR_1990_TYPE_NAMES | set(LOKALNI_WARD_TYPES.values())
     RANK_BY_MUNI = {'Gradonačelnik', 'Načelnik'}
     RANK_BY_COUNTY = {'Župan'}
     LOKALNI_EXEC = RANK_BY_MUNI | RANK_BY_COUNTY
@@ -606,6 +616,8 @@ def person_detail(person_id):
         'Općinsko vijeće': 'vijece',
         'Župan': 'zupan',
         'Županijska skupština': 'zup_skupstina',
+        LOKALNI_WARD_TYPES['vijece_ij']: 'vijece_ij',
+        LOKALNI_WARD_TYPES['zup_skupstina_ij']: 'zup_skupstina_ij',
     }
     ALL_LOKALNI = set(LOKALNI_KIND_MAP.keys())
 
@@ -2801,6 +2813,73 @@ def lokalni_years():
     years = (db.session.query(Election.year).join(ElectionType)
              .filter(ElectionType.slug.like('local%')).distinct().all())
     return jsonify(sorted((y for (y,) in years), reverse=True))
+
+
+@app.route('/api/lokalni/wards')
+def lokalni_wards():
+    """1997's single-member wards (izborne jedinice) of one council
+    (`municipality_id`) or one county assembly (`county_id`): each ward's
+    candidates with party, votes and share, the winner, and the ward's printed
+    electorate where the report gives one (assembly wards only)."""
+    year = request.args.get('year', type=int) or 1997
+    muni_id = request.args.get('municipality_id', type=int)
+    county_id = request.args.get('county_id', type=int)
+    if county_id:
+        type_name = LOKALNI_WARD_TYPES['zup_skupstina_ij']
+        scope = (db.session.query(PollingStation.id)
+                 .join(Municipality, Municipality.id == PollingStation.municipality_id)
+                 .filter(Municipality.county_id == county_id))
+        number_base = county_id
+    elif muni_id:
+        type_name = LOKALNI_WARD_TYPES['vijece_ij']
+        scope = db.session.query(PollingStation.id).filter(PollingStation.municipality_id == muni_id)
+        number_base = muni_id
+    else:
+        return jsonify({'error': 'municipality_id or county_id required'}), 400
+    election = (Election.query.join(ElectionType)
+                .filter(ElectionType.name == type_name, Election.year == year).first())
+    if not election:
+        return jsonify({'error': f'Izborne jedinice postoje samo za 1997.; {year}. su vijeća '
+                                 'birana samo po listama.'}), 404
+    er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
+    # Ward numbers are place_pk * 100 + ward, so one place's wards are a range.
+    districts = (ElectoralDistrict.query
+                 .filter(ElectoralDistrict.election_id == election.id,
+                         ElectoralDistrict.number >= number_base * 100,
+                         ElectoralDistrict.number < number_base * 100 + 100)
+                 .order_by(ElectoralDistrict.number).all())
+    rows = (db.session.query(ElectoralList.district_id, ElectoralList.name, Candidacy.person_id,
+                             db.func.sum(CandidateResult.votes).label('votes'))
+            .join(Candidacy, Candidacy.electoral_list_id == ElectoralList.id)
+            .outerjoin(CandidateResult, db.and_(CandidateResult.candidacy_id == Candidacy.id,
+                                                CandidateResult.polling_station_id.in_(scope)))
+            .filter(ElectoralList.election_round_id == er.id,
+                    ElectoralList.district_id.in_([d.id for d in districts]))
+            .group_by(ElectoralList.district_id, ElectoralList.name, Candidacy.person_id)
+            .all())
+    by_district = {}
+    for r in rows:
+        # Ward lists are named "NAME (PARTY)".
+        m = re.match(r'^(.*?)\s*\(([^()]*)\)$', r.name)
+        name, party = (m.group(1), m.group(2)) if m else (r.name, '')
+        by_district.setdefault(r.district_id, []).append({
+            'name': name, 'person_id': r.person_id, 'party': party,
+            'votes': int(r.votes) if r.votes is not None else None,
+        })
+    wards = []
+    for d in districts:
+        cands = sorted(by_district.get(d.id, []), key=lambda c: -(c['votes'] or 0))
+        total = sum(c['votes'] or 0 for c in cands)
+        for i, c in enumerate(cands):
+            c['votes_pct'] = (c['votes'] / total * 100.0) if total and c['votes'] is not None else None
+            c['winner'] = i == 0
+        wards.append({
+            'name': d.name, 'number': d.number % 100,
+            'registered_voters': d.registered_voters, 'ballots_cast': d.ballots_cast,
+            'invalid_ballots': d.invalid_ballots, 'unopposed': len(cands) == 1,
+            'total_votes': total, 'candidates': cands,
+        })
+    return jsonify({'election_type': type_name, 'year': year, 'wards': wards})
 
 
 @app.route('/api/lokalni/station-results')

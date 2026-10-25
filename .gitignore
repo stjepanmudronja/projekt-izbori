@@ -11,3 +11,5 @@ notes
 .DS_Store
 database_script.sql
 tools/pdf_text
+tools/pdf_ocr
+tools/pdf_ocr_crops
