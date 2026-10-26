@@ -6342,7 +6342,9 @@ const IZL_COMPARE_PALETTE = [
 ];
 
 // === Lokalni izbori — per-station results module ===
-const lok = { initialized: false, year: null, currentRound: 1, mapPaths: [], compareScopes: [] };
+// `years` are the selected years oldest first, `picked` the same in click
+// order (the oldest pick is dropped past 3), `year` the newest of them.
+const lok = { initialized: false, year: null, years: [], picked: [], currentRound: 1, mapPaths: [], compareScopes: [] };
 const LOK_COUNTY_KINDS = new Set(['zupan', 'zup_skupstina', 'zup_skupstina_ij']);
 // 1997's single-member wards (izborne jedinice): each ward is its own race,
 // shown as one card per ward rather than one bar chart, and not comparable.
@@ -6406,7 +6408,9 @@ function lokSyncKindOptions() {
             if (LOK_WARD_KINDS.has(o.value)) _lokWardOptions.push({ opt: o, group: o.parentNode });
         });
     }
-    const show = LOK_WARD_YEARS.has(lok.year);
+    // Compared years share one kind, so wards are offered only when every
+    // selected year has them.
+    const show = lok.years.length > 0 && lok.years.every(y => LOK_WARD_YEARS.has(y));
     if (!show && LOK_WARD_KINDS.has(sel.value)) {
         sel.value = '';
         lokUpdateAddBtn();
@@ -6418,26 +6422,52 @@ function lokSyncKindOptions() {
 }
 
 // One button per year with lokalni results, newest selected. Picking a year
-// keeps the chosen place and race and reloads them for that year.
+// keeps the chosen place and race and reloads them for that year. Like the
+// other modules' pickers it is additive: a second year joins the selection
+// (max 3, the oldest pick dropped first) and the race is shown side by side
+// per year; clicking an active year removes it, never emptying the set.
+// Scope chips keep it single-select, since scopes × years would multiply.
 async function initLokYearPicker() {
     const picker = document.getElementById('lokYearPicker');
     const res = await fetch('/api/lokalni/years');
     const years = res.ok ? await res.json() : [];
     if (!years.length) return;
-    lok.year = years[0];
-    lokSyncKindOptions();
     picker.insertAdjacentHTML('beforeend', years.map(y =>
-        `<button type="button" class="btn btn-outline-primary btn-sm results-year-btn${y === lok.year ? ' active' : ''}" data-year="${y}">${y}.</button>`
-    ).join(''));
+        `<button type="button" class="btn btn-outline-primary btn-sm results-year-btn" data-year="${y}">${y}.</button>`
+    ).join('') + (years.length > 1
+        ? `<small class="text-muted ms-2 align-self-center" style="font-size:0.72rem;">Klikni više godina za usporedbu (max 3).</small>`
+        : ''));
+    setLokYears([years[0]], false);
     picker.querySelectorAll('.results-year-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            lok.year = parseInt(btn.dataset.year, 10);
-            picker.querySelectorAll('.results-year-btn').forEach(b =>
-                b.classList.toggle('active', b === btn));
-            lokSyncKindOptions();
-            loadLokResults();
+            // A focused outline button paints like an active one, so a year
+            // just deselected would still look selected.
+            btn.blur();
+            const yr = parseInt(btn.dataset.year, 10);
+            let next;
+            if (lok.compareScopes.length > 0) {
+                next = [yr];
+            } else if (lok.picked.includes(yr)) {
+                next = lok.picked.filter(y => y !== yr);
+                if (next.length === 0) next = [yr];
+            } else {
+                next = lok.picked.concat(yr).slice(-3);
+            }
+            setLokYears(next);
         });
     });
+}
+
+// Single entry point for the active years — the picker and deep links, which
+// must land on exactly one year rather than toggle it.
+function setLokYears(years, reload = true) {
+    lok.picked = years.slice();
+    lok.years = years.slice().sort((a, b) => a - b);
+    lok.year = lok.years[lok.years.length - 1];
+    document.querySelectorAll('#lokYearPicker .results-year-btn').forEach(b =>
+        b.classList.toggle('active', lok.years.includes(parseInt(b.dataset.year, 10))));
+    lokSyncKindOptions();
+    if (reload) loadLokResults();
 }
 
 async function loadLokCroatiaMap() {
@@ -6526,6 +6556,8 @@ function onLokAddCompare() {
     if (!sc) return;
     if (lok.compareScopes.find(x => x.type === sc.type && x.id === sc.id && x.kind === sc.kind)) return;
     if (lok.compareScopes.length >= 3) return; // side-by-side cap
+    // Scope chips compare places within one year.
+    if (lok.years.length > 1) setLokYears([lok.year], false);
     lok.compareScopes.push(sc);
     renderLokCompareChips();
     loadLokResults();
@@ -6645,27 +6677,45 @@ async function loadLokWards(sc) {
     area.style.display = 'none';
     spinner.style.display = '';
     document.getElementById('lokRoundToggle').classList.add('d-none');
-    const params = new URLSearchParams({ year: lok.year || 1997 });
-    params.set(sc.type === 'county' ? 'county_id' : 'municipality_id', sc.id);
-    const res = await fetch('/api/lokalni/wards?' + params.toString());
-    const data = await res.json().catch(() => ({}));
+    const years = lok.years.length ? lok.years : [lok.year || 1997];
+    const parts = await Promise.all(years.map(async y => {
+        const params = new URLSearchParams({ year: y });
+        params.set(sc.type === 'county' ? 'county_id' : 'municipality_id', sc.id);
+        const res = await fetch('/api/lokalni/wards?' + params.toString());
+        const data = await res.json().catch(() => ({}));
+        return lokWardsHtml(res, data, years.length > 1 ? 'col-12' : 'col-md-6');
+    }));
     spinner.style.display = 'none';
     area.style.display = '';
-    if (!res.ok) {
-        area.innerHTML = `<div class="alert alert-warning">${escapeHtml(data.error || `HTTP ${res.status}`)}</div>`;
+    if (years.length === 1) {
+        area.innerHTML = parts[0];
         return;
+    }
+    const kindLabel = LOK_KIND_LABELS[sc.kind] || sc.kind;
+    area.innerHTML = `<div class="compare-grid scope-compare-grid">${years.map((y, i) => `
+        <div class="compare-card">
+            <div class="compare-card-header">
+                <h6><i class="bi bi-calendar3 me-1"></i>${y}.</h6>
+                <span class="badge bg-info text-dark" style="font-size:0.65rem;">${kindLabel}</span>
+            </div>
+            <div class="compare-card-body">${parts[i]}</div>
+        </div>`).join('')}</div>`;
+}
+
+function lokWardsHtml(res, data, colClass) {
+    if (!res.ok) {
+        return `<div class="alert alert-warning">${escapeHtml(data.error || `HTTP ${res.status}`)}</div>`;
     }
     if (!data.wards.length) {
-        area.innerHTML = '<div class="alert alert-info">Za ovo mjesto nema izbornih jedinica (sva su mjesta dodijeljena po listama).</div>';
-        return;
+        return '<div class="alert alert-info">Za ovo mjesto nema izbornih jedinica (sva su mjesta dodijeljena po listama).</div>';
     }
     const fmt = n => (n ?? 0).toLocaleString('hr-HR');
-    area.innerHTML = `
+    return `
         <div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>
             ${escapeHtml(data.election_type)} ${data.year}. — dio vijeća biran je u jednomandatnim izbornim jedinicama
             (relativnom većinom), uz mjesta dodijeljena po listama.</div>
         <div class="row g-3">${data.wards.map(w => `
-            <div class="col-md-6"><div class="card h-100"><div class="card-body">
+            <div class="${colClass}"><div class="card h-100"><div class="card-body">
                 <h6 class="card-title mb-1">${escapeHtml(w.name)}</h6>
                 ${w.registered_voters ? `<div class="text-muted small mb-2">Birača ${fmt(w.registered_voters)},
                     glasovalo ${fmt(w.ballots_cast)}, nevažećih ${fmt(w.invalid_ballots)}</div>` : ''}
@@ -6710,7 +6760,12 @@ async function loadLokResults() {
                 : { type: 'municipality', id: parseInt(muniId, 10), kind };
         }
         if (LOK_WARD_KINDS.has(kind)) return loadLokWards(sc);
-        targets.push({ scope: sc, prefix: '' });
+        // Several years picked: the one race once per year, side by side.
+        if (lok.years.length > 1) {
+            lok.years.forEach(y => targets.push({ scope: sc, year: y, prefix: `y${y}_` }));
+        } else {
+            targets.push({ scope: sc, prefix: '' });
+        }
     }
 
     empty.style.display = 'none';
@@ -6721,9 +6776,9 @@ async function loadLokResults() {
     // one repeat vote (Kraljevec na Sutli's načelnik went to a third round).
     // Rounds the race doesn't have are dropped once rounds_available is known.
     const roundsToFetch = lok.currentRound === 2 ? [1, 2, 3] : [1];
-    const fetchOne = async (sc, rn) => {
+    const fetchOne = async (sc, rn, year) => {
         const params = new URLSearchParams({ kind: sc.kind, round: rn });
-        if (lok.year) params.set('year', lok.year);
+        if (year || lok.year) params.set('year', year || lok.year);
         if (sc.type === 'station') params.set('station_id', sc.id);
         else if (sc.type === 'county') params.set('county_id', sc.id);
         else params.set('municipality_id', sc.id);
@@ -6737,7 +6792,7 @@ async function loadLokResults() {
 
     // For each target (chip or single), fetch all wanted rounds in parallel.
     const blocks = await Promise.all(targets.map(async t => {
-        const results = await Promise.all(roundsToFetch.map(rn => fetchOne(t.scope, rn)));
+        const results = await Promise.all(roundsToFetch.map(rn => fetchOne(t.scope, rn, t.year)));
         return { target: t, results };
     }));
     spinner.style.display = 'none';
@@ -6769,8 +6824,8 @@ async function loadLokResults() {
     // than draw an empty card.
     blocks.forEach(b => { b.results = b.results.filter(r => r.error || r.round === 1 || r.total_votes > 0); });
 
-    // Single mode (no chips): just stack the round cards as before.
-    const compareMode = lok.compareScopes.length > 0;
+    // Single mode (one place, one year): just stack the round cards as before.
+    const compareMode = targets.length > 1;
     if (!compareMode) {
         area.innerHTML = blocks[0].results.map(d => d.error
             ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
@@ -6780,18 +6835,19 @@ async function loadLokResults() {
         return;
     }
 
-    // Compare mode: one column per chip, side-by-side (max 3 by chip cap).
+    // Compare mode: one column per chip or per year, side-by-side (max 3).
     const cols = blocks.map(b => {
         const sc = b.target.scope;
         const kindLabel = LOK_KIND_LABELS[sc.kind] || sc.kind;
-        const headerLabel = sc.muniLabel ? `${sc.label} (${sc.muniLabel})` : sc.label;
+        const headerLabel = b.target.year ? `${b.target.year}.`
+            : sc.muniLabel ? `${sc.label} (${sc.muniLabel})` : sc.label;
         const cardsHtml = b.results.map(d => d.error
             ? `<div class="alert alert-warning">${escapeHtml(d.error)} (krug ${d.round})</div>`
             : renderLokResultCard(Object.assign(d, { _chartPrefix: b.target.prefix }))
         ).join('');
         return `<div class="compare-card">
             <div class="compare-card-header">
-                <h6><i class="bi bi-geo-alt me-1"></i>${escapeHtml(headerLabel || '')}</h6>
+                <h6><i class="bi ${b.target.year ? 'bi-calendar3' : 'bi-geo-alt'} me-1"></i>${escapeHtml(headerLabel || '')}</h6>
                 <span class="badge bg-info text-dark" style="font-size:0.65rem;">${kindLabel}</span>
             </div>
             <div class="compare-card-body">${cardsHtml}</div>
@@ -8172,7 +8228,9 @@ function izlNavigateTo(category, year, opts) {
         const yearBtn = document.querySelector(
             `#module-results-${category} .results-year-btn[data-year="${year}"]`
         );
-        if (yearBtn) {
+        if (yearBtn && category === 'lokalni') {
+            setLokYears([+year]);   // a click would add the year to a comparison
+        } else if (yearBtn) {
             yearBtn.click();
         } else if (attempts < 20) {
             setTimeout(() => tryLoad(attempts + 1), 100);
