@@ -1055,12 +1055,12 @@
                                     <optgroup label="Županijska razina">
                                         <option value="zupan">Župan</option>
                                         <option value="zup_skupstina">Županijska skupština</option>
-                                        <option value="zup_skupstina_ij">Županijska skupština — izborne jedinice (1993., 1997.)</option>
+                                        <option value="zup_skupstina_ij">Županijska skupština — izborne jedinice</option>
                                     </optgroup>
                                     <optgroup label="Gradska / općinska razina">
                                         <option value="vijece">Gradsko / Općinsko vijeće</option>
                                         <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
-                                        <option value="vijece_ij">Gradsko / Općinsko vijeće — izborne jedinice (1993., 1997.)</option>
+                                        <option value="vijece_ij">Gradsko / Općinsko vijeće — izborne jedinice</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -6393,6 +6393,30 @@ async function initLokalniModule() {
     });
 }
 
+// Single-member wards (izborne jedinice) exist only in 1993 and 1997, so
+// their two kinds are offered only for those years. The options are taken
+// out of the list rather than hidden (Safari shows hidden options); a ward
+// kind left selected when another year is picked falls back to none.
+const LOK_WARD_YEARS = new Set([1993, 1997]);
+const _lokWardOptions = [];
+function lokSyncKindOptions() {
+    const sel = document.getElementById('lokSelKind');
+    if (!_lokWardOptions.length) {
+        sel.querySelectorAll('option').forEach(o => {
+            if (LOK_WARD_KINDS.has(o.value)) _lokWardOptions.push({ opt: o, group: o.parentNode });
+        });
+    }
+    const show = LOK_WARD_YEARS.has(lok.year);
+    if (!show && LOK_WARD_KINDS.has(sel.value)) {
+        sel.value = '';
+        lokUpdateAddBtn();
+    }
+    _lokWardOptions.forEach(({ opt, group }) => {
+        if (show && !opt.parentNode) group.appendChild(opt);
+        else if (!show && opt.parentNode) opt.remove();
+    });
+}
+
 // One button per year with lokalni results, newest selected. Picking a year
 // keeps the chosen place and race and reloads them for that year.
 async function initLokYearPicker() {
@@ -6401,6 +6425,7 @@ async function initLokYearPicker() {
     const years = res.ok ? await res.json() : [];
     if (!years.length) return;
     lok.year = years[0];
+    lokSyncKindOptions();
     picker.insertAdjacentHTML('beforeend', years.map(y =>
         `<button type="button" class="btn btn-outline-primary btn-sm results-year-btn${y === lok.year ? ' active' : ''}" data-year="${y}">${y}.</button>`
     ).join(''));
@@ -6409,6 +6434,7 @@ async function initLokYearPicker() {
             lok.year = parseInt(btn.dataset.year, 10);
             picker.querySelectorAll('.results-year-btn').forEach(b =>
                 b.classList.toggle('active', b === btn));
+            lokSyncKindOptions();
             loadLokResults();
         });
     });
