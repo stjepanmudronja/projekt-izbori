@@ -83,6 +83,7 @@ class Local2009Importer(BaseImporter):
 
     year = YEAR
     text_glob = 'i_06_*.txt'
+    display = DISPLAY
 
     def _county_code(self, path):
         return path.stem.split('_')[2]
@@ -173,8 +174,8 @@ class Local2009Importer(BaseImporter):
 
     def _import_contest(self, code, c):
         slug = c['slug']
-        election_type = self.get_or_create_election_type(slug, DISPLAY[slug], parent_slug='local')
-        election = self.get_or_create_election(election_type, self.year, f'{DISPLAY[slug]} {self.year}')
+        election_type = self.get_or_create_election_type(slug, self.display[slug], parent_slug='local')
+        election = self.get_or_create_election(election_type, self.year, f'{self.display[slug]} {self.year}')
         election_round = self.get_or_create_round(election, c['round'])
         station, number, name = self._place(code, c)
 

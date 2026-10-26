@@ -7,10 +7,13 @@
 //   tools/pdf_ocr_crops < crops.tsv > readings.tsv
 //
 // Input lines:  id <TAB> pdf <TAB> page <TAB> x <TAB> y <TAB> w <TAB> h
-// (page points, origin top-left). Output lines: id <TAB> confidence <TAB> text,
+// (page points, origin top-left), optionally <TAB> degrees: the page's `skew`
+// line from `pdf_ocr` under OCR_DESKEW=1, so a crop is cut from the same
+// straightened page its coordinates came from. Output lines: id <TAB> confidence <TAB> text,
 // the crop's recognised lines joined with spaces, left to right — or, with
 // CROP_LINES=1, one line per recognised line: id <TAB> confidence <TAB> y <TAB>
-// text, y being the line's top in page points (for a column of counts).
+// text <TAB> x, y and x being the line's top and left edge in page points
+// (for a column of counts).
 import Foundation
 import PDFKit
 import Vision
@@ -37,6 +40,11 @@ while let line = readLine() {
     ctx.clip(to: CGRect(x: pad * scale, y: pad * scale, width: cw * scale, height: ch * scale))
     ctx.scaleBy(x: scale, y: scale)
     ctx.translateBy(x: pad - cx, y: pad - (box.height - cy - ch))
+    if f.count >= 8, let degrees = Double(f[7]), degrees != 0 {
+        ctx.translateBy(x: box.width / 2, y: box.height / 2)
+        ctx.rotate(by: CGFloat(-degrees * .pi / 180))
+        ctx.translateBy(x: -box.width / 2 - box.minX, y: -box.height / 2 - box.minY)
+    }
     page.draw(with: .mediaBox, to: ctx)
     ctx.restoreGState()
     guard let image = ctx.makeImage() else { continue }
@@ -44,13 +52,18 @@ while let line = readLine() {
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = false
     request.recognitionLanguages = ["cs-CZ", "pl-PL"]
+    // Revision 3 guesses each line's orientation, and on a crop with little
+    // text reads some upside down ("HNS 414" as "SNH DIT"); revision 2
+    // reads the crop as rendered.
+    request.revision = VNRecognizeTextRequestRevision2
     try? VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
     if ProcessInfo.processInfo.environment["CROP_LINES"] == "1" {
         for o in request.results ?? [] {
             guard let t = o.topCandidates(1).first else { continue }
             // Normalised box -> page points: undo the padding and the scale.
             let top = cy - pad + (1 - o.boundingBox.maxY) * (ch + 2 * pad)
-            print("\(f[0])\t\(String(format: "%.2f", t.confidence))\t\(String(format: "%.1f", top))\t\(t.string)")
+            let left = cx - pad + o.boundingBox.minX * (cw + 2 * pad)
+            print("\(f[0])\t\(String(format: "%.2f", t.confidence))\t\(String(format: "%.1f", top))\t\(t.string.replacingOccurrences(of: "\t", with: " "))\t\(String(format: "%.1f", left))")
         }
         fflush(stdout)
         continue

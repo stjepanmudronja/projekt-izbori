@@ -1055,12 +1055,12 @@
                                     <optgroup label="Županijska razina">
                                         <option value="zupan">Župan</option>
                                         <option value="zup_skupstina">Županijska skupština</option>
-                                        <option value="zup_skupstina_ij">Županijska skupština — izborne jedinice (1997.)</option>
+                                        <option value="zup_skupstina_ij">Županijska skupština — izborne jedinice (1993., 1997.)</option>
                                     </optgroup>
                                     <optgroup label="Gradska / općinska razina">
                                         <option value="vijece">Gradsko / Općinsko vijeće</option>
                                         <option value="nacelnik">Gradonačelnik / Općinski načelnik</option>
-                                        <option value="vijece_ij">Gradsko / Općinsko vijeće — izborne jedinice (1997.)</option>
+                                        <option value="vijece_ij">Gradsko / Općinsko vijeće — izborne jedinice (1993., 1997.)</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -6610,7 +6610,7 @@ function onLokStationChange() {
     if (selK.value) loadLokResults();
 }
 
-// 1997 wards: one card per izborna jedinica with its candidates.
+// 1993/1997 wards: one card per izborna jedinica with its candidates.
 async function loadLokWards(sc) {
     const empty = document.getElementById('lokEmpty');
     const area = document.getElementById('lokResultsArea');
@@ -6647,7 +6647,8 @@ async function loadLokWards(sc) {
                     <tr class="${c.winner ? 'fw-semibold' : ''}">
                         <td>${c.winner ? '<i class="bi bi-check-circle-fill text-success me-1" title="Izabran(a)"></i>' : ''}${personLinkHtml(c.name, c.person_id)}</td>
                         <td class="text-muted small">${escapeHtml(c.party)}</td>
-                        <td class="text-end">${w.unopposed && c.votes == null ? '<span class="text-muted small">jedini kandidat</span>' : fmt(c.votes)}</td>
+                        <td class="text-end">${w.winner_only ? '<span class="text-muted small" title="Izvješće za ovu jedinicu navodi samo izabranog kandidata">samo izabrani</span>'
+                            : w.unopposed && c.votes == null ? '<span class="text-muted small">jedini kandidat</span>' : fmt(c.votes)}</td>
                         <td class="text-end text-muted small">${c.votes_pct != null ? c.votes_pct.toFixed(2) + ' %' : ''}</td>
                     </tr>`).join('')}</tbody></table>
             </div></div></div>`).join('')}</div>`;

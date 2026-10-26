@@ -113,7 +113,7 @@ class Local1997Importer(Local2009Importer):
         win = ward.get('winner_name') or ''
         if win and fold(_tokens(win) and ' '.join(_tokens(win)) or '') != fold(name.split(',')[0]):
             words = _tokens(win)
-            if cand is max(ward['candidates'], key=lambda x: x['votes'] or -1) and words and \
+            if cand is max(ward['candidates'], key=lambda x: x['votes'] or -1) and len(words) >= 2 and \
                     words[0].upper() in first and words[-1].upper() in last and \
                     not (name.split()[0].upper() in first and name.split(',')[0].split()[-1].upper() in last):
                 name = ' '.join(words)

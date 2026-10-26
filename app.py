@@ -391,6 +391,7 @@ INCOMPLETE_COVERAGE = {
     ('lokalni', 2005): 'samo zbroj po gradu/općini',
     ('lokalni', 2001): 'samo zbroj po gradu/općini',
     ('lokalni', 1997): 'samo zbroj po gradu/općini',
+    ('lokalni', 1993): 'samo zbroj po gradu/općini',
 }
 
 # The 1990 Sabor's chambers, each its own election type: key (as in the URL)
@@ -614,6 +615,7 @@ def person_detail(person_id):
         'Načelnik': 'nacelnik',
         'Gradsko vijeće': 'vijece',
         'Općinsko vijeće': 'vijece',
+        'Kotarska skupština': 'vijece',
         'Župan': 'zupan',
         'Županijska skupština': 'zup_skupstina',
         LOKALNI_WARD_TYPES['vijece_ij']: 'vijece_ij',
@@ -2798,7 +2800,8 @@ def sabor_district_municipalities(district_id):
 # ('grad' → Grad*, 'općina' → Općin*). The two county-level kinds always map
 # to a single ElectionType regardless of any muni-type lookup.
 LOKALNI_KIND_TO_TYPE = {
-    'vijece': {'grad': 'Gradsko vijeće', 'općina': 'Općinsko vijeće'},
+    # 1993's two kotari (Glina, Knin) are stored as municipalities of type kotar.
+    'vijece': {'grad': 'Gradsko vijeće', 'općina': 'Općinsko vijeće', 'kotar': 'Kotarska skupština'},
     'nacelnik': {'grad': 'Gradonačelnik', 'općina': 'Načelnik'},
 }
 LOKALNI_COUNTY_KIND_TO_TYPE = {
@@ -2817,10 +2820,11 @@ def lokalni_years():
 
 @app.route('/api/lokalni/wards')
 def lokalni_wards():
-    """1997's single-member wards (izborne jedinice) of one council
-    (`municipality_id`) or one county assembly (`county_id`): each ward's
-    candidates with party, votes and share, the winner, and the ward's printed
-    electorate where the report gives one (assembly wards only)."""
+    """1993's and 1997's single-member wards (izborne jedinice) of one
+    council (`municipality_id`) or one county assembly (`county_id`): each
+    ward's candidates with party, votes and share, the winner, and the ward's
+    printed electorate where the report gives one. `winner_only` marks a ward
+    whose report names only the winner (many 1993 općine)."""
     year = request.args.get('year', type=int) or 1997
     muni_id = request.args.get('municipality_id', type=int)
     county_id = request.args.get('county_id', type=int)
@@ -2839,8 +2843,8 @@ def lokalni_wards():
     election = (Election.query.join(ElectionType)
                 .filter(ElectionType.name == type_name, Election.year == year).first())
     if not election:
-        return jsonify({'error': f'Izborne jedinice postoje samo za 1997.; {year}. su vijeća '
-                                 'birana samo po listama.'}), 404
+        return jsonify({'error': f'Izborne jedinice postoje samo za 1993. i 1997.; {year}. su '
+                                 'vijeća birana samo po listama.'}), 404
     er = ElectionRound.query.filter_by(election_id=election.id, round_number=1).first()
     # Ward numbers are place_pk * 100 + ward, so one place's wards are a range.
     districts = (ElectoralDistrict.query
@@ -2877,6 +2881,11 @@ def lokalni_wards():
             'name': d.name, 'number': d.number % 100,
             'registered_voters': d.registered_voters, 'ballots_cast': d.ballots_cast,
             'invalid_ballots': d.invalid_ballots, 'unopposed': len(cands) == 1,
+            # 1993 prints no count for an unopposed candidate in a full ward,
+            # so there a count-less single candidate is always winners-only
+            # (Nova Gradiška prints the turnout, then only the winner).
+            'winner_only': (len(cands) == 1 and cands[0]['votes'] is None
+                            and (year == 1993 or d.registered_voters is None)),
             'total_votes': total, 'candidates': cands,
         })
     return jsonify({'election_type': type_name, 'year': year, 'wards': wards})
@@ -2927,7 +2936,7 @@ def lokalni_station_results():
             muni = Municipality.query.get(muni_id)
             if not muni:
                 return jsonify({'error': 'municipality not found'}), 404
-        if not muni or muni.type not in ('grad', 'općina'):
+        if not muni or muni.type not in LOKALNI_KIND_TO_TYPE[kind]:
             return jsonify({'error': f'muni type {muni.type if muni else "?"} unsupported for kind={kind}'}), 400
         county = muni.county
         type_name = LOKALNI_KIND_TO_TYPE[kind][muni.type]
