@@ -870,6 +870,7 @@
 
             <div id="locationDetailSection" class="mt-4 mb-5" style="display:none;">
                 <h3 id="locationDetailName" class="fw-bold mb-3"></h3>
+                <div id="locationNumberOnlyNote" class="alert alert-info small py-2" style="display:none"></div>
                 <div class="chart-map-row">
                     <div class="chart-card chart-map-chart" id="stationWinnerChartCard" style="display:none;">
                         <canvas id="stationWinnerChart"></canvas>
@@ -1866,6 +1867,7 @@ async function loadLocationResults() {
     _rawData.station = data.elections;
 
     detailName.innerHTML = `<i class="bi bi-geo-alt-fill me-2"></i>${data.label}`;
+    renderNumberOnlyNote(data);
     const filtered = filterResults(data.elections, 'station');
     renderStationWinnerChart(filtered);
     renderStationResults(detailResults, filtered);
@@ -1878,6 +1880,32 @@ async function loadLocationResults() {
     } else {
         document.getElementById('stationMapCard').style.display = 'none';
     }
+}
+
+// Presidential 2000-2009 and Sabor 2000-2007 were published per station
+// number only, with no name or address, so a place has them only where its
+// town's number always meant that place.
+function renderNumberOnlyNote(data) {
+    const note = document.getElementById('locationNumberOnlyNote');
+    const missing = data.number_only_missing || [];
+    const shown = data.number_only_shown || [];
+    if (!missing.length && !shown.length) {
+        note.style.display = 'none';
+        return;
+    }
+    let html = '<i class="bi bi-info-circle me-1"></i>';
+    if (missing.length) {
+        html += `<b>Nema rezultata za ovo biračko mjesto:</b> ${missing.map(escapeHtml).join(', ')}. `
+              + 'Za te izbore DIP je objavio rezultate samo po broju biračkog mjesta, bez naziva i adrese, '
+              + 'a taj je broj u ovom gradu/općini s vremenom označavao više mjesta. '
+              + 'Glasovi su uključeni u rezultat grada/općine. ';
+    }
+    if (shown.length) {
+        html += `<b>Prema broju biračkog mjesta:</b> ${shown.map(escapeHtml).join(', ')} — `
+              + 'izvor navodi samo broj, koji je u ovom gradu/općini uvijek označavao ovo mjesto.';
+    }
+    note.innerHTML = html;
+    note.style.display = '';
 }
 
 function getElectionColor(type) {

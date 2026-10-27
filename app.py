@@ -374,6 +374,18 @@ LOKALNI_WARD_TYPES = {
     'zup_skupstina_ij': 'Županijska skupština — izborne jedinice',
 }
 
+# Elections whose per-station files give only the station's number, no name
+# or address. A place shows one only where its town's number always meant
+# that place (`rekey_stations`); elsewhere it counts in the town total only.
+NUMBER_ONLY_ELECTIONS = [
+    ('presidential', 2000, 'Predsjednički izbori 2000.'),
+    ('presidential', 2005, 'Predsjednički izbori 2005.'),
+    ('presidential', 2009, 'Predsjednički izbori 2009.'),
+    ('sabor', 2000, 'Parlamentarni izbori 2000.'),
+    ('sabor', 2003, 'Parlamentarni izbori 2003.'),
+    ('sabor', 2007, 'Parlamentarni izbori 2007.'),
+]
+
 INCOMPLETE_COVERAGE = {
     ('sabor', 2000): 'bez XI. i XII. IJ',
     # 1995 has no per-station export at all — DIP published only summary
@@ -1320,9 +1332,12 @@ def location_results():
         .all()
     )
 
+    number_only = {(slug, year) for slug, year, _ in NUMBER_ONLY_ELECTIONS}
+    shown = set()
     elections = []
     for td in turnout_rows:
         er = ElectionRound.query.get(td.er_id)
+        shown.add((er.election.election_type.slug, er.election.year))
         election = er.election
         etype = election.election_type
 
@@ -1370,6 +1385,7 @@ def location_results():
             'year': election.year,
             'date': round_date_iso(er, election),
             'round': er.round_number,
+            'number_only': bool(station_id) and (etype.slug, election.year) in number_only,
             'registered_voters': td.registered_voters,
             'ballots_cast': td.ballots_cast,
             'valid_ballots': td.valid_ballots,
@@ -1391,6 +1407,12 @@ def location_results():
     return jsonify({
         'label': label,
         'elections': elections,
+        # For one place: the number-only elections it has no result for, and
+        # those it has through a number that always meant this place.
+        'number_only_missing': [name for slug, year, name in NUMBER_ONLY_ELECTIONS
+                                if station_id and (slug, year) not in shown],
+        'number_only_shown': [name for slug, year, name in NUMBER_ONLY_ELECTIONS
+                              if station_id and (slug, year) in shown],
     })
 
 
