@@ -22,12 +22,13 @@ skips that last step, which needs every named source's mapping.
 """
 import re
 from collections import defaultdict
+from itertools import combinations
 
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 from elections.importers.base import same_place, similar_names, station_for_place
-from elections.importers.name_utils import place_key
+from elections.importers.name_utils import place_key, strip_diacritics
 from elections.models import PollingStation, Municipality
 
 
@@ -97,6 +98,11 @@ class Command(BaseCommand):
                 self.stdout.write(f'gave {self._fill_buildings()} name-only stations their building')
                 self.stdout.write(f'spelled {self._zagreb_sabor()} Zagreb Sabor stations '
                                   f'as their Grad Zagreb place')
+                joined = total = self._join_spellings()
+                while joined:                  # a joined place can pair up anew
+                    joined = self._join_spellings()
+                    total += joined
+                self.stdout.write(f'spelled {total} stations as the other spelling of their address')
                 with connection.cursor() as c:
                     c.execute('''DELETE FROM elections_pollingstation p WHERE
                         NOT EXISTS (SELECT 1 FROM elections_turnoutdata WHERE polling_station_id = p.id)
@@ -155,6 +161,68 @@ class Command(BaseCommand):
                 s.name, s.location, s.address = twin.name, twin.location, twin.address
                 s.save(update_fields=['name', 'location', 'address'])
                 n += 1
+        return n
+
+    # Words that say what kind of street it is, not which one.
+    STREET_TYPES = {'ULICA', 'UL', 'CESTA', 'TRG', 'PUT', 'BB', 'KBR', 'BR', 'BROJ',
+                    'NASELJE', 'ODVOJAK', 'PROLAZ', 'SETALISTE', 'OBALA'}
+
+    def _street(self, address, town):
+        """(house numbers, street words cut to 5 letters, street type) of an
+        address, leaving out the town's own name ("SLAVONSKI BROD, ...")."""
+        a = strip_diacritics((address or '').upper())
+        numbers = set()
+        for digits, slash, letter in re.findall(r'(\d+)\s*(?:/\s*([A-Z0-9]+)|([A-Z])\b)?', a):
+            numbers |= {digits, slash or letter} - {''}
+        town_words = set(re.findall(r'[A-Z]+', strip_diacritics(town.upper())))
+        words = {w[:5] for w in re.findall(r'[A-Z]+', a)
+                 if len(w) >= 3 and w not in town_words and w not in self.STREET_TYPES}
+        kind = set(re.findall(r'\b(OBALA|TRG|CESTA|PUT|SETALISTE)\b', a))
+        return frozenset(numbers), words, kind
+
+    def _join_spellings(self):
+        """One address spelled two ways ("KVATERNIKOVA 7" / "EUGENA KVATERNIKA
+        7", "S. RADIĆA 19" / "STJEPANA RADIĆA 19", "52 A" / "52A") is one
+        place. Two places of a municipality are the same when their house
+        numbers agree, one's street words are among the other's, any street
+        types agree and no election has both (a source spells a place one way).
+        The spelling of fewer elections takes the other's building and
+        address; one that fits several places is left alone."""
+        with connection.cursor() as c:
+            c.execute('SELECT polling_station_id, array_agg(DISTINCT election_round_id) '
+                      'FROM elections_turnoutdata GROUP BY 1')
+            rounds = dict(c.fetchall())
+        by_muni = defaultdict(lambda: defaultdict(list))
+        for s in PollingStation.objects.select_related('municipality'):
+            if s.address and not (s.location or '').startswith('sažetak') \
+                    and s.municipality.name != 'HRVATSKA':     # mobile stations of every town
+                by_muni[s.municipality][place_key(s.name, s.location, s.address)].append(s)
+        n = 0
+        for muni, places in by_muni.items():
+            town = f'{muni.name} {muni.name.replace(" - ", " ")}'
+            info = {k: (self._street(rows[0].address, town),
+                        set().union(*(rounds.get(r.id, []) for r in rows)))
+                    for k, rows in places.items()}
+            partners = defaultdict(set)
+            for k1, k2 in combinations(places, 2):
+                (n1, w1, t1), r1 = info[k1]
+                (n2, w2, t2), r2 = info[k2]
+                if (r1 & r2 or not n1 or n1 != n2 or not w1 or not w2
+                        or not (w1 <= w2 or w2 <= w1) or (t1 and t2 and t1 != t2)):
+                    continue
+                small, big = sorted((k1, k2), key=lambda k: (len(info[k][1]), k))
+                partners[small].add(big)
+            for small, bigs in partners.items():
+                if len(bigs) != 1:
+                    continue
+                big = next(iter(bigs))
+                while len(partners.get(big, ())) == 1:         # a chain of spellings
+                    big = next(iter(partners[big]))
+                twin = places[big][0]
+                for r in places[small]:
+                    r.location, r.address = twin.location, twin.address
+                    r.save(update_fields=['location', 'address'])
+                    n += 1
         return n
 
     def _rows(self):
