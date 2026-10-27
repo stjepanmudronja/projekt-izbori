@@ -1140,6 +1140,7 @@ def list_municipalities(county_id):
         Municipality.query
         .filter(Municipality.county_id == county_id)
         .filter(~Municipality.name.like('%IZBORNA JEDINICA%'))
+        .filter(~Municipality.id.in_(zagreb_sabor_units()))
         .order_by(Municipality.name)
         .all()
     )
@@ -1154,10 +1155,38 @@ def _row_place(s):
     return place_key(s.name, s.location, s.address) or f'#{s.id}'
 
 
+_ZAGREB_UNITS = None
+
+
+def zagreb_sabor_units():
+    """Sabor files Zagreb's stations under its electoral districts ("ZAGREB
+    - VI. IZBORNA JEDINICA", "ZAGREB-JUGOISTOK") rather than GRAD ZAGREB.
+    Every other municipality of county 21 is one of those."""
+    global _ZAGREB_UNITS
+    if _ZAGREB_UNITS is None:
+        _ZAGREB_UNITS = [m.id for m in Municipality.query.join(County)
+                         .filter(County.code == '21', Municipality.name != 'GRAD ZAGREB')
+                         .filter(~Municipality.name.like('%SAŽETAK%'))]
+    return _ZAGREB_UNITS
+
+
+def town_muni_ids(municipality_id):
+    """The municipality as a town: GRAD ZAGREB with its Sabor districts, whose
+    stations `rekey_stations` spells as the Grad Zagreb place they are."""
+    units = zagreb_sabor_units()
+    if not units:
+        return [municipality_id]
+    zagreb = Municipality.query.filter_by(name='GRAD ZAGREB').first()
+    if zagreb and (municipality_id == zagreb.id or municipality_id in units):
+        return [zagreb.id] + units
+    return [municipality_id]
+
+
 def station_place_ids(station):
-    """Every station row of `station`'s place, in its municipality."""
+    """Every station row of `station`'s place, in its town."""
     key = _row_place(station)
-    return [r.id for r in PollingStation.query.filter_by(municipality_id=station.municipality_id)
+    return [r.id for r in PollingStation.query.filter(
+                PollingStation.municipality_id.in_(town_muni_ids(station.municipality_id)))
             if _row_place(r) == key]
 
 
@@ -1185,14 +1214,15 @@ def _place_options(rows):
 
 @app.route('/api/polling-stations/<int:municipality_id>')
 def list_polling_stations(municipality_id):
-    return jsonify(_place_options(PollingStation.query.filter_by(municipality_id=municipality_id).all()))
+    return jsonify(_place_options(PollingStation.query.filter(
+        PollingStation.municipality_id.in_(town_muni_ids(municipality_id))).all()))
 
 
 @app.route('/api/streets/<int:municipality_id>')
 def list_streets(municipality_id):
     streets = (
         db.session.query(PollingStation.address)
-        .filter(PollingStation.municipality_id == municipality_id)
+        .filter(PollingStation.municipality_id.in_(town_muni_ids(municipality_id)))
         .distinct()
         .order_by(PollingStation.address)
         .all()
@@ -1206,8 +1236,9 @@ def stations_by_street(municipality_id):
     street = request.args.get('street', '').strip()
     if not street:
         return jsonify([])
-    return jsonify(_place_options(
-        PollingStation.query.filter_by(municipality_id=municipality_id, address=street).all()))
+    return jsonify(_place_options(PollingStation.query.filter(
+        PollingStation.municipality_id.in_(town_muni_ids(municipality_id)),
+        PollingStation.address == street).all()))
 
 
 @app.route('/api/location-results')
@@ -1230,9 +1261,9 @@ def location_results():
     elif street:
         query = query.filter_by(address=street)
         if municipality_id:
-            query = query.filter_by(municipality_id=municipality_id)
+            query = query.filter(PollingStation.municipality_id.in_(town_muni_ids(municipality_id)))
     elif municipality_id:
-        query = query.filter_by(municipality_id=municipality_id)
+        query = query.filter(PollingStation.municipality_id.in_(town_muni_ids(municipality_id)))
     elif county_id:
         muni_ids = [m.id for m in Municipality.query.filter_by(county_id=county_id).all()]
         query = query.filter(PollingStation.municipality_id.in_(muni_ids))

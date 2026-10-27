@@ -20,12 +20,13 @@ where it meant several, they go to an unnamed row, since nothing says which.
 Re-run after an import; it is idempotent. `--only` remaps a single source and
 skips that last step, which needs every named source's mapping.
 """
+import re
 from collections import defaultdict
 
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
-from elections.importers.base import similar_names, station_for_place
+from elections.importers.base import same_place, similar_names, station_for_place
 from elections.importers.name_utils import place_key
 from elections.models import PollingStation, Municipality
 
@@ -94,6 +95,8 @@ class Command(BaseCommand):
                 self.stdout.write(f'unnamed sources: moved {moved} result rows off numbers '
                                   f'that meant several places, created {created} unnamed stations')
                 self.stdout.write(f'gave {self._fill_buildings()} name-only stations their building')
+                self.stdout.write(f'spelled {self._zagreb_sabor()} Zagreb Sabor stations '
+                                  f'as their Grad Zagreb place')
                 with connection.cursor() as c:
                     c.execute('''DELETE FROM elections_pollingstation p WHERE
                         NOT EXISTS (SELECT 1 FROM elections_turnoutdata WHERE polling_station_id = p.id)
@@ -123,6 +126,35 @@ class Command(BaseCommand):
                     r.location, r.address = seen.pop()
                     r.save(update_fields=['location', 'address'])
                     n += 1
+        return n
+
+    def _zagreb_sabor(self):
+        """Sabor files Zagreb's stations under its electoral districts ("ZAGREB
+        - VI. IZBORNA JEDINICA", "ZAGREB-JUGOISTOK"), not under GRAD ZAGREB.
+        The app treats those as one town with GRAD ZAGREB and matches places
+        by `place_key`, so a district's station takes the spelling of the Grad
+        Zagreb place it is (`same_place`), where exactly one is."""
+        city = [s for s in PollingStation.objects.filter(municipality__name='GRAD ZAGREB')
+                if place_key(s.name, s.location, s.address)
+                and not (s.location or '').startswith('sažetak')]
+        keys = {place_key(s.name, s.location, s.address) for s in city}
+        by_number = defaultdict(list)          # blocked on the address's house numbers
+        for s in city:
+            by_number[frozenset(re.findall(r'\d+', s.address or ''))].append(s)
+        n = 0
+        for s in (PollingStation.objects.filter(municipality__county__code='21')
+                  .exclude(municipality__name='GRAD ZAGREB')):
+            k = place_key(s.name, s.location, s.address)
+            if not k or k in keys:
+                continue
+            twins = {place_key(r.name, r.location, r.address): r
+                     for r in by_number[frozenset(re.findall(r'\d+', s.address or ''))]
+                     if same_place(r, s.name, s.location, s.address)}
+            if len(twins) == 1:
+                twin = twins.popitem()[1]
+                s.name, s.location, s.address = twin.name, twin.location, twin.address
+                s.save(update_fields=['name', 'location', 'address'])
+                n += 1
         return n
 
     def _rows(self):
