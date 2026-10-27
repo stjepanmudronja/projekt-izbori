@@ -171,23 +171,21 @@
         .chart-card canvas { max-height: 320px; }
 
         /* Map */
-        /* Chart + map row */
+        /* Chart, then the station's map below it, both full width */
         .chart-map-row {
             display: flex;
+            flex-direction: column;
             gap: 1rem;
-            align-items: flex-start;
             margin-bottom: 1.5rem;
         }
         .chart-map-row .chart-map-chart {
-            flex: 1;
             min-width: 0;
-            height: 280px !important;
+            height: 360px !important;
             margin-bottom: 0 !important;
         }
         .chart-map-row .chart-map-map {
-            width: 250px !important;
-            height: 280px !important;
-            flex-shrink: 0;
+            width: 100% !important;
+            height: 380px !important;
         }
 
         /* Croatia SVG map */
