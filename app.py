@@ -1612,6 +1612,20 @@ def national_results(category, year):
             ],
         })
 
+    # A place with no result in an election published per station number
+    # only (NUMBER_ONLY_ELECTIONS): say so instead of a card of zeros.
+    slug = {'predsjednicki': 'presidential', 'sabor': 'sabor'}.get(category)
+    if (station_id and (slug, year) in {(s, y) for s, y, _ in NUMBER_ONLY_ELECTIONS}
+            and not any(e['ballots_cast'] for e in elections)):
+        return jsonify({
+            'category': category,
+            'year': year,
+            'scope_label': scope_label,
+            'scope': 'station',
+            'elections': [],
+            'error': 'Nema rezultata za ovo biračko mjesto.',
+        })
+
     return jsonify({
         'category': category,
         'year': year,
