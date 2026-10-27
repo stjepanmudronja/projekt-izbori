@@ -1332,7 +1332,6 @@ def location_results():
         .all()
     )
 
-    number_only = {(slug, year) for slug, year, _ in NUMBER_ONLY_ELECTIONS}
     shown = set()
     elections = []
     for td in turnout_rows:
@@ -1385,7 +1384,6 @@ def location_results():
             'year': election.year,
             'date': round_date_iso(er, election),
             'round': er.round_number,
-            'number_only': bool(station_id) and (etype.slug, election.year) in number_only,
             'registered_voters': td.registered_voters,
             'ballots_cast': td.ballots_cast,
             'valid_ballots': td.valid_ballots,
@@ -1407,12 +1405,9 @@ def location_results():
     return jsonify({
         'label': label,
         'elections': elections,
-        # For one place: the number-only elections it has no result for, and
-        # those it has through a number that always meant this place.
+        # For one place: the number-only elections it has no result for.
         'number_only_missing': [name for slug, year, name in NUMBER_ONLY_ELECTIONS
                                 if station_id and (slug, year) not in shown],
-        'number_only_shown': [name for slug, year, name in NUMBER_ONLY_ELECTIONS
-                              if station_id and (slug, year) in shown],
     })
 
 
