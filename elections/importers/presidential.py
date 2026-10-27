@@ -59,7 +59,7 @@ class PresidentialImporter(BaseImporter):
 
     YEARS = {
         2024: {
-            'dir': BASE_DIR,
+            'dir': BASE_DIR / '2024',
             'encoding': 'utf-8-sig',
             'title_rows': 1,
             'name': 'Predsjednički izbori 2024',

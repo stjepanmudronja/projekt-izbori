@@ -113,6 +113,23 @@ def strip_diacritics(text):
     return ''.join(c for c in nfkd if unicodedata.category(c) != 'Mn')
 
 
+def place_key(name, location='', address=''):
+    """Which place a polling station is, for matching it across years.
+
+    Station numbers are not: DIP renumbers them between elections (Grad
+    Zagreb's Odranski Strmec is 605 in 2021 and 604 in 2025). The place is the
+    building and address; the station's name (usually its mjesni odbor) is
+    only used when neither is given. Case, diacritics, spacing and
+    punctuation are ignored. An empty key means the source named no place.
+    """
+    def norm(s):
+        return re.sub(r'[^0-9A-Z]', '', strip_diacritics((s or '').upper()))
+    loc = norm(location) + '|' + norm(address)
+    if loc != '|':
+        return loc
+    return 'N|' + norm(name) if norm(name) else ''
+
+
 def normalize_person_name(full_name):
     """Normalize a full name for cross-election matching.
 

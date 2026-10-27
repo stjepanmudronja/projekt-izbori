@@ -39,7 +39,9 @@ class PollingStation(models.Model):
     address = models.CharField(max_length=500, blank=True)
 
     class Meta:
-        unique_together = ['municipality', 'number']
+        # Not unique: a number DIP gave to different places in different
+        # years is one row per place (see `station_for_place`).
+        indexes = [models.Index(fields=['municipality', 'number'])]
         ordering = ['municipality', 'number']
 
     def __str__(self):

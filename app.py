@@ -4,7 +4,7 @@ from collections import defaultdict
 from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 
-from elections.importers.name_utils import normalize_person_name
+from elections.importers.name_utils import normalize_person_name, place_key, strip_diacritics
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql:///projekt_izbori'
@@ -1010,15 +1010,7 @@ def station_detail(station_id):
     county = municipality.county if municipality else None
 
     # Find all polling stations at the same location/address (across elections)
-    sibling_ids = [
-        s.id for s in
-        PollingStation.query
-        .filter_by(
-            location=station.location,
-            address=station.address,
-        )
-        .all()
-    ]
+    sibling_ids = station_place_ids(station)
 
     # Get all election rounds that have turnout data for these stations
     turnout_rows = (
@@ -1154,34 +1146,46 @@ def list_municipalities(county_id):
     return jsonify([{'id': m.id, 'name': m.name} for m in munis])
 
 
+# A polling station is shown as a place, never by number: DIP renumbers
+# stations between elections, so a place can hold rows under several numbers
+# (`station_for_place`, `rekey_stations`). Rows of one place share a
+# `place_key`; rows naming no place (bare-number exports) stand alone.
+def _row_place(s):
+    return place_key(s.name, s.location, s.address) or f'#{s.id}'
+
+
+def station_place_ids(station):
+    """Every station row of `station`'s place, in its municipality."""
+    key = _row_place(station)
+    return [r.id for r in PollingStation.query.filter_by(municipality_id=station.municipality_id)
+            if _row_place(r) == key]
+
+
+def _place_options(rows):
+    """Dropdown entries, one per place: the first row's id, its name(s) and
+    building. Left out: summary pseudo stations (location "sažetak…"), which
+    hold whole-town or county totals, and rows whose source named no place
+    (a bare number) — picking the town already includes both."""
+    places = {}
+    for r in sorted(rows, key=lambda r: r.id):
+        if (r.location or '').startswith('sažetak') or not place_key(r.name, r.location, r.address):
+            continue
+        places.setdefault(_row_place(r), []).append(r)
+    out = []
+    for key, group in places.items():
+        names = list(dict.fromkeys(r.name for r in group if r.name))
+        built = next((r for r in group if r.location or r.address), group[0])
+        label = ', '.join(x for x in (' / '.join(names), built.location) if x)
+        out.append({'id': group[0].id,
+                    'name': label or f'{group[0].number}. (naziv nije objavljen)',
+                    '_sort': (not label, strip_diacritics(label).upper())})
+    out.sort(key=lambda o: o.pop('_sort'))
+    return out
+
+
 @app.route('/api/polling-stations/<int:municipality_id>')
 def list_polling_stations(municipality_id):
-    stations = (
-        db.session.query(
-            db.func.min(PollingStation.id).label('id'),
-            PollingStation.number,
-            PollingStation.name,
-            PollingStation.location,
-            PollingStation.address,
-        )
-        .filter(PollingStation.municipality_id == municipality_id)
-        # Summary pseudo stations (location "sažetak", "sažetak županije")
-        # hold years published only as a whole-town or whole-county total.
-        # They are not places anyone votes at, and picking the town alone
-        # already counts them, so they are left out of the station list.
-        .filter(~PollingStation.location.like('sažetak%'))
-        .group_by(PollingStation.number, PollingStation.name,
-                  PollingStation.location, PollingStation.address)
-        .order_by(PollingStation.number)
-        .all()
-    )
-    return jsonify([
-        # Stations known only from exports that ship a bare number
-        # (presidential 2000, Sabor 2003-2011 posebna) have no name to show.
-        {'id': s.id, 'name': f'{s.number}. ' + (', '.join(x for x in (s.name, s.location) if x)
-                                                 or '(naziv nije objavljen)')}
-        for s in stations
-    ])
+    return jsonify(_place_options(PollingStation.query.filter_by(municipality_id=municipality_id).all()))
 
 
 @app.route('/api/streets/<int:municipality_id>')
@@ -1202,27 +1206,8 @@ def stations_by_street(municipality_id):
     street = request.args.get('street', '').strip()
     if not street:
         return jsonify([])
-    stations = (
-        db.session.query(
-            db.func.min(PollingStation.id).label('id'),
-            PollingStation.number,
-            PollingStation.name,
-            PollingStation.location,
-            PollingStation.address,
-        )
-        .filter(PollingStation.municipality_id == municipality_id, PollingStation.address == street)
-        .group_by(PollingStation.number, PollingStation.name,
-                  PollingStation.location, PollingStation.address)
-        .order_by(PollingStation.number)
-        .all()
-    )
-    return jsonify([
-        # Stations known only from exports that ship a bare number
-        # (presidential 2000, Sabor 2003-2011 posebna) have no name to show.
-        {'id': s.id, 'name': f'{s.number}. ' + (', '.join(x for x in (s.name, s.location) if x)
-                                                 or '(naziv nije objavljen)')}
-        for s in stations
-    ])
+    return jsonify(_place_options(
+        PollingStation.query.filter_by(municipality_id=municipality_id, address=street).all()))
 
 
 @app.route('/api/location-results')
@@ -1241,7 +1226,7 @@ def location_results():
     if station_id:
         # Specific station — find siblings at same location/address
         station = PollingStation.query.get_or_404(station_id)
-        query = query.filter_by(location=station.location, address=station.address)
+        query = query.filter(PollingStation.id.in_(station_place_ids(station)))
     elif street:
         query = query.filter_by(address=street)
         if municipality_id:
@@ -1460,9 +1445,9 @@ def national_results(category, year):
     scope_station_ids = None
     scope_label = 'Republika Hrvatska'
     if station_id:
+        ps = PollingStation.query.get_or_404(station_id)
         scope_station_ids = db.session.query(PollingStation.id).filter(
-            PollingStation.id == station_id
-        )
+            PollingStation.id.in_(station_place_ids(ps)))
         ps = PollingStation.query.get(station_id)
         if ps:
             scope_label = f'{ps.number} — {ps.location or ps.name or ""}'.strip(' —')
@@ -2561,7 +2546,9 @@ def eu_seats(year):
     scope_station_ids = None
     scope_label = 'Republika Hrvatska'
     if station_id:
-        scope_station_ids = db.session.query(PollingStation.id).filter(PollingStation.id == station_id)
+        ps = PollingStation.query.get_or_404(station_id)
+        scope_station_ids = db.session.query(PollingStation.id).filter(
+            PollingStation.id.in_(station_place_ids(ps)))
         ps = PollingStation.query.get(station_id)
         if ps:
             scope_label = f'{ps.number} — {ps.location or ps.name or ""}'.strip(' —')
@@ -2981,7 +2968,8 @@ def lokalni_station_results():
             Municipality, Municipality.id == PollingStation.municipality_id
         ).filter(Municipality.county_id == county.id)
     elif station_id:
-        scope_stations = db.session.query(PollingStation.id).filter(PollingStation.id == station_id)
+        scope_stations = db.session.query(PollingStation.id).filter(
+            PollingStation.id.in_(station_place_ids(station)))
     else:
         scope_stations = db.session.query(PollingStation.id).filter(
             PollingStation.municipality_id == muni.id
@@ -3015,40 +3003,33 @@ def lokalni_station_results():
         'votes_pct': (r.votes / total * 100.0) if total else 0.0,
     } for r in list_rows]
 
-    # Turnout — uses the same station-scope subquery as votes.
-    if station_id and not is_county_kind:
-        turnout_row = TurnoutData.query.filter_by(
-            election_round_id=er.id, polling_station_id=station_id
-        ).first()
-        turnout_data = {
-            'registered_voters': turnout_row.registered_voters if turnout_row else 0,
-            'ballots_cast': turnout_row.ballots_cast if turnout_row else 0,
-            'valid_ballots': turnout_row.valid_ballots if turnout_row else 0,
-            'invalid_ballots': turnout_row.invalid_ballots if turnout_row else 0,
-        } if turnout_row else None
-    else:
-        agg_q = (
-            db.session.query(
-                db.func.coalesce(db.func.sum(TurnoutData.registered_voters), 0),
-                db.func.coalesce(db.func.sum(TurnoutData.ballots_cast), 0),
-                db.func.coalesce(db.func.sum(TurnoutData.valid_ballots), 0),
-                db.func.coalesce(db.func.sum(TurnoutData.invalid_ballots), 0),
-            )
-            .join(PollingStation, PollingStation.id == TurnoutData.polling_station_id)
-            .filter(TurnoutData.election_round_id == er.id)
+    # Turnout over the same scope as the votes: the county, the station's
+    # place, or the municipality.
+    agg_q = (
+        db.session.query(
+            db.func.coalesce(db.func.sum(TurnoutData.registered_voters), 0),
+            db.func.coalesce(db.func.sum(TurnoutData.ballots_cast), 0),
+            db.func.coalesce(db.func.sum(TurnoutData.valid_ballots), 0),
+            db.func.coalesce(db.func.sum(TurnoutData.invalid_ballots), 0),
         )
-        if is_county_kind:
-            agg_q = agg_q.join(Municipality, Municipality.id == PollingStation.municipality_id) \
-                         .filter(Municipality.county_id == county.id)
-        else:
-            agg_q = agg_q.filter(PollingStation.municipality_id == muni.id)
-        agg = agg_q.first()
-        turnout_data = {
-            'registered_voters': int(agg[0] or 0),
-            'ballots_cast': int(agg[1] or 0),
-            'valid_ballots': int(agg[2] or 0),
-            'invalid_ballots': int(agg[3] or 0),
-        } if agg else None
+        .join(PollingStation, PollingStation.id == TurnoutData.polling_station_id)
+        .filter(TurnoutData.election_round_id == er.id)
+    )
+    if is_county_kind:
+        agg_q = agg_q.join(Municipality, Municipality.id == PollingStation.municipality_id) \
+                     .filter(Municipality.county_id == county.id)
+    elif station_id:
+        # Every row of the station's place (it may sit under several numbers).
+        agg_q = agg_q.filter(PollingStation.id.in_(station_place_ids(station)))
+    else:
+        agg_q = agg_q.filter(PollingStation.municipality_id == muni.id)
+    agg = agg_q.first()
+    turnout_data = {
+        'registered_voters': int(agg[0] or 0),
+        'ballots_cast': int(agg[1] or 0),
+        'valid_ballots': int(agg[2] or 0),
+        'invalid_ballots': int(agg[3] or 0),
+    } if agg and (agg[0] or not station_id) else None    # a station with no turnout row: none
 
     # Per-station turnout breakdown — only for non-station scopes. For
     # county-level kinds, list every station in the county; for muni scopes,

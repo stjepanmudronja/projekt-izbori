@@ -206,9 +206,9 @@ class LocalImporter(BaseImporter):
     def _station(self, row):
         _county, municipality = self._geo(row)
         name, location, address = (str(row[i] or '').strip() for i in (5, 6, 7))
-        # 2017's Grad Zagreb and Pakrac files are shifted a column: "Naziv BM"
-        # holds a bare district number ("7"), no location, and the station's
-        # name sits under "Adresa BM" ("ODRANSKI STRMEC").
+        # Every 2017 file is shifted a column: "Naziv BM" holds a bare number
+        # ("7"), "Lokacija BM" is empty, and the station's name sits under
+        # "Adresa BM" ("ODRANSKI STRMEC"). 2017 names no building or address.
         if re.fullmatch(r'\d{1,2}', name) and not location:
             name, address = address, ''
         return self.get_or_create_polling_station(
