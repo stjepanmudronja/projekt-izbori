@@ -114,10 +114,17 @@ class ZupanijskiDomImporter(BaseImporter):
     def _import_county(self, election, election_round, entry):
         county = self.get_or_create_county(entry['code'], entry['name'].upper())
         # One pseudo station per county: the report has no finer breakdown.
-        muni = self.get_or_create_municipality(
-            county, f"{entry['name'].upper()} (SAŽETAK)", 'sažetak')
-        station = self.get_or_create_polling_station(
-            muni, '001', entry['name'], 'sažetak županije', '')
+        # Grad Zagreb is a county and a city at once, so its figures go on
+        # the city's own summary station (the lokalni imports' `000`) rather
+        # than a second "GRAD ZAGREB (SAŽETAK)" beside GRAD ZAGREB.
+        if entry['code'] == '21':
+            muni = self.get_or_create_municipality(county, 'GRAD ZAGREB', 'grad')
+            station = self.get_or_create_polling_station(muni, '000', 'GRAD ZAGREB', 'sažetak', '')
+        else:
+            muni = self.get_or_create_municipality(
+                county, f"{entry['name'].upper()} (SAŽETAK)", 'sažetak')
+            station = self.get_or_create_polling_station(
+                muni, '001', entry['name'], 'sažetak županije', '')
         district = self.get_or_create_district(
             election, int(entry['code']), entry['name'])
 
