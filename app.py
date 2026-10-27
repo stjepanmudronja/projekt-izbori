@@ -1165,6 +1165,11 @@ def list_polling_stations(municipality_id):
             PollingStation.address,
         )
         .filter(PollingStation.municipality_id == municipality_id)
+        # Summary pseudo stations (location "sažetak", "sažetak županije")
+        # hold years published only as a whole-town or whole-county total.
+        # They are not places anyone votes at, and picking the town alone
+        # already counts them, so they are left out of the station list.
+        .filter(~PollingStation.location.like('sažetak%'))
         .group_by(PollingStation.number, PollingStation.name,
                   PollingStation.location, PollingStation.address)
         .order_by(PollingStation.number)
