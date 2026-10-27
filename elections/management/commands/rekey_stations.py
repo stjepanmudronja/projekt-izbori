@@ -116,23 +116,63 @@ class Command(BaseCommand):
     def _fill_buildings(self):
         """2017 names only the station (its settlement or mjesni odbor). Such
         a row takes the building and address of the station of the same name
-        in its municipality, when that name is at exactly one building."""
+        in its municipality, when that name is at exactly one building.
+
+        Where the name was at several buildings (a mjesni odbor voting in two
+        schools), the row's electorate decides: it takes the building one of
+        whose stations had within 5% of its registered voters in an election
+        up to four years either side, when every other building is clearly
+        further off (twice the gap, and 3 points more)."""
+        with connection.cursor() as c:
+            c.execute('''SELECT t.polling_station_id, e.year, max(t.registered_voters)
+                         FROM elections_turnoutdata t
+                         JOIN elections_electionround er ON er.id = t.election_round_id
+                         JOIN elections_election e ON e.id = er.election_id
+                         WHERE er.round_number = 1 AND t.registered_voters > 0
+                         GROUP BY 1, 2''')
+            electorate = defaultdict(dict)
+            for sid, year, registered in c.fetchall():
+                electorate[sid][year] = registered
         by_muni = defaultdict(list)
         for s in PollingStation.objects.order_by('id'):
             by_muni[s.municipality_id].append(s)
         n = 0
         for rows in by_muni.values():
-            built = [r for r in rows if r.location or r.address]
+            built = [(r, place_key(r.name)) for r in rows
+                     if (r.location or r.address) and not (r.location or '').startswith('sažetak')]
             for r in rows:
                 if r.location or r.address or not r.name:
                     continue
-                seen = ({(b.location, b.address) for b in built if place_key(b.name) == place_key(r.name)}
-                        or {(b.location, b.address) for b in built if similar_names(r.name, b.name)})
-                if len(seen) == 1:
-                    r.location, r.address = seen.pop()
+                key = place_key(r.name)
+                same = ([b for b, k in built if k == key]
+                        or [b for b, _ in built if similar_names(r.name, b.name)])
+                buildings = {(b.location, b.address) for b in same}
+                if len(buildings) > 1:
+                    buildings = self._by_electorate(r, same, electorate)
+                if len(buildings) == 1:
+                    r.location, r.address = buildings.pop()
                     r.save(update_fields=['location', 'address'])
                     n += 1
         return n
+
+    @staticmethod
+    def _by_electorate(row, candidates, electorate):
+        """The one building of `candidates` whose electorate matches `row`'s
+        (see `_fill_buildings`), else none."""
+        gaps = {}
+        for year, registered in electorate[row.id].items():
+            for b in candidates:
+                for y, v in electorate[b.id].items():
+                    if y != year and abs(y - year) <= 4:
+                        gap = abs(v - registered) / registered
+                        place = (b.location, b.address)
+                        gaps[place] = min(gap, gaps.get(place, gap))
+        ranked = sorted(gaps.items(), key=lambda g: g[1])
+        if not ranked or ranked[0][1] > 0.05:
+            return set()
+        if len(ranked) > 1 and ranked[1][1] < max(2 * ranked[0][1], ranked[0][1] + 0.03):
+            return set()
+        return {ranked[0][0]}
 
     def _zagreb_sabor(self):
         """Sabor files Zagreb's stations under its electoral districts ("ZAGREB
