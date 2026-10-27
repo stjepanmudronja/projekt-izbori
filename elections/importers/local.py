@@ -1,4 +1,5 @@
 import hashlib
+import re
 import openpyxl
 from pathlib import Path
 from .base import BaseImporter
@@ -204,11 +205,14 @@ class LocalImporter(BaseImporter):
 
     def _station(self, row):
         _county, municipality = self._geo(row)
+        name, location, address = (str(row[i] or '').strip() for i in (5, 6, 7))
+        # 2017's Grad Zagreb and Pakrac files are shifted a column: "Naziv BM"
+        # holds a bare district number ("7"), no location, and the station's
+        # name sits under "Adresa BM" ("ODRANSKI STRMEC").
+        if re.fullmatch(r'\d{1,2}', name) and not location:
+            name, address = address, ''
         return self.get_or_create_polling_station(
-            municipality,
-            str(row[4] or '').strip(), str(row[5] or '').strip(),
-            str(row[6] or '').strip(), str(row[7] or '').strip(),
-        )
+            municipality, str(row[4] or '').strip(), name, location, address)
 
     def _race_district(self, election, slug, row):
         """The municipality (or county) a candidate race belongs to, as a

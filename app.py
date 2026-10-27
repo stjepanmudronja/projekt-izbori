@@ -1176,7 +1176,10 @@ def list_polling_stations(municipality_id):
         .all()
     )
     return jsonify([
-        {'id': s.id, 'name': f'{s.number}. {s.name}, {s.location}'}
+        # Stations known only from exports that ship a bare number
+        # (presidential 2000, Sabor 2003-2011 posebna) have no name to show.
+        {'id': s.id, 'name': f'{s.number}. ' + (', '.join(x for x in (s.name, s.location) if x)
+                                                 or '(naziv nije objavljen)')}
         for s in stations
     ])
 
@@ -1214,7 +1217,10 @@ def stations_by_street(municipality_id):
         .all()
     )
     return jsonify([
-        {'id': s.id, 'name': f'{s.number}. {s.name}, {s.location}'}
+        # Stations known only from exports that ship a bare number
+        # (presidential 2000, Sabor 2003-2011 posebna) have no name to show.
+        {'id': s.id, 'name': f'{s.number}. ' + (', '.join(x for x in (s.name, s.location) if x)
+                                                 or '(naziv nije objavljen)')}
         for s in stations
     ])
 
