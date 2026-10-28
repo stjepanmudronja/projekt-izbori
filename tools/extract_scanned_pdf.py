@@ -1,6 +1,6 @@
 """Render a scanned PDF's pages to PNG without poppler, OCR or a PDF library.
 
-Written for `files/rezultati_sabor_2024/1997/1997_3_Rezultati_Sabor_zupanijski_dom.pdf`,
+Written for `files/rezultati_sabor/1997/1997_3_Rezultati_Sabor_zupanijski_dom.pdf`,
 the DIP report on the 1997 Županijski dom election, which is the only source
 for that year. The file has **no text layer at all** — 43 pages, each a single
 1-bit CCITTFaxDecode (Group 4 fax) image at 2480x3507 — and this machine has

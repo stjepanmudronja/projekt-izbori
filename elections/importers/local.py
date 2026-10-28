@@ -84,7 +84,7 @@ class LocalImporter(BaseImporter):
     so every view scopes them by station anyway.
     """
 
-    DATA_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_lokalni_izbori_2025')
+    DATA_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_lokalni_izbori')
 
     def __init__(self, year=2025, stdout=None):
         super().__init__(stdout=stdout)

@@ -24,7 +24,7 @@ class SaborImporter(BaseImporter):
     across 2020 and 2024 so no per-year layout config is needed yet.
     """
 
-    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor_2024')
+    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor')
     CANDIDATES_PER_LIST = 14
     COLS_PER_LIST = 15  # 1 list + 14 candidates
     GEO_COLS = 15  # columns 0-14

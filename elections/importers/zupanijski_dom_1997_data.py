@@ -1,6 +1,6 @@
 """The 1997 Županijski dom election, transcribed from the DIP report.
 
-Source: `files/rezultati_sabor_2024/1997/1997_3_Rezultati_Sabor_zupanijski_dom.pdf`
+Source: `files/rezultati_sabor/1997/1997_3_Rezultati_Sabor_zupanijski_dom.pdf`
 — "Izvješće o konačnim službenim rezultatima izbora zastupnika u Županijski dom
 Sabora Republike Hrvatske", Klasa 013/01/97-01/01, Zagreb, 23 April 1997.
 

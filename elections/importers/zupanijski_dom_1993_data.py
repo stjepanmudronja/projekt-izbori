@@ -1,6 +1,6 @@
 """The 1993 Županijski dom election, transcribed from the DIP report.
 
-Source: `files/rezultati_sabor_2024/1993/1993_2_Rezultati_Sabor_zupanijski_dom.pdf`
+Source: `files/rezultati_sabor/1993/1993_2_Rezultati_Sabor_zupanijski_dom.pdf`
 — the bundle of Izborna komisija RH decisions declaring the result county by
 county, Klasa 013-91/92-01/08, Urbroj 56605/93-317-1…21, Zagreb, February 1993.
 

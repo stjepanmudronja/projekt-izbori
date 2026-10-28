@@ -77,7 +77,7 @@ class EUParliamentImporter(BaseImporter):
     adding a new entry there. Coalition names may contain literal newlines.
     """
 
-    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_eu_parlamet_2024')
+    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_eu_parlamet')
 
     def __init__(self, year=2024, stdout=None):
         super().__init__(stdout=stdout)

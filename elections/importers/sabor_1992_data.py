@@ -3,7 +3,7 @@
 Source: Izborna komisija Republike Hrvatske, Klasa 013-03/92-01/05, Zagreb,
 10-12 August 1992 — the decisions declaring the result of the election held on
 **2 August 1992** (the same day as the first presidential election), scanned in
-five files under `files/rezultati_sabor_2024/1992/`:
+five files under `files/rezultati_sabor/1992/`:
 
   * `1992_2_1_…_po_IJ.pdf` — one decision per contest: the 60 single-member
     districts and the 4 special minority units (`DISTRICTS`, `MINORITY_UNITS`).

@@ -3,7 +3,7 @@
 Source: Izborna komisija Republike Hrvatske, Klasa 013-01/95-01/01, Urbroj
 56605-95-470…504, Zagreb, 14 November 1995 — the bundle of decisions declaring
 the result of the election held on **29 October 1995**, scanned at
-`files/rezultati_sabor_2024/1995/1995_Rezultati_Sabor_zastupnicki_dom.pdf`.
+`files/rezultati_sabor/1995/1995_Rezultati_Sabor_zastupnicki_dom.pdf`.
 The PDF is a CCITT-G4 fax scan with no text layer; pages were rendered with
 `tools/extract_scanned_pdf.py` and read off the images.
 

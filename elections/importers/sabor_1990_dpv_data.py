@@ -1,6 +1,6 @@
 """Transcription of the 1990 Društveno-političko vijeće election.
 
-Source: `files/rezultati_sabor_2024/1990/1990_1_1_Sabor_Rezultati_Drustveno_politicko_vijece.pdf`
+Source: `files/rezultati_sabor/1990/1990_1_1_Sabor_Rezultati_Drustveno_politicko_vijece.pdf`
 (76 pages) and its supplement `…_dopunski_izvjestaj.pdf` (4 pages), both
 CCITT-G4 scans with no text layer, rendered with `tools/extract_scanned_pdf.py`
 and read off the images.

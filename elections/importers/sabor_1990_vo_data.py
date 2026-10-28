@@ -1,6 +1,6 @@
 """Transcription of the 1990 Vijeće općina election.
 
-Source: `files/rezultati_sabor_2024/1990/1990_1_3_Sabor_Rezultati_Vijece_opcina.pdf`
+Source: `files/rezultati_sabor/1990/1990_1_3_Sabor_Rezultati_Vijece_opcina.pdf`
 (109 pages) and its supplement `1990_1_4_…_dopunski_izvjestaj.pdf` (7 pages),
 CCITT-G4 scans with no text layer, rendered with `tools/extract_scanned_pdf.py`
 and read off the images.

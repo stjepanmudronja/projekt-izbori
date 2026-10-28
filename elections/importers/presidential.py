@@ -55,7 +55,7 @@ class PresidentialImporter(BaseImporter):
     `file_specs` (a list of {filename, layout, county_override} per round).
     """
 
-    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/Rezultati_predsjednicki_izbori_2024')
+    BASE_DIR = Path('/Users/stjepanmudronja/Documents/projekt_izbori/files/predsjednicki_izbori')
 
     YEARS = {
         2024: {

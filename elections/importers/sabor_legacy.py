@@ -87,7 +87,7 @@ _KANDIDAT_RE = re.compile(
 
 class SaborLegacyImporter(BaseImporter):
     BASE_DIR = Path(
-        '/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor_2024'
+        '/Users/stjepanmudronja/Documents/projekt_izbori/files/rezultati_sabor'
     )
     YEARS = (2007, 2011)
 
