@@ -61,6 +61,7 @@ The data is a hand transcription of a scanned report; see
 `zupanijski_dom_1993_data.py` / `zupanijski_dom_1997_data.py` for their
 provenance and the checks they satisfy.
 """
+import re
 from datetime import date
 
 from .base import BaseImporter
@@ -196,7 +197,8 @@ class ZupanijskiDomImporter(BaseImporter):
         for seat in entry['seats']:
             stored_list = self._match_list_name(seat['list'], list_names)
             for member in seat['elected']:
-                name = clean_candidate_name(member['name']).upper()
+                # "Josip Vukelić - Piki": the nickname is not part of the name.
+                name = clean_candidate_name(re.sub(r'\s+-\s+\S+$', '', member['name'])).upper()
                 if not name:
                     continue
                 person = self.get_or_create_person(name)

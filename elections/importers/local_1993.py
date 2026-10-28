@@ -62,10 +62,24 @@ KOTAR_COUNTY = {'KOTAR GLINA': '03', 'KOTAR KNIN': '15'}
 WARD_TYPES = {**WARD_TYPES, 'kotar': WARD_TYPES['muni']}
 
 
+# OCR fuses the row's "kandidat" label into the name, with the "dr" after it
+# ("KANDIDATR DAMIR NEKIĆ") or an "I" read as "L" ("KANDIDATLVAN LESICA").
+_FUSED_LABEL = re.compile(r'^\s*kandidat\s*(?:d?r\b\.?\s*)?', re.I)
+# A nickname printed as a dash suffix ("Marijan Kostelac - Dane"), as 1992
+# writes them; not part of the name a person is matched on across years.
+_NICKNAME = re.compile(r'\s+-\s*[^\s-]+\s*$')
+
+
 class Local1993Importer(Local1997Importer):
 
     year = 1993
     display = DISPLAY
+
+    def _name(self, ward, cand):
+        name = _FUSED_LABEL.sub('', super()._name(ward, cand))
+        name = re.sub(r'^L(?=v)', 'I', name, flags=re.I)
+        head, sep, tail = name.partition(',')
+        return _NICKNAME.sub('', head) + sep + tail
 
     def run(self):
         folder = LocalImporter.DATA_DIR / '1993' / 'ocr'
