@@ -1216,7 +1216,9 @@ def _place_options(rows):
     for key, group in places.items():
         names = list(dict.fromkeys(r.name for r in group if r.name))
         built = next((r for r in group if r.location or r.address), group[0])
-        label = ', '.join(x for x in (' / '.join(names), built.location) if x)
+        # The address too: Varaždin has four "BIRALIŠTE 2, PROSTORIJE DJEČJEG
+        # VRTIĆA", one per kindergarten, told apart only by their street.
+        label = ', '.join(x for x in (' / '.join(names), built.location, built.address) if x)
         out.append({'id': group[0].id,
                     'name': label or f'{group[0].number}. (naziv nije objavljen)',
                     '_sort': (not label, strip_diacritics(label).upper())})
