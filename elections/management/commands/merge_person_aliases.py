@@ -36,6 +36,10 @@ KNOWN_ALIASES = [
     ('SEAD BRACO HASANOVIĆ', 'SEAD HASANOVIĆ',
      'same minority sub-district 125 in 2007, 2011 and 2016, never twice in one '
      'election; the nickname "Braco" is recorded from 2011 on'),
+    # Not a fuller name: the 2017 file put his occupation in the name column
+    # ("ŽELJKO CICKAJ, upravni pravnik", as 2013 has ", iur.").
+    ('ŽELJKO CICKAJ', 'ŽELJKO CICKAJ upravni pravnik',
+     'mayoral candidate in 2013, 2017, 2021 and 2025, confirmed the same person'),
 ]
 
 
