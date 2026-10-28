@@ -1,4 +1,5 @@
 import re
+import time
 from collections import defaultdict
 
 from flask import Flask, render_template, jsonify, request
@@ -1167,6 +1168,120 @@ def _row_place(s):
     return place_key(s.name, s.location, s.address) or f'#{s.id}'
 
 
+# A building's rooms are one place: DIP lists "BIRALIŠTE 1/2/3, PROSTORIJE
+# VI. OSNOVNE ŠKOLE", "IV. OSNOVNA ŠKOLA I/II", "O.Š. KEFELJA - PROSTOR BR. 2",
+# "DOM KULTURE - ULAZ LIJEVO" at one address as separate stations.
+_ROOM = re.compile(r'\b(?:BIRALI[SŠ]TE|BIR)\b\.?\s*(?:\d+|[IVX]+\b)\.?'
+                   r'|\b(?:PROSTOR(?:IJA)?|U[CČ]IONICA)\s+(?:BR(?:OJ)?\.?\s*)?\d+\.?'
+                   r'|\b(?:ULAZ\s+)?(?:LIJEVO|DESNO)\b'
+                   r'|\([^)]*DVORAN[^)]*\)')
+
+
+def _strip_rooms(location):
+    """The building of a station's location, its room markers taken out."""
+    s = _ROOM.sub(' ', location or '')
+    s = re.sub(r'\s*[-,]\s*(?=[-,]|$)', '', s)               # separators left dangling
+    return ' '.join(s.split()).strip(' ,-')
+
+
+def _building_words(location):
+    """A building's name as word stems, so its grammatical case does not
+    matter ("VI. OSNOVNA ŠKOLA" / "PROSTORIJE VI. OSNOVNE ŠKOLE")."""
+    words = re.findall(r'[A-Z]+', strip_diacritics(_strip_rooms(location).upper()))
+    return {w[:4] for w in words if len(w) >= 4 and not re.fullmatch(r'[IVX]+', w)}
+
+
+_PLACE_CACHE = {}
+
+
+_STREET_TYPES = {'ULICA', 'UL', 'CESTA', 'TRG', 'PUT', 'BB', 'KBR', 'BR', 'BROJ',
+                 'NASELJE', 'ODVOJAK', 'PROLAZ', 'SETALISTE', 'OBALA'}
+
+
+def _address_sig(address, town_words):
+    """(house numbers, street words cut to 5 letters) of an address, the
+    town's own name left out — as `rekey_stations._street` reads it."""
+    a = strip_diacritics((address or '').upper())
+    numbers = set()
+    for digits, slash, letter in re.findall(r'(\d+)\s*(?:/\s*([A-Z0-9]+)|([A-Z])\b)?', a):
+        numbers |= {digits, slash or letter} - {''}
+    words = {w[:5] for w in re.findall(r'[A-Z]+', a)
+             if len(w) >= 3 and w not in town_words and w not in _STREET_TYPES}
+    return frozenset(numbers), words
+
+
+def _town_places(muni_ids):
+    """Station id -> place key for a town's rows. Rows of one place_key are
+    one place, and so is a building: rows at the same house numbers and street
+    ("D. DEMETRA 13" / "DIMITRIJE DEMETRA 13"), whatever their rooms; where the
+    source gives only the village ("KLENOVNIK"), rows of that village whose
+    building names are the same once room markers and the town's name are
+    dropped — "OSNOVNA ŠKOLA - BIR.1/2/3", but not Ivanec's SREDNJA and
+    OSNOVNA ŠKOLA, nor its OSNOVNA ŠKOLA and Salinovec's OSNOVNA ŠKOLA
+    SALINOVEC. Cached for ten minutes; `rekey_stations` changes this."""
+    cache_key = tuple(sorted(muni_ids))
+    hit = _PLACE_CACHE.get(cache_key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    rows = PollingStation.query.filter(PollingStation.municipality_id.in_(muni_ids)).all()
+    town_words = set()
+    for m in Municipality.query.filter(Municipality.id.in_(muni_ids)):
+        town_words |= set(re.findall(r'[A-Z]+', strip_diacritics(m.name.upper())))
+    parent = {}
+
+    def find(k):
+        while parent.setdefault(k, k) != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    town_stems = {w[:4] for w in town_words}
+    # "HRVATSKA" holds every town's mobile stations, so one address there can
+    # be two towns.
+    mixed = {m.id for m in Municipality.query.filter(Municipality.id.in_(muni_ids),
+                                                    Municipality.name == 'HRVATSKA')}
+    buckets = defaultdict(list)
+    for r in rows:
+        find(_row_place(r))
+        if r.municipality_id in mixed:
+            continue
+        # Some sources put the room in the address ("BIRALIŠTE II").
+        address = _strip_rooms(r.address)
+        if not address or (r.location or '').startswith('sažetak'):
+            continue
+        numbers, street = _address_sig(address, town_words)
+        plain = re.sub(r'[^0-9A-Z]', '', strip_diacritics(address.upper()))
+        # Without a house number the building's name decides, and the town's
+        # own name in it ("CENTAR ZA KULTURU KORČULA") says nothing.
+        building = _building_words(r.location) if numbers else _building_words(r.location) - town_stems
+        buckets[numbers or plain].append((r, street, building, bool(numbers)))
+    # A row whose address was only its room ("BIRALIŠTE II", "PROSTORIJA 2")
+    # is at its village or town: compared with the rows whose address is the
+    # station's name ("SALINOVEC") or the town's ("KORČULA").
+    muni_names = {m.id: m.name for m in Municipality.query.filter(Municipality.id.in_(muni_ids))}
+    for r in rows:
+        if r.address and not _strip_rooms(r.address) and r.location and r.municipality_id not in mixed:
+            entry = (r, set(), _building_words(r.location) - town_stems, False)
+            for where in (r.name, muni_names[r.municipality_id]):
+                buckets[re.sub(r'[^0-9A-Z]', '', strip_diacritics((where or '').upper()))].append(entry)
+    for group in buckets.values():
+        for i, (r1, s1, b1, numbered) in enumerate(group):
+            for r2, s2, b2, _ in group[i + 1:]:
+                # A street and house number is one building whatever its
+                # rooms are called (Kastav's PRIZEMLJE / SUTEREN); a bare
+                # village or town needs the building's name to agree too.
+                if not numbered and not (b1 and b1 == b2):
+                    continue
+                if s1 != s2 and not (s1 and s2 and (s1 <= s2 or s2 <= s1)):
+                    continue
+                a, b = find(_row_place(r1)), find(_row_place(r2))
+                if a != b:
+                    parent[max(a, b)] = min(a, b)
+    places = {r.id: find(_row_place(r)) for r in rows}
+    _PLACE_CACHE[cache_key] = (time.time(), places)
+    return places
+
+
 _ZAGREB_UNITS = None
 
 
@@ -1196,10 +1311,9 @@ def town_muni_ids(municipality_id):
 
 def station_place_ids(station):
     """Every station row of `station`'s place, in its town."""
-    key = _row_place(station)
-    return [r.id for r in PollingStation.query.filter(
-                PollingStation.municipality_id.in_(town_muni_ids(station.municipality_id)))
-            if _row_place(r) == key]
+    places = _town_places(town_muni_ids(station.municipality_id))
+    key = places.get(station.id, _row_place(station))
+    return [sid for sid, k in places.items() if k == key] or [station.id]
 
 
 def _place_options(rows):
@@ -1207,18 +1321,31 @@ def _place_options(rows):
     building. Left out: summary pseudo stations (location "sažetak…"), which
     hold whole-town or county totals, and rows whose source named no place
     (a bare number) — picking the town already includes both."""
+    town = _town_places({r.municipality_id for r in rows}) if rows else {}
     places = {}
     for r in sorted(rows, key=lambda r: r.id):
         if (r.location or '').startswith('sažetak') or not place_key(r.name, r.location, r.address):
             continue
-        places.setdefault(_row_place(r), []).append(r)
+        places.setdefault(town.get(r.id, _row_place(r)), []).append(r)
     out = []
     for key, group in places.items():
-        names = list(dict.fromkeys(r.name for r in group if r.name))
+        # "VARAŽDIN - 25", "IVANEC - 3": a station number in the name.
+        names = list(dict.fromkeys(re.sub(r'\s*-\s*\d+\.?$', '', r.name)
+                                   for r in group if r.name))
         built = next((r for r in group if r.location or r.address), group[0])
+        location, address = built.location, built.address
+        if len({(r.location, r.address) for r in group}) > 1:
+            address = _strip_rooms(address)
+        if len({r.location for r in group if r.location}) > 1:
+            # Several rooms: name the building, not one of its rooms.
+            location = _strip_rooms(built.location)
+            romans = {m.group(1) for r in group
+                      if (m := re.search(r'\s([IVX]+)\.?$', _strip_rooms(r.location)))}
+            if len(romans) > 1:                   # "IV. OSNOVNA ŠKOLA I" / "... II"
+                location = re.sub(r'\s[IVX]+\.?$', '', location)
         # The address too: Varaždin has four "BIRALIŠTE 2, PROSTORIJE DJEČJEG
         # VRTIĆA", one per kindergarten, told apart only by their street.
-        label = ', '.join(x for x in (' / '.join(names), built.location, built.address) if x)
+        label = ', '.join(x for x in (' / '.join(names), location, address) if x)
         out.append({'id': group[0].id,
                     'name': label or f'{group[0].number}. (naziv nije objavljen)',
                     '_sort': (not label, strip_diacritics(label).upper())})
