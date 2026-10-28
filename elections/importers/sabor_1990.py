@@ -1,9 +1,10 @@
-"""Import the 1990 elections to the Društveno-političko vijeće and the Vijeće
-općina of the Sabor.
+"""Import the 1990 elections to the three chambers of the Sabor: the
+Društveno-političko vijeće, the Vijeće općina and the Vijeće udruženog rada.
 
-Both chambers share one shape, so one importer serves both, picked by
-`chamber` ('dpv' or 'vo'); everything below is said of the DPV and holds for
-the Vijeće općina (`sabor_vo`, 115 units) too, except where noted.
+All three share one shape, so one importer serves them, picked by `chamber`
+('dpv', 'vo' or 'vur'); everything below is said of the DPV and holds for the
+Vijeće općina (`sabor_vo`, 115 units) and the Vijeće udruženog rada
+(`sabor_vur`, 160 units) too, except where noted.
 
 The 1990 Sabor had three chambers, elected separately; this is the
 "socio-political council" every adult voted for. It gets its own ElectionType
@@ -35,11 +36,12 @@ this chamber instead of running D'Hondt.
 from collections import Counter
 from datetime import date
 
-from . import sabor_1990_dpv_data, sabor_1990_vo_data
+from . import sabor_1990_dpv_data, sabor_1990_vo_data, sabor_1990_vur_data
 from .base import BaseImporter
 from .sabor_1990_dpv_data import party_label, person_name
 
-CHAMBERS = {'dpv': sabor_1990_dpv_data, 'vo': sabor_1990_vo_data}
+CHAMBERS = {'dpv': sabor_1990_dpv_data, 'vo': sabor_1990_vo_data,
+            'vur': sabor_1990_vur_data}
 
 ROUND_DATES = {1: date(1990, 4, 22), 2: date(1990, 5, 6)}
 
@@ -97,7 +99,13 @@ class Sabor1990Importer(BaseImporter):
         deciding = None
         for round_no, rnd in enumerate(unit['rounds'], 1):
             er = rounds[round_no]
-            valid = sum(v for _n, _res, _p, v in rnd['candidates'])
+            # A unit whose votes the scan lost (VUR 91) has candidates with
+            # votes None: no results for them, and valid is cast - invalid.
+            counted = [v for _n, _res, _p, v in rnd['candidates'] if v is not None]
+            if len(counted) == len(rnd['candidates']):
+                valid = sum(counted)
+            else:
+                valid = rnd['cast'] - rnd['invalid']
             if not overlapping:
                 self.create_turnout(er, station, rnd['registered'], rnd['cast'],
                                     valid, rnd['invalid'])
@@ -109,8 +117,9 @@ class Sabor1990Importer(BaseImporter):
                 if candidacy.residence != residence:
                     candidacy.residence = residence
                     candidacy.save(update_fields=['residence'])
-                self.create_list_result(el, station, votes)
-                self.create_candidate_result(candidacy, station, votes)
+                if votes is not None:
+                    self.create_list_result(el, station, votes)
+                    self.create_candidate_result(candidacy, station, votes)
                 if raw == unit['winner'] and round_no == len(unit['rounds']):
                     deciding = (candidacy, party)
 

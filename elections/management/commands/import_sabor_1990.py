@@ -4,9 +4,8 @@ from elections.importers.sabor_1990 import CHAMBERS, Sabor1990Importer
 
 
 class Command(BaseCommand):
-    help = ('Import the 1990 Sabor: the Društveno-političko vijeće (dpv) and the '
-            'Vijeće općina (vo). The Vijeće udruženog rada is not transcribed yet '
-            '— see elections/importers/sabor_1990.py.')
+    help = ('Import the 1990 Sabor: the Društveno-političko vijeće (dpv), the '
+            'Vijeće općina (vo) and the Vijeće udruženog rada (vur).')
 
     def add_arguments(self, parser):
         parser.add_argument('--chamber', choices=[*CHAMBERS, 'all'], default='all',
