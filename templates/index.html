@@ -1937,7 +1937,7 @@ function renderVotesChart(panel, results, type) {
 
     const shareValues = filtered.map(r => r.vote_share || 0);
     const rawVotes = filtered.map(r => r[votesKey]);
-    const totalBallots = filtered.map(r => r.total_valid_ballots || 0);
+    const totalBallots = filtered.map(r => r.total_ballots_cast || 0);
     const colors = filtered.map(r => getElectionColor(r.election_type));
     // Per-point click target: open the matching election results module.
     // Lokalni results carry kind + county + muni so the dropdowns can be
@@ -2276,7 +2276,7 @@ function renderPersonResultsHTML(results) {
                       under a divider. Say why instead. */ ''}
                 ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${mandateReasonText(r)}</small>` : ''}
                 ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
-                ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
+                ${r.total_ballots_cast ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_ballots_cast)}</strong></small>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -2431,7 +2431,7 @@ function renderPersonResults(container, results) {
                       under a divider. Say why instead. */ ''}
                 ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${mandateReasonText(r)}</small>` : ''}
                 ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
-                ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
+                ${r.total_ballots_cast ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_ballots_cast)}</strong></small>` : ''}
                 ${r.list_votes && r.list_votes !== r.candidate_votes ? `<small class="text-muted"><i class="bi bi-list-ul me-1"></i>Glasovi za listu: <strong>${formatNumber(r.list_votes)}</strong></small>` : ''}
             </div>
         </div>`;

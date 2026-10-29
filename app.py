@@ -795,22 +795,26 @@ def person_detail(person_id):
             ListResult.polling_station_id
         ).filter_by(electoral_list_id=el.id).subquery()
 
-        total_valid_ballots = db.session.query(
-            db.func.sum(TurnoutData.valid_ballots)
+        # The share is of everyone who voted (glasali), not of valid ballots,
+        # so invalid ballots count against the candidate too.
+        total_ballots_cast = db.session.query(
+            db.func.sum(TurnoutData.ballots_cast)
         ).filter(
             TurnoutData.election_round_id == er.id,
             TurnoutData.polling_station_id.in_(db.session.query(station_ids))
         ).scalar() or 0
 
-        # Fallback denominator: the votes cast in the same district. Needed for
-        # 1995, whose 28 single-member districts and 5 minority units carry no
-        # TurnoutData — the same voters are counted by the national list, so
+        # Fallback denominator for districts without TurnoutData (1995's 28
+        # single-member districts and 5 minority units, 1990's overlapping
+        # Zagreb unit) — the same voters are counted by the national list, so
         # storing it there too would double the electorate (see sabor_1995.py).
-        # Summing the district's lists gives the right base for a plurality
-        # race, and for the 3-seat minority unit it reproduces the report's own
-        # denominator, which is votes cast rather than ballots.
-        if not total_valid_ballots and el.district_id:
-            total_valid_ballots = db.session.query(
+        # The district's own published "glasovalo" comes first; failing that,
+        # the sum of the district's lists, which for the 3-seat minority unit
+        # reproduces the report's own denominator.
+        if not total_ballots_cast and el.district_id:
+            total_ballots_cast = el.district.ballots_cast or 0
+        if not total_ballots_cast and el.district_id:
+            total_ballots_cast = db.session.query(
                 db.func.sum(ListResult.votes)
             ).join(
                 ElectoralList, ElectoralList.id == ListResult.electoral_list_id
@@ -819,7 +823,7 @@ def person_detail(person_id):
                 ElectoralList.district_id == el.district_id,
             ).scalar() or 0
 
-        vote_share = round((total_votes / total_valid_ballots) * 100, 1) if total_valid_ballots > 0 else 0
+        vote_share = round((total_votes / total_ballots_cast) * 100, 1) if total_ballots_cast > 0 else 0
 
         rank, total_cands = rank_lookup.get(c.id, (None, None))
         # Deep-link payload for the lokalni results module: kind + county +
@@ -839,7 +843,7 @@ def person_detail(person_id):
             'district': el.district.name if el.district else None,
             'candidate_votes': total_votes,
             'list_votes': total_list_votes,
-            'total_valid_ballots': total_valid_ballots,
+            'total_ballots_cast': total_ballots_cast,
             'vote_share': vote_share,
             'rank': rank,
             'total_candidates_in_round': total_cands,
@@ -889,7 +893,7 @@ def person_detail(person_id):
                          ('XII. IJ - nacionalne manjine' if m.minority else None)),
             'candidate_votes': 0,
             'list_votes': 0,
-            'total_valid_ballots': 0,
+            'total_ballots_cast': 0,
             'vote_share': 0,
             'rank': None,
             'total_candidates_in_round': None,
