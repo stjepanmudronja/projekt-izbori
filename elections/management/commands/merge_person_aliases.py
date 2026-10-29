@@ -40,6 +40,13 @@ KNOWN_ALIASES = [
     # ("ŽELJKO CICKAJ, upravni pravnik", as 2013 has ", iur.").
     ('ŽELJKO CICKAJ', 'ŽELJKO CICKAJ upravni pravnik',
      'mayoral candidate in 2013, 2017, 2021 and 2025, confirmed the same person'),
+    # Same again: načelnik of Vrbje 2009-2025, the 2013 and 2017 files with
+    # his occupation in the name column. (The 2015 ORaH Sabor candidate of the
+    # name is someone else — split off in split_persons.)
+    ('IGOR JURIŠIĆ', 'IGOR JURIŠIĆ UPR.PRAVNIK',
+     'načelnik of Vrbje 2009-2025, confirmed the same person'),
+    ('IGOR JURIŠIĆ', 'IGOR JURIŠIĆ up. pravnik',
+     'načelnik of Vrbje 2009-2025, confirmed the same person'),
 ]
 
 

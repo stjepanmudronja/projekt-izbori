@@ -264,6 +264,11 @@ KNOWN_DISTINCT = [
     ('FRANJO TUĐMAN', 'Luka, 1997.', [('local_council_ward', 1997, 2402)],  # Luka, ward II
      '1997: an HDZ candidate in a single-member ward of the Luka općinsko '
      'vijeće — a namesake, not the President, who stood for no local office'),
+    # --- Confirmed by the data's owner: nothing in the data proves these,
+    # someone who knows the person does.
+    ('IGOR JURIŠIĆ', 'ORaH, 2015.', [('sabor', 2015, 10)],
+     'sabor 2015: ORaH #7 in X. IJ — confirmed not the načelnik of Vrbje '
+     '(2009-2025)'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
