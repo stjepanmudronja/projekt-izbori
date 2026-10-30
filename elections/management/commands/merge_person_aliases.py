@@ -47,6 +47,9 @@ KNOWN_ALIASES = [
      'načelnik of Vrbje 2009-2025, confirmed the same person'),
     ('IGOR JURIŠIĆ', 'IGOR JURIŠIĆ up. pravnik',
      'načelnik of Vrbje 2009-2025, confirmed the same person'),
+    ('DARKO BAN', 'DARKO BAN inž.građ',
+     'načelnik candidate in Bedekovčina 2013-2025 (2017 with "inž.građ" in the '
+     'name column), confirmed the same person'),
 ]
 
 
