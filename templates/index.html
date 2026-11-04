@@ -2712,7 +2712,7 @@ function renderStationResults(container, elections) {
         window._electionBarData[idx] = {
             original: JSON.parse(JSON.stringify(originalItems)),
             current: originalItems,
-            validBallots: el.valid_ballots,
+            shareBase: el.valid_ballots,
         };
 
         buildBarChart(idx);
@@ -2729,7 +2729,7 @@ function buildBarChart(idx) {
 
     chartArea.innerHTML = items.map((it, i) => {
         const pct = maxVotes > 0 ? (it.votes / maxVotes) * 100 : 0;
-        const votePct = data.validBallots > 0 ? (it.votes / data.validBallots) * 100 : 0;
+        const votePct = data.shareBase > 0 ? (it.votes / data.shareBase) * 100 : 0;
         const displayName = it.name.length > 40 ? it.name.substring(0, 37) + '...' : it.name;
 
         // Make the label a clickable jump to the politician page when this
@@ -3556,7 +3556,7 @@ function renderNationalResults(data) {
             window._electionBarData[chartId] = {
                 original: JSON.parse(JSON.stringify(originalItems)),
                 current: originalItems,
-                validBallots: el.valid_ballots,
+                shareBase: el.valid_ballots,
                 kind: hasCandidates ? 'person' : 'list',
             };
 
@@ -5037,7 +5037,7 @@ function renderSaborScopeBlocks(results) {
         window._electionBarData[chartId] = {
             original: JSON.parse(JSON.stringify(original)),
             current: original,
-            validBallots: el.valid_ballots,
+            shareBase: el.valid_ballots,
         };
         buildBarChart(chartId);
     });
@@ -6317,7 +6317,7 @@ function renderComparisons() {
             window._electionBarData[chartId] = {
                 original: JSON.parse(JSON.stringify(originalItems)),
                 current: originalItems,
-                validBallots: el.valid_ballots,
+                shareBase: el.valid_ballots,
             };
 
             buildBarChart(chartId);
@@ -6899,7 +6899,7 @@ function renderLokResultCard(data) {
             name: it.name, votes: it.votes, personId: it.person_id,
             color: palette[i % palette.length], origNames: [it.name],
         })),
-        validBallots: (data.turnout && data.turnout.valid_ballots) || data.total_votes || 0,
+        shareBase: (data.turnout && (data.turnout.ballots_cast || data.turnout.valid_ballots)) || data.total_votes || 0,
     };
     // Defer to after innerHTML is in DOM
     setTimeout(() => buildBarChart(chartId), 0);
