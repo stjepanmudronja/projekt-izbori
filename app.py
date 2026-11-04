@@ -3213,6 +3213,7 @@ def lokalni_station_results():
         'name': r.name,
         'person_id': person_by_list.get(r.id),
         'votes': int(r.votes or 0),
+        'votes_pct': (r.votes / total * 100.0) if total else 0.0,
     } for r in list_rows]
 
     # Turnout over the same scope as the votes: the county, the station's
@@ -3242,12 +3243,6 @@ def lokalni_station_results():
         'valid_ballots': int(agg[2] or 0),
         'invalid_ballots': int(agg[3] or 0),
     } if agg and (agg[0] or not station_id) else None    # a station with no turnout row: none
-
-    # A share is of everyone who voted (glasali), as on politician pages. Some
-    # sources leave the turnout blank: then only the votes themselves are known.
-    share_base = (turnout_data and (turnout_data['ballots_cast'] or turnout_data['valid_ballots'])) or total
-    for item in items:
-        item['votes_pct'] = (item['votes'] / share_base * 100.0) if share_base else 0.0
 
     # Per-station turnout breakdown — only for non-station scopes. For
     # county-level kinds, list every station in the county; for muni scopes,
