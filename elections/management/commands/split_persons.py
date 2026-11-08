@@ -274,6 +274,21 @@ KNOWN_DISTINCT = [
     ('IVAN JUKIĆ', 'Starigrad, 1993.', [('local_council_ward', 1993, 31208)],  # Starigrad, ward VIII
      '1993: HDZ for the Starigrad vijeće the same day an Ivan Jukić stood in '
      'Slavonski Brod (HKDS, HNS) and another in Drenje (independent)'),
+    # The other 1990s wards of the name: two per polling day, in four
+    # counties under four parties, and nothing tying one year's to the
+    # other's, so each is its own person; the 2020 Sabor MVH candidate in
+    # VII. IJ keeps the unlabelled row.
+    ('IVAN JUKIĆ', 'Slavonski Brod, 1993.', [('local_council_ward', 1993, 25913)],  # ward XIII
+     '1993: HKDS-HNS in Slavonski Brod the same day as the Drenje and '
+     'Starigrad Ivan Jukićs'),
+    ('IVAN JUKIĆ', 'Drenje, 1993.', [('local_council_ward', 1993, 33502)],  # ward II
+     '1993: independent in Drenje the same day as the Slavonski Brod and '
+     'Starigrad Ivan Jukićs'),
+    ('IVAN JUKIĆ', 'Oroslavje, 1997.', [('local_council_ward', 1997, 3803)],  # ward III
+     '1997: ZDS in Oroslavje the same day an HSLS Ivan Jukić stood in Privlaka'),
+    ('IVAN JUKIĆ', 'Privlaka, 1997.', [('local_council_ward', 1997, 30802)],  # ward II
+     '1997: HSLS in Privlaka (Zadarska) the same day a ZDS Ivan Jukić stood in '
+     'Oroslavje'),
     # --- Confirmed by the data's owner: nothing in the data proves these,
     # someone who knows the person does.
     ('IGOR JURIŠIĆ', 'ORaH, 2015.', [('sabor', 2015, 10)],
