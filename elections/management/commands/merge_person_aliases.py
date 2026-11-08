@@ -65,6 +65,17 @@ PREFER_UNHYPHENATED = {
 }
 
 
+# The right diacritics of a name the sources spell two ways (č / ć), where no
+# rule can tell which is right. Every row of that name is given this spelling
+# on each run, so a re-import from the other source does not bring the wrong
+# one back. Keyed by the spelling itself.
+KNOWN_SPELLINGS = {
+    'TONČI BUBLE': 'confirmed by the data\'s owner; the 2001/2005 reports print "TONĆI"',
+    'SREĆKO BLAŽIČKO': 'confirmed by the data\'s owner; načelnik of Kumrovec, '
+                       'printed "SREČKO" in lokalni 2005 and 2017',
+}
+
+
 class Command(BaseCommand):
     help = 'Merge curated same-person name variants (middle names, added surnames)'
 
@@ -82,6 +93,7 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
         merged = self._merge_hyphen_variants(dry_run)
         merged += self._apply_spelling_preferences(dry_run)
+        self._apply_known_spellings(dry_run)
         for canonical_name, variant_name, evidence in KNOWN_ALIASES:
             canonical = self._find(canonical_name)
             variant = self._find(variant_name)
@@ -134,6 +146,18 @@ class Command(BaseCommand):
                             'first_name', 'last_name', 'normalized_name'])
                 fixed += 1
         return fixed
+
+    def _apply_known_spellings(self, dry_run):
+        """Give every row of a KNOWN_SPELLINGS name its confirmed diacritics."""
+        for spelling, evidence in KNOWN_SPELLINGS.items():
+            for person in Person.objects.filter(normalized_name=normalize_person_name(spelling)):
+                if f'{person.first_name} {person.last_name}' == spelling:
+                    continue
+                self.stdout.write(f'  respell {person.first_name} {person.last_name} '
+                                  f'(id={person.pk}) -> {spelling}\n     {evidence}')
+                if not dry_run:
+                    person.first_name, person.last_name = parse_person_name(spelling)
+                    person.save(update_fields=['first_name', 'last_name'])
 
     @staticmethod
     def _absorb(canonical, variant):
