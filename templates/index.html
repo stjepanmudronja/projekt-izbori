@@ -2566,6 +2566,9 @@ function renderStationWinnerChart(elections) {
                 pointHoverRadius: 10,
                 pointHoverBorderWidth: 3,
                 pointStyle: 'circle',
+                // A 100% winner sits on the axis's top edge; unclipped (with
+                // the layout padding below) its point is drawn whole.
+                clip: false,
             }]
         },
         options: {
@@ -2611,7 +2614,8 @@ function renderStationWinnerChart(elections) {
                 }
             },
             layout: {
-                padding: { bottom: 10 }
+                // top: room for the largest point (radius 10 hovered, 3px border).
+                padding: { top: 14, bottom: 10 }
             },
             animation: { duration: 1000, easing: 'easeOutQuart' }
         }
