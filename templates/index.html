@@ -88,7 +88,21 @@
         .main-content {
             margin-left: 260px;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
+        .main-content > .content-area { flex: 1 0 auto; }
+        .site-footer {
+            margin-top: auto;
+            padding: 1rem 2rem;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+            color: #6c757d;
+            font-size: .8rem;
+            line-height: 1.5;
+        }
+        .site-footer-note { color: #8a6d1d; margin-bottom: .25rem; }
+        .site-footer a { color: inherit; text-decoration: underline; }
         .top-bar {
             background: white;
             border-bottom: 1px solid #e0e0e0;
@@ -1336,6 +1350,15 @@
             <div id="izlEmpty" class="izl-empty">Odaberi barem jedne izbore za prikaz.</div>
         </div>
     </div>
+    <footer class="site-footer">
+        <div class="site-footer-note">
+            <i class="bi bi-exclamation-triangle me-1"></i>Prikupljanje i obrada dokumenata je u tijeku - podaci su nepotpuni i mogu sadržavati pogreške.
+        </div>
+        <div>
+            Izvor podataka: <a href="https://www.izbori.hr/" target="_blank" rel="noopener">Državno izborno povjerenstvo Republike Hrvatske (izbori.hr)</a>
+            — službeni rezultati i izvješća o provedenim izborima.
+        </div>
+    </footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
