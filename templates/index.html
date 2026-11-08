@@ -2157,6 +2157,9 @@ function renderMultiLineChart(panel, type) {
             pointRadius: pointRadii,
             pointHoverRadius: pointRadii.map(r => r + 3),
             spanGaps: true,
+            // A 100% share sits on the axis's top edge; unclipped (with the
+            // layout padding below) its point is drawn whole, not halved.
+            clip: false,
             _ranks: ranks,
         };
     });
@@ -2178,6 +2181,8 @@ function renderMultiLineChart(panel, type) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            // Room above the plot for the largest point (radius 9, 12 hovered).
+            layout: { padding: { top: 14 } },
             interaction: { intersect: false, mode: 'index' },
             onClick: (evt, items_) => {
                 if (items_ && items_.length) {
