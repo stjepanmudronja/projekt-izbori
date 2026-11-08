@@ -12,11 +12,32 @@ from .local_2009 import Local2009Importer
 from .local_2001_parse import check, parse_dir
 
 
+# List leaders the report prints surname-first, so the stored name is turned
+# round. Five Virovitičko-podravska sections print every leader that way
+# ("KUMRIĆ ŽELJKO"); elsewhere a single name is. Each confirmed by the same
+# person standing first-name-first in that place in another year (Željko
+# Kumrić, Suhopolje nositelj 2005 and načelnik 2009; Ivica Lulić, Špišić
+# Bukovica načelnik 2009; Anđelko Novoselnik, Crnac načelnik 2009; Zdravko
+# Dijaković, Pitomača načelnik 2021; Vladimir Janečić, Voćin načelnik 2009;
+# Dušan Hrelja, Buje nositelj 2005), and in the rest by the order alone:
+# a given name second ("RENGEL ĐURO", "VUKOVIĆ BOŽO", "PAVIŠIĆ SLAVKO").
+SURNAME_FIRST_SECTIONS = {'CRNAC', 'PITOMAČA', 'SUHOPOLJE', 'ŠPIŠIĆ BUKOVICA', 'VOĆIN'}
+SURNAME_FIRST_NAMES = {('BUJE - BUIE', 'HRELJA DUŠAN'), ('VRSAR - ORSERA', 'PAVIŠIĆ SLAVKO')}
+
+
 class Local2001Importer(Local2009Importer):
 
     year = 2001
     text_glob = 'Z*.txt'
     store_holders = True
+
+    def _holder_order(self, name, municipality):
+        if municipality.name in SURNAME_FIRST_SECTIONS or (municipality.name, name) in SURNAME_FIRST_NAMES:
+            words = name.split()
+            if len(words) != 2:
+                raise RuntimeError(f'{municipality.name}: cannot turn round "{name}"')
+            return f'{words[1]} {words[0]}'
+        return name
 
     def _county_code(self, path):
         return f'{int(path.stem[1:]):02d}'

@@ -225,7 +225,13 @@ class Local2009Importer(BaseImporter):
             name = ' '.join(words)
         else:                           # as printed ("MANSOUR EL.BAHTITY", "Tomislav Lunka")
             name = name.upper()
+        name = self._holder_order(name, municipality)
         person = self.get_or_create_person(clean_candidate_name(name))
         ListHolder.objects.update_or_create(
             electoral_list=el_list, municipality=municipality,
             defaults={'person': person, 'printed_name': printed})
+
+    def _holder_order(self, name, municipality):
+        """A leader's name in first-name-first order; overridden where a
+        report prints some surname-first (2001)."""
+        return name
