@@ -49,6 +49,7 @@ class Command(BaseCommand):
                     )
                     if not dry_run:
                         p.candidacies.update(person=target)
+                        p.held_lists.update(person=target)
                         p.delete()
                     merged += 1
                 else:

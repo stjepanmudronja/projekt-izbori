@@ -40,6 +40,7 @@ class Command(BaseCommand):
                     for dupe in dupes:
                         # Re-point candidacies
                         dupe.candidacies.update(person=canonical)
+                        dupe.held_lists.update(person=canonical)
                         dupe.delete()
 
             merged_count += len(dupes)

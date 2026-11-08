@@ -16,6 +16,7 @@ class Local2001Importer(Local2009Importer):
 
     year = 2001
     text_glob = 'Z*.txt'
+    store_holders = True
 
     def _county_code(self, path):
         return f'{int(path.stem[1:]):02d}'

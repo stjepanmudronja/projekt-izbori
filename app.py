@@ -53,6 +53,17 @@ class Candidacy(db.Model):
     electoral_list = db.relationship('ElectoralList', backref='candidacies', lazy=True)
 
 
+class ListHolder(db.Model):
+    """Nositelj liste of a council list in one municipality (2001, 2005);
+    mirrors the Django model, see participants.py."""
+    __tablename__ = 'elections_listholder'
+    id = db.Column(db.Integer, primary_key=True)
+    electoral_list_id = db.Column(db.Integer, db.ForeignKey('elections_electorallist.id'))
+    municipality_id = db.Column(db.Integer, db.ForeignKey('elections_municipality.id'))
+    person_id = db.Column(db.Integer, db.ForeignKey('elections_person.id'))
+    printed_name = db.Column(db.String)
+
+
 class ElectedMandate(db.Model):
     __tablename__ = 'elections_electedmandate'
     id = db.Column(db.Integer, primary_key=True)
@@ -906,6 +917,60 @@ def person_detail(person_id):
             'county_id': None,
             'municipality_id': None,
         })
+    # Council lists this person led (2001, 2005): no personal vote, so the
+    # row carries the list's result in that municipality and its place among
+    # the lists, never a rank or seat badge. Before 2009 the council chose
+    # the executive; leading the first list did not make anyone načelnik.
+    held = (db.session.query(ListHolder, ElectoralList, Municipality)
+            .join(ElectoralList, ElectoralList.id == ListHolder.electoral_list_id)
+            .join(Municipality, Municipality.id == ListHolder.municipality_id)
+            .filter(ListHolder.person_id == person_id).all())
+    for h, el, muni in held:
+        er = el.election_round
+        election = er.election
+        etype = election.election_type
+        stations = db.session.query(PollingStation.id).filter(PollingStation.municipality_id == muni.id)
+        by_list = dict(
+            db.session.query(ListResult.electoral_list_id, db.func.sum(ListResult.votes))
+            .join(ElectoralList, ElectoralList.id == ListResult.electoral_list_id)
+            .filter(ElectoralList.election_round_id == er.id,
+                    ListResult.polling_station_id.in_(stations))
+            .group_by(ListResult.electoral_list_id).all())
+        list_votes = int(by_list.get(el.id) or 0)
+        valid = db.session.query(db.func.sum(TurnoutData.valid_ballots)).filter(
+            TurnoutData.election_round_id == er.id,
+            TurnoutData.polling_station_id.in_(stations)).scalar() or 0
+        if not valid:
+            valid = sum(int(v or 0) for v in by_list.values())
+        ordered = sorted(by_list, key=lambda k: -int(by_list[k] or 0))
+        county_level = muni.type == 'sažetak'
+        results.append({
+            'election': election.name or f'{etype.name} {election.year}',
+            'election_type': etype.name,
+            'year': election.year,
+            'date': round_date_iso(er, election),
+            'round': er.round_number,
+            'list_name': el.name,
+            'position': None,
+            'district': muni.name.replace(' (SAŽETAK)', '') if county_level else muni.name,
+            'candidate_votes': 0,
+            'list_votes': list_votes,
+            'total_valid_ballots': valid,
+            'vote_share': 0,
+            'rank': None,
+            'total_candidates_in_round': None,
+            'won_seat': False,
+            'list_holder': True,
+            'list_share': round(list_votes / valid * 100, 1) if valid else 0,
+            'list_place': ordered.index(el.id) + 1 if el.id in ordered else None,
+            'lists_in_race': len(ordered),
+            'eu_mep': False,
+            'eu_group': None,
+            'lokalni_kind': LOKALNI_KIND_MAP.get(etype.name),
+            'county_id': muni.county_id,
+            'municipality_id': None if county_level else muni.id,
+        })
+
     results.sort(key=lambda r: (-(r['year'] or 0), r['date'] or '', -(r['round'] or 0)))
 
     return jsonify({
@@ -3160,7 +3225,9 @@ def lokalni_station_results():
         # has only vijeća and skupštine.
         if year and int(year) < 2009 and kind in ('nacelnik', 'zupan'):
             return jsonify({'error': f'{type_name}: {year}. nije bilo neposrednih izbora — '
-                                     'načelnike, gradonačelnike i župane neposredno se bira od 2009.'}), 404
+                                     'načelnike, gradonačelnike i župane neposredno se bira od 2009. '
+                                     'Nositelja liste s najviše glasova prikazuje '
+                                     + ('Županijska skupština.' if kind == 'zupan' else 'Vijeće.')}), 404
         return jsonify({'error': f'no election for type "{type_name}" year={year}'}), 404
 
     er = ElectionRound.query.filter_by(election_id=election.id, round_number=round_num).first()
@@ -3210,7 +3277,26 @@ def lokalni_station_results():
         'person_id': person_by_list.get(r.id),
         'votes': int(r.votes or 0),
         'votes_pct': (r.votes / total * 100.0) if total else 0.0,
+        'holder': None,
     } for r in list_rows]
+
+    # Before 2009 the council chose the executive, so the result names only
+    # each list's nositelj (2001, 2005). Council lists are shared across
+    # municipalities, so a leader is looked up within the scope's own.
+    if is_county_kind:
+        scope_munis = db.session.query(Municipality.id).filter(Municipality.county_id == county.id)
+    else:
+        scope_munis = db.session.query(Municipality.id).filter(Municipality.id == muni.id)
+    holders = {}
+    for h, p in (db.session.query(ListHolder, Person)
+                 .join(Person, Person.id == ListHolder.person_id)
+                 .filter(ListHolder.electoral_list_id.in_([r.id for r in list_rows]),
+                         ListHolder.municipality_id.in_(scope_munis))):
+        holders.setdefault(h.electoral_list_id, []).append(
+            {'name': f'{p.first_name} {p.last_name}', 'person_id': p.id})
+    for r, item in zip(list_rows, items):
+        if len(holders.get(r.id, [])) == 1:
+            item['holder'] = holders[r.id][0]
 
     # Turnout over the same scope as the votes: the county, the station's
     # place, or the municipality.

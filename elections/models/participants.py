@@ -65,6 +65,31 @@ class Candidacy(models.Model):
         return f"{self.person} - #{self.position_on_list} on {self.electoral_list}"
 
 
+class ListHolder(models.Model):
+    """The nositelj liste a council list was led by in one municipality.
+
+    Before 2009 mayors, načelnici and župani were chosen by the newly elected
+    body, not by voters, so for those years the leader of the list with the
+    most votes is the nearest thing the result records — not who took office.
+    Council lists are shared by name across municipalities (one "HDZ" list
+    per round), each with a different leader in each, hence a row per
+    (list, municipality) rather than a field on the list. Seeded from DIP's
+    2001 and 2005 reports, which print a "Nositelj liste" for every list.
+    `person` is protected: a command merging or deleting people must move
+    these rows as it moves candidacies.
+    """
+    electoral_list = models.ForeignKey(ElectoralList, on_delete=models.CASCADE, related_name='holders')
+    municipality = models.ForeignKey('Municipality', on_delete=models.CASCADE, related_name='list_holders')
+    person = models.ForeignKey(Person, on_delete=models.PROTECT, related_name='held_lists')
+    printed_name = models.CharField(max_length=300)
+
+    class Meta:
+        unique_together = ['electoral_list', 'municipality']
+
+    def __str__(self):
+        return f"{self.person} - nositelj {self.electoral_list} ({self.municipality})"
+
+
 class ElectedMandate(models.Model):
     """A candidacy that actually took a seat/mandate.
 

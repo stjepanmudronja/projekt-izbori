@@ -426,7 +426,8 @@ class Command(BaseCommand):
         namesake, so this also runs when there is nothing left to move)."""
         for person in Person.objects.filter(normalized_name=normalized):
             if (not person.candidacies.exists()
-                    and not person.parliament_memberships.exists()):
+                    and not person.parliament_memberships.exists()
+                    and not person.held_lists.exists()):
                 person.delete()
 
     # ---- --suggest -----------------------------------------------------

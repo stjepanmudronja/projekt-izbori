@@ -145,6 +145,7 @@ class Command(BaseCommand):
         """
         with transaction.atomic():
             variant.candidacies.update(person=canonical)
+            variant.held_lists.update(person=canonical)
             taken = set(
                 ParliamentMember.objects
                 .filter(person=canonical).values_list('election_id', flat=True)

@@ -2261,6 +2261,7 @@ function renderPersonResultsHTML(results) {
                     <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
                     ${rankBadgeHtml(r)}
+                    ${r.list_holder ? '<span class="badge bg-secondary badge-election" title="Prvi na listi koju je predvodio">Nositelj liste</span>' : ''}
                 </div>
                 <div class="text-end">
                     ${r.vote_share ? `<div class="vote-number">${formatPct(r.vote_share)}</div><small class="text-muted">udio glasova</small>` : ''}
@@ -2280,6 +2281,7 @@ function renderPersonResultsHTML(results) {
                       result, so this row would otherwise be an empty strip
                       under a divider. Say why instead. */ ''}
                 ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${mandateReasonText(r)}</small>` : ''}
+                ${r.list_holder ? listHolderHtml(r) : ''}
                 ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
                 ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
             </div>
@@ -2366,6 +2368,16 @@ function mandateReasonText(r) {
     return 'Objavljeni su samo rezultati po listama, pa za ovaj mandat nema osobnog rezultata.';
 }
 
+// Before 2009 the council (or county assembly) chose the executive after the
+// election, so these years name only who led each list.
+const LIST_HOLDER_NOTE = 'Prije 2009. načelnike, gradonačelnike i župane biralo je predstavničko tijelo nakon izbora; nositelj liste nije nužno preuzeo tu dužnost.';
+
+function listHolderHtml(r) {
+    const place = r.list_place ? `${r.list_place}. od ${r.lists_in_race} lista, ` : '';
+    return `<small class="text-muted"><i class="bi bi-list-ol me-1"></i>Lista: <strong>${place}${formatNumber(r.list_votes)} glasova (${formatPct(r.list_share)})</strong></small>
+        <small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${LIST_HOLDER_NOTE}</small>`;
+}
+
 function rankBadgeHtml(r) {
     if (!r) return '';
     if (r.eu_mep) {
@@ -2416,6 +2428,7 @@ function renderPersonResults(container, results) {
                     <span class="badge bg-dark badge-election">${r.date ? new Date(r.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', year: 'numeric' }) : r.year}</span>
                     ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
                     ${rankBadgeHtml(r)}
+                    ${r.list_holder ? '<span class="badge bg-secondary badge-election" title="Prvi na listi koju je predvodio">Nositelj liste</span>' : ''}
                 </div>
                 <div class="text-end">
                     ${r.vote_share ? `<div class="vote-number">${formatPct(r.vote_share)}</div><small class="text-muted">udio glasova</small>` : ''}
@@ -2435,9 +2448,10 @@ function renderPersonResults(container, results) {
                       result, so this row would otherwise be an empty strip
                       under a divider. Say why instead. */ ''}
                 ${r.mandate_only ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${mandateReasonText(r)}</small>` : ''}
+                ${r.list_holder ? listHolderHtml(r) : ''}
                 ${r.candidate_votes ? `<small class="text-muted"><i class="bi bi-person-check me-1"></i>Glasovi: <strong>${formatNumber(r.candidate_votes)}</strong></small>` : ''}
                 ${r.total_valid_ballots ? `<small class="text-muted"><i class="bi bi-people me-1"></i>Ukupno glasača: <strong>${formatNumber(r.total_valid_ballots)}</strong></small>` : ''}
-                ${r.list_votes && r.list_votes !== r.candidate_votes ? `<small class="text-muted"><i class="bi bi-list-ul me-1"></i>Glasovi za listu: <strong>${formatNumber(r.list_votes)}</strong></small>` : ''}
+                ${r.list_votes && r.list_votes !== r.candidate_votes && !r.list_holder ? `<small class="text-muted"><i class="bi bi-list-ul me-1"></i>Glasovi za listu: <strong>${formatNumber(r.list_votes)}</strong></small>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -6947,6 +6961,22 @@ function renderLokResultCard(data) {
         ? '<div class="text-muted text-center py-3">Nema rezultata za ovo biračko mjesto u odabranoj vrsti izbora.</div>'
         : '';
 
+    // 2001 / 2005: who led each list, the first in bold — the nearest the
+    // result comes to naming the executive the council then chose.
+    const led = items.filter(i => i.holder);
+    const holdersBlock = led.length ? `
+        <div class="mt-3">
+            <div class="fw-semibold mb-1" style="color:#0f3460; font-size:0.9rem;"><i class="bi bi-person-badge me-1"></i>Nositelji lista</div>
+            <table class="table table-sm mb-1"><tbody>
+                ${led.map((i, n) => `<tr${n === 0 ? ' class="fw-semibold"' : ''}>
+                    <td style="font-size:0.85rem;">${escapeHtml(i.name)}</td>
+                    <td style="font-size:0.85rem; white-space:nowrap;">${personLinkHtml(i.holder.name, i.holder.person_id)}</td>
+                    <td class="text-end" style="font-size:0.85rem; white-space:nowrap;">${formatNumber(i.votes)}</td>
+                </tr>`).join('')}
+            </tbody></table>
+            <small class="text-muted fst-italic">* ${LIST_HOLDER_NOTE}</small>
+        </div>` : '';
+
     // Per-station turnout breakdown (only present when scope=municipality)
     let stationsBlock = '';
     if (data.stations && data.stations.length > 0) {
@@ -7024,6 +7054,7 @@ function renderLokResultCard(data) {
             </div>` : ''}
             ${bars}
             ${noVotes}
+            ${holdersBlock}
             ${stationsBlock}
         </div>`;
 }

@@ -17,6 +17,7 @@ from .local_2005_parse import parse_text, problems
 class Local2005Importer(Local2009Importer):
 
     year = 2005
+    store_holders = True
 
     def _parse(self, code, text):
         return [(c, problems(code, c)) for c in parse_text(text)]

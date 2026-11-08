@@ -70,6 +70,10 @@ class Command(BaseCommand):
                     moved_stations += s_moved
                     merged_stations += s_merged
                     moved_results += r_moved
+                    # List leaders follow their votes; one the canonical
+                    # already has for that list is the same leader twice.
+                    taken = canonical.list_holders.values_list('electoral_list_id', flat=True)
+                    dupe.list_holders.exclude(electoral_list_id__in=list(taken)).update(municipality=canonical)
                     dupe.delete()  # CASCADE drops any leftover conflicting rows
                     merged_munis += 1
 

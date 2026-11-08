@@ -84,6 +84,10 @@ class Local2009Importer(BaseImporter):
     year = YEAR
     text_glob = 'i_06_*.txt'
     display = DISPLAY
+    # Store each council list's nositelj liste (`ListHolder`): set for the
+    # years before 2009, when the body chose the executive and the leading
+    # list's holder is the nearest the result comes to naming one.
+    store_holders = False
 
     def _county_code(self, path):
         return path.stem.split('_')[2]
@@ -195,6 +199,33 @@ class Local2009Importer(BaseImporter):
                 self.create_candidate_result(candidacy, station, e['votes'])
             else:
                 el_list = self.get_or_create_electoral_list(election_round, list_name(e))
+                if self.store_holders and e.get('holder'):
+                    self._store_holder(el_list, station.municipality, e['holder'])
             # 1997 prints a few lists with no count; they stand, unscored.
             if e.get('votes') is not None:
                 self.create_list_result(el_list, station, e['votes'])
+
+    def _store_holder(self, el_list, municipality, printed):
+        """One list's leader in one municipality. The person is what precedes
+        a title's comma ("ANTE RIZVAN, dipl. ing."); a title printed first
+        (", dipl. oec. BRANKO MUČNJAK") is dropped from the front."""
+        from elections.models import ListHolder
+        name = re.sub(r'^\s*,\s*(?:[a-zčćšžđ]+[.,]\s*)+', '', printed)
+        name = re.sub(r'\s+-\s+', '-', name.split(',')[0].strip())
+        # The report prints names in capitals and titles without a comma in
+        # lower case or with dots ("MILIVOJ DUJMOVIĆ dr.med.", "Prim. NINO
+        # ŠIKIĆ", "ING.STROJARSTVA"); a father's name ("pok. ANTE"), a
+        # nickname in brackets and "ML." are not the person's name either.
+        bare = re.sub(r'\s*\([^)]*\)|-?"[^"]*"|\bpok\.\s*\S+', ' ', name)
+        # A surname's stray dot goes ("LOŽAR. prof."); "DR.", "ML." and an
+        # initial ("L.") are too short to be one and are dropped below.
+        words = [w[:-1] if w.endswith('.') and len(w) > 4 else w for w in bare.split()]
+        words = [w for w in words if '.' not in w and w == w.upper() and re.search(r'[A-ZČĆŠŽĐ]', w)]
+        if len(words) >= 2:
+            name = ' '.join(words)
+        else:                           # as printed ("MANSOUR EL.BAHTITY", "Tomislav Lunka")
+            name = name.upper()
+        person = self.get_or_create_person(clean_candidate_name(name))
+        ListHolder.objects.update_or_create(
+            electoral_list=el_list, municipality=municipality,
+            defaults={'person': person, 'printed_name': printed})

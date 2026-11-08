@@ -26,6 +26,8 @@ class Command(BaseCommand):
             # Remember who stood, so rows left with nothing can go afterwards.
             touched = set(Person.objects.filter(
                 candidacies__electoral_list__election_round__election__in=elections,
+            ).values_list('pk', flat=True)) | set(Person.objects.filter(
+                held_lists__electoral_list__election_round__election__in=elections,
             ).values_list('pk', flat=True))
             count, _ = elections.delete()
             self.stdout.write(f'Wiped local {year}: {count} rows')
@@ -41,8 +43,9 @@ class Command(BaseCommand):
 
         if touched:
             empty = (Person.objects.filter(pk__in=touched)
-                     .annotate(c=Count('candidacies'), m=Count('parliament_memberships'))
-                     .filter(c=0, m=0))
+                     .annotate(c=Count('candidacies'), m=Count('parliament_memberships'),
+                               h=Count('held_lists'))
+                     .filter(c=0, m=0, h=0))
             n = empty.count()
             empty.delete()
             self.stdout.write(f'Removed {n} person row(s) left without candidacies')
