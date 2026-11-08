@@ -2587,8 +2587,24 @@ function renderStationWinnerChart(elections) {
                     callbacks: {
                         label: function(ctx) {
                             const i = ctx.dataIndex;
+                            // Chart.js draws each line on one row, newlines and
+                            // all, so a coalition (2025 joins its parties with
+                            // newlines, 2021 with commas) ran off the screen: one
+                            // party per line, a long name wrapped at word breaks.
+                            const parties = winnerNames[i].split(/\s*\n\s*/).flatMap(p =>
+                                p.split(/,\s+/).map((x, j, all) => j < all.length - 1 ? x + ',' : x));
+                            const nameLines = parties.flatMap(part => {
+                                const out = [];
+                                for (const word of part.split(' ')) {
+                                    const last = out.length - 1;
+                                    if (last >= 0 && (out[last] + ' ' + word).length <= 45) out[last] += ' ' + word;
+                                    else out.push(word);
+                                }
+                                return out;
+                            });
                             return [
-                                `Pobjednik: ${winnerNames[i]}`,
+                                `Pobjednik: ${nameLines[0]}`,
+                                ...nameLines.slice(1).map(l => `    ${l}`),
                                 `Udio: ${formatPct(pctValues[i])}`,
                                 `Glasovi: ${winnerVotes[i].toLocaleString('hr-HR')}`,
                             ];
