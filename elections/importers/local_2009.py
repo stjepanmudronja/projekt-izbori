@@ -225,11 +225,27 @@ class Local2009Importer(BaseImporter):
             name = ' '.join(words)
         else:                           # as printed ("MANSOUR EL.BAHTITY", "Tomislav Lunka")
             name = name.upper()
-        name = self._holder_order(name, municipality)
-        person = self.get_or_create_person(clean_candidate_name(name))
+        name = clean_candidate_name(self._holder_order(name, municipality))
+        person = self.get_or_create_person(name)
+        self._restore_marks(person, name)
         ListHolder.objects.update_or_create(
             electoral_list=el_list, municipality=municipality,
             defaults={'person': person, 'printed_name': printed})
+
+    def _restore_marks(self, person, name):
+        """Give a matched person the report's diacritics where its stored
+        spelling is the same name with marks lost — mostly the 1993 / 1997
+        OCR ("KRUNOSLAV SPANIĆ" -> "ŠPANIĆ", "ANDELKO" -> "ANĐELKO"). Only
+        added marks: where the two disagree (č for ć, "TONČI" / "TONĆI"),
+        nothing says which is right and the stored one stands."""
+        from .name_utils import parse_person_name, strip_diacritics
+        stored = f'{person.first_name} {person.last_name}'
+        if stored == name or len(stored) != len(name) or not person.pk:
+            return
+        if any(s != n and s != strip_diacritics(n) for s, n in zip(stored, name)):
+            return
+        person.first_name, person.last_name = parse_person_name(name)
+        person.save(update_fields=['first_name', 'last_name'])
 
     def _holder_order(self, name, municipality):
         """A leader's name in first-name-first order; overridden where a
