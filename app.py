@@ -1458,6 +1458,182 @@ def place_profile(muni_id):
     return jsonify(payload)
 
 
+_HOME_CACHE = {}            # one payload; the data only changes on import
+HOME_EXEC_SLUGS = ('local_mayor', 'local_city_mayor', 'local_county_prefect')
+HOME_OFFICE = {'local_mayor': 'Načelnik', 'local_city_mayor': 'Gradonačelnik',
+               'local_county_prefect': 'Župan'}
+
+
+@app.route('/api/home')
+def home_highlights():
+    hit = _HOME_CACHE.get('payload')
+    if hit and time.time() - hit[0] < 6 * 3600:
+        return jsonify(hit[1])
+    payload = _home_highlights()
+    _HOME_CACHE['payload'] = (time.time(), payload)
+    return jsonify(payload)
+
+
+def _home_highlights():
+    """What the home page shows: headline counts and a handful of rankings
+    worth a look, read off the stored results.
+
+    Executive races (načelnik, gradonačelnik, župan; direct since 2009) are
+    judged on their deciding round, the last one held: a runoff decides, so
+    round 1 of a race that went to one is never a 'win'. A race's district
+    number is its municipality's (or for a župan its county's) primary key.
+    Careers count elections a person stood in; names are matched across
+    years as everywhere else, so a long gap may be two namesakes and is not
+    ranked."""
+    sql = lambda q, **kw: db.session.execute(db.text(q), kw).fetchall()
+
+    rows = sql("""
+        select e.year, et.slug, ed.number, er.round_number, c.person_id,
+               p.first_name || ' ' || p.last_name, sum(lr.votes)
+        from elections_listresult lr
+        join elections_electorallist el on el.id = lr.electoral_list_id
+        join elections_electoraldistrict ed on ed.id = el.district_id
+        join elections_candidacy c on c.electoral_list_id = el.id
+        join elections_person p on p.id = c.person_id
+        join elections_electionround er on er.id = el.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        where et.slug in :slugs
+        group by 1, 2, 3, 4, 5, 6""", slugs=HOME_EXEC_SLUGS)
+    rounds = defaultdict(list)
+    for year, slug, num, rnd, pid, name, votes in rows:
+        rounds[(year, slug, num, rnd)].append((int(votes or 0), pid, name))
+    deciding = {}
+    for (year, slug, num, rnd), cands in rounds.items():
+        if (year, slug, num) not in deciding or rnd > deciding[(year, slug, num)][0]:
+            deciding[(year, slug, num)] = (rnd, sorted(cands, key=lambda c: -c[0]))
+
+    munis = {m.id: m for m in Municipality.query.filter(Municipality.type.in_(('grad', 'općina')))}
+    counties = {c.id: c.name for c in County.query}
+
+    def place(slug, num):
+        if slug == 'local_county_prefect':
+            return {'name': counties.get(num), 'place_id': None}
+        m = munis.get(num)
+        return {'name': m.name if m else None, 'place_id': m.id if m else None}
+
+    def person(c):
+        return {'name': c[2], 'person_id': c[1], 'votes': c[0]}
+
+    races = []
+    for (year, slug, num), (rnd, cands) in deciding.items():
+        total = sum(c[0] for c in cands)
+        if not total:
+            continue
+        races.append({'year': year, 'office': HOME_OFFICE[slug], 'round': rnd, **place(slug, num),
+                      'candidates': len(cands), 'total': total,
+                      'first': person(cands[0]), 'second': person(cands[1]) if len(cands) > 1 else None,
+                      'share': round(cands[0][0] / total * 100, 1),
+                      '_key': (slug, num), '_tie': len(cands) > 1 and cands[0][0] == cands[1][0]})
+    contested = [r for r in races if r['second']]
+    closest = sorted(contested, key=lambda r: (r['first']['votes'] - r['second']['votes'], -r['total']))[:12]
+    for r in closest:
+        r['margin'] = r['first']['votes'] - r['second']['votes']
+        r['tie'] = r['_tie']
+    landslides = sorted(contested, key=lambda r: -r['share'])[:12]
+    unopposed = defaultdict(int)
+    for r in races:
+        if r['candidates'] == 1:
+            unopposed[r['year']] += 1
+
+    # Unbroken runs: won every direct election from 2009 to the latest one.
+    exec_years = sorted({r['year'] for r in races})
+    wins = defaultdict(dict)                       # (slug, num, person) -> {year: race}
+    for r in races:
+        if not r['_tie']:
+            wins[(*r['_key'], r['first']['person_id'])][r['year']] = r
+    streaks = []
+    for key, by_year in wins.items():
+        run = 0
+        for y in reversed(exec_years):
+            if y not in by_year:
+                break
+            run += 1
+        if run == len(exec_years):
+            latest = by_year[exec_years[-1]]
+            streaks.append({'name': latest['first']['name'], 'person_id': latest['first']['person_id'],
+                            'office': latest['office'], 'place': latest['name'], 'place_id': latest['place_id'],
+                            'wins': run, 'since': exec_years[0], 'share': latest['share'],
+                            'votes': latest['first']['votes']})
+    streaks.sort(key=lambda s: -s['votes'])
+    for r in races:
+        r.pop('_key', None)
+        r.pop('_tie', None)
+
+    careers = sql("""
+        select p.id, p.first_name || ' ' || p.last_name, count(distinct e.id), min(e.year), max(e.year),
+               count(distinct case when et.slug like 'local%%' then 'local'
+                                   when et.slug like 'sabor%%' then 'sabor' else et.slug end)
+        from elections_person p
+        join elections_candidacy c on c.person_id = p.id
+        join elections_electorallist el on el.id = c.electoral_list_id
+        join elections_electionround er on er.id = el.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        group by p.id order by 3 desc, 6 desc, 2 limit 12""")
+
+    def top_preferences(slug):
+        latest = sql("""select max(e.year) from elections_election e
+                        join elections_electiontype et on et.id = e.election_type_id where et.slug = :s""", s=slug)[0][0]
+        rows = sql("""
+            select p.id, p.first_name || ' ' || p.last_name, el.name, sum(cr.votes) v
+            from elections_candidateresult cr
+            join elections_candidacy c on c.id = cr.candidacy_id
+            join elections_person p on p.id = c.person_id
+            join elections_electorallist el on el.id = c.electoral_list_id
+            join elections_electionround er on er.id = el.election_round_id
+            join elections_election e on e.id = er.election_id
+            join elections_electiontype et on et.id = e.election_type_id
+            where et.slug = :s and e.year = :y
+            group by 1, 2, 3 order by v desc limit 10""", s=slug, y=latest)
+        def short(lst):     # first party of the list, as its abbreviation where given
+            first = (lst or '').split('\n', 1)[0].split(',', 1)[0].strip()
+            return first.rsplit(' - ', 1)[-1] if ' - ' in first else first
+        return {'year': latest, 'items': [{'person_id': pid, 'name': name, 'list': short(lst),
+                                           'votes': int(v)} for pid, name, lst, v in rows]}
+
+    # Turnout records: the latest local election's councils, towns of 300+ voters.
+    local_year = max(exec_years) if exec_years else None
+    turnout = sql("""
+        select m.id, m.name, sum(t.registered_voters) reg, sum(t.ballots_cast) cast_
+        from elections_turnoutdata t
+        join elections_pollingstation ps on ps.id = t.polling_station_id
+        join elections_municipality m on m.id = ps.municipality_id
+        join elections_electionround er on er.id = t.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        where et.slug in ('local_municipal_council', 'local_city_council') and e.year = :y
+              and er.round_number = 1 and m.type in ('grad', 'općina')
+        group by 1, 2 having sum(t.registered_voters) >= 300""", y=local_year)
+    turnout = sorted(({'place_id': mid, 'name': name, 'registered': int(reg), 'cast': int(c),
+                       'pct': round(int(c) / int(reg) * 100, 1)} for mid, name, reg, c in turnout if reg),
+                     key=lambda t: -t['pct'])
+
+    counts = sql("""select (select count(*) from elections_person),
+                           (select count(*) from elections_election),
+                           (select min(year) from elections_election), (select max(year) from elections_election),
+                           (select count(*) from elections_municipality where type in ('grad', 'općina')),
+                           (select count(*) from elections_candidacy)""")[0]
+    return {
+        'stats': {'persons': counts[0], 'elections': counts[1], 'first_year': counts[2],
+                  'last_year': counts[3], 'places': counts[4], 'candidacies': counts[5]},
+        'closest': closest,
+        'landslides': landslides,
+        'streaks': {'since': exec_years[0] if exec_years else None, 'count': len(streaks),
+                    'items': streaks[:15]},
+        'unopposed': [{'year': y, 'count': unopposed[y]} for y in exec_years],
+        'careers': [{'person_id': pid, 'name': name, 'elections': n, 'from': a, 'to': b, 'kinds': k}
+                    for pid, name, n, a, b, k in careers],
+        'preferences': {'sabor': top_preferences('sabor'), 'eu': top_preferences('eu_parliament')},
+        'turnout': {'year': local_year, 'top': turnout[:10]},
+    }
+
+
 def _place_profile(muni_id):
     """One town's electoral history for the municipality page (an error
     response tuple when there is none): every round
@@ -3886,5 +4062,20 @@ def analytics_turnout():
     return jsonify({'error': f'Unknown level: {level}'}), 400
 
 
+def _warm_home_cache():
+    """Compute the home page's highlights in the background (~4 s), so the
+    first visitor to the landing page does not wait for them."""
+    with app.app_context():
+        try:
+            _HOME_CACHE['payload'] = (time.time(), _home_highlights())
+        except Exception as exc:              # the endpoint retries on demand
+            app.logger.warning('home highlights not precomputed: %s', exc)
+
+
 if __name__ == '__main__':
+    import os
+    import threading
+    # Under the debug reloader only the child process serves requests.
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        threading.Thread(target=_warm_home_cache, daemon=True).start()
     app.run(debug=True, port=5001)

@@ -32,6 +32,48 @@
             padding: 1.5rem 1.25rem;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
+        a.sidebar-brand { display: block; color: inherit; text-decoration: none; }
+        a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
+
+        /* ---- Home page ---- */
+        .home-hero {
+            background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+            color: #fff; border-radius: 14px; padding: 1.75rem 2rem;
+        }
+        .home-hero p { color: rgba(255,255,255,.8); max-width: 46rem; }
+        .home-stats { display: flex; flex-wrap: wrap; gap: .75rem; }
+        .home-stat { background: rgba(255,255,255,.12); border-radius: 10px; padding: .55rem .9rem; min-width: 8.5rem; }
+        .home-stat b { display: block; font-size: 1.35rem; line-height: 1.2; }
+        .home-stat span { font-size: .75rem; color: rgba(255,255,255,.75); }
+        .home-section { margin-bottom: 2rem; }
+        .home-section-head { display: flex; align-items: flex-end; gap: 1rem; margin-bottom: .6rem; }
+        .home-section-head h5 { margin: 0; font-weight: 700; }
+        .home-section-head small { color: #6c757d; }
+        .home-arrows { margin-left: auto; display: flex; gap: .35rem; flex-shrink: 0; }
+        .home-arrows button { width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #dee2e6;
+                              background: #fff; color: #495057; line-height: 1; padding: 0; }
+        .home-arrows button:hover { background: #f1f3f5; }
+        .home-track { display: flex; gap: .85rem; overflow-x: auto; scroll-snap-type: x mandatory;
+                      scroll-behavior: smooth; padding: .15rem .1rem .6rem; scrollbar-width: thin; }
+        .home-card { flex: 0 0 15.5rem; scroll-snap-align: start; background: #fff; border: 1px solid #e9ecef;
+                     border-radius: 12px; padding: .9rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+                     display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; }
+        .home-card .hc-kicker { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #6c757d; }
+        .home-card .hc-title { font-weight: 700; font-size: .98rem; line-height: 1.25; }
+        .home-card .hc-big { font-size: 1.6rem; font-weight: 800; color: #1a365d; line-height: 1.1; }
+        .home-card .hc-row { display: flex; justify-content: space-between; gap: .5rem; }
+        .home-card .hc-row span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .home-card .hc-muted { color: #6c757d; font-size: .78rem; }
+        .home-card .hc-badge { align-self: flex-start; font-size: .72rem; font-weight: 600; border-radius: 999px;
+                               padding: .1rem .55rem; background: #ebf4ff; color: #2b6cb0; }
+        .home-card .hc-badge.tie { background: #fff4e5; color: #b45309; }
+        .home-card .hc-rank { font-size: .8rem; font-weight: 700; color: #2b6cb0; }
+        .home-card .bar-label-link, .home-card .place-link { color: inherit; }
+        .home-bars { display: flex; align-items: flex-end; gap: .6rem; height: 7rem; margin-top: .4rem; }
+        .home-bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+                         height: 100%; font-size: .72rem; color: #6c757d; }
+        .home-bars i { display: block; width: 100%; background: #2b6cb0; border-radius: 4px 4px 0 0; margin: .15rem 0; }
+        .home-bars b { color: #1a365d; font-size: .8rem; }
         .sidebar-brand h5 {
             margin: 0;
             font-weight: 700;
@@ -674,15 +716,18 @@
 
 <!-- Sidebar -->
 <nav class="sidebar">
-    <div class="sidebar-brand">
+    <a href="/" class="sidebar-brand" id="homeBrand" title="Početna stranica">
         <h5><i class="bi bi-bar-chart-fill me-2"></i>Projekt Izbori</h5>
         <small>Hrvatski izborni podaci</small>
-    </div>
+    </a>
 
     <div class="sidebar-section">
         <div class="sidebar-section-title">Pretraživanje</div>
         <ul class="sidebar-nav">
-            <li><a href="#" data-module="person" class="active">
+            <li><a href="#" data-module="home" class="active">
+                <i class="bi bi-stars"></i> Početna
+            </a></li>
+            <li><a href="#" data-module="person">
                 <i class="bi bi-person"></i> Političar
             </a></li>
             <li>
@@ -740,12 +785,32 @@
 <!-- Main content -->
 <div class="main-content">
     <div class="top-bar">
-        <h4 id="moduleTitle"><i class="bi bi-person me-2"></i>Političar</h4>
+        <h4 id="moduleTitle"><i class="bi bi-stars me-2"></i>Početna</h4>
     </div>
 
     <div class="content-area">
+        <!-- Home module: headline numbers and sliders of highlights (/api/home) -->
+        <div id="module-home" class="module-panel active">
+            <div class="home-hero mb-4">
+                <h2 class="fw-bold mb-1">Hrvatski izbori od 1990. do danas</h2>
+                <p class="mb-3">Rezultati predsjedničkih, parlamentarnih, europskih i lokalnih izbora na jednom mjestu:
+                    svaki političar, svako mjesto i svako biračko mjesto.</p>
+                <div class="home-stats" id="homeStats"></div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a href="#" class="btn btn-light btn-sm home-go" data-go="person"><i class="bi bi-person me-1"></i>Pretraži političara</a>
+                    <a href="#" class="btn btn-light btn-sm home-go" data-go="place"><i class="bi bi-house-door me-1"></i>Pronađi svoje mjesto</a>
+                    <a href="#" class="btn btn-light btn-sm home-go" data-go="sabor-analysis"><i class="bi bi-bank me-1"></i>Sabor</a>
+                    <a href="#" class="btn btn-light btn-sm home-go" data-go="analytics-turnout"><i class="bi bi-graph-up me-1"></i>Izlaznost</a>
+                </div>
+            </div>
+            <div class="spinner-wrapper" id="homeSpinner">
+                <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Učitavanje...</span></div>
+            </div>
+            <div id="homeSections"></div>
+        </div>
+
         <!-- Person module -->
-        <div id="module-person" class="module-panel active">
+        <div id="module-person" class="module-panel">
             <div class="card search-card p-4 mb-4">
                 <div class="position-relative">
                     <div class="input-group input-group-lg">
@@ -1333,6 +1398,7 @@ const modulePanels = document.querySelectorAll('.module-panel');
 const moduleTitle = document.getElementById('moduleTitle');
 
 const moduleTitles = {
+    home: '<i class="bi bi-stars me-2"></i>Početna',
     person: '<i class="bi bi-person me-2"></i>Političar',
     station: '<i class="bi bi-geo-alt me-2"></i>Prema lokaciji',
     place: '<i class="bi bi-house-door me-2"></i>Općine i gradovi',
@@ -1350,6 +1416,7 @@ const stationSubnav = document.getElementById('stationSubnav');
 // pretty URL slugs (used in the address bar). Keep in sync with SPA_ROUTES in
 // app.py — if a module isn't here, the URL falls back to "/".
 const MODULE_SLUGS = {
+    'home': '',                 // the home page is "/"
     'person': 'politicar',
     'station': 'prema-lokaciji',
     'place': 'mjesto',
@@ -1386,6 +1453,7 @@ function activateModule(mod, opts) {
 
     if (moduleTitles[mod]) moduleTitle.innerHTML = moduleTitles[mod];
 
+    if (mod === 'home') initHome();
     if (mod === 'place') initPlaceModule();
     if (mod === 'analytics-turnout') initIzlaznost();
     if (mod === 'sabor-analysis') initSaborAnalysis();
@@ -1412,6 +1480,18 @@ sidebarLinks.forEach(link => {
         e.preventDefault();
         activateModule(link.dataset.module, { pushState: true });
     });
+});
+// "Projekt Izbori" in the sidebar, and the home page's shortcut buttons.
+document.getElementById('homeBrand').addEventListener('click', e => {
+    if (e.metaKey || e.ctrlKey) return;              // a new tab opens "/" itself
+    e.preventDefault();
+    activateModule('home', { pushState: true, focusInput: false });
+});
+document.addEventListener('click', e => {
+    const go = e.target.closest && e.target.closest('.home-go');
+    if (!go) return;
+    e.preventDefault();
+    activateModule(go.dataset.go, { pushState: true });
 });
 
 // ---- Shareable links: /politicar/1952-jakov-vetma[/5-zoran-milanovic] ----
@@ -1456,6 +1536,139 @@ function copyPersonLink(id, name, btn) {
 }
 
 // ---- Općine i gradovi: one town's electoral history (/mjesto/439-klis) ----
+// ---- Home page: headline numbers + sliders of highlights (/api/home) ----
+let _homeData = null;
+async function initHome() {
+    if (_homeData) return;
+    const spinner = document.getElementById('homeSpinner');
+    spinner.classList.add('show');
+    try {
+        const res = await fetch('/api/home');
+        _homeData = await res.json();
+        renderHome(_homeData);
+    } catch (err) {
+        document.getElementById('homeSections').innerHTML =
+            '<div class="alert alert-warning">Pregled trenutačno nije dostupan.</div>';
+    } finally {
+        spinner.classList.remove('show');
+    }
+}
+
+const homePct = v => (v ?? 0).toLocaleString('hr-HR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+const homeNum = v => (v ?? 0).toLocaleString('hr-HR');
+const homeVotes = v => `${homeNum(v)} ${v % 10 === 1 && v % 100 !== 11 ? 'glas' : ([2, 3, 4].includes(v % 10) && ![12, 13, 14].includes(v % 100) ? 'glasa' : 'glasova')}`;
+const homeRound = r => r.round > 1 ? ` · ${r.round}. krug` : '';
+
+function homeSection(id, title, subtitle, cards) {
+    if (!cards.length) return '';
+    return `<section class="home-section">
+        <div class="home-section-head">
+            <div><h5>${title}</h5>${subtitle ? `<small>${subtitle}</small>` : ''}</div>
+            <div class="home-arrows">
+                <button type="button" data-scroll="${id}" data-dir="-1" title="Natrag"><i class="bi bi-chevron-left"></i></button>
+                <button type="button" data-scroll="${id}" data-dir="1" title="Dalje"><i class="bi bi-chevron-right"></i></button>
+            </div>
+        </div>
+        <div class="home-track" id="${id}">${cards.join('')}</div>
+    </section>`;
+}
+
+function renderHome(d) {
+    const st = d.stats || {};
+    document.getElementById('homeStats').innerHTML = [
+        [`${st.first_year}.–${st.last_year}.`, 'razdoblje'],
+        [homeNum(st.elections), 'izbora'],
+        [homeNum(st.persons), 'kandidata i političara'],
+        [homeNum(st.candidacies), 'kandidatura'],
+        [homeNum(st.places), 'općina i gradova'],
+    ].map(([v, l]) => `<div class="home-stat"><b>${v}</b><span>${l}</span></div>`).join('');
+
+    const where = r => r.place_id ? placeLinkHtml(r.place_id, r.name) : escapeHtml(r.name || '');
+    const sections = [];
+
+    const streaks = d.streaks || { items: [] };
+    sections.push(homeSection('homeStreaks', `Na vlasti bez prekida od ${streaks.since}.`,
+        `${homeNum(streaks.count)} načelnika, gradonačelnika i župana pobijedilo je na svim neposrednim izborima od ${streaks.since}.`,
+        streaks.items.map(s => `<div class="home-card">
+            <div class="hc-kicker">${escapeHtml(s.office)}</div>
+            <div class="hc-title">${personLinkHtml(s.name, s.person_id)}</div>
+            <div>${s.place_id ? placeLinkHtml(s.place_id, s.place) : escapeHtml(s.place || '')}</div>
+            <span class="hc-badge">${s.wins} pobjeda zaredom</span>
+            <div class="hc-muted mt-auto">Zadnji izbori: ${homePct(s.share)}</div>
+        </div>`)));
+
+    sections.push(homeSection('homeClosest', 'Najtješnje utrke',
+        'Izbori za načelnika, gradonačelnika i župana odlučeni s najmanje glasova razlike.',
+        (d.closest || []).map(r => `<div class="home-card">
+            <div class="hc-kicker">${escapeHtml(r.office)} · ${r.year}.${homeRound(r)}</div>
+            <div class="hc-title">${where(r)}</div>
+            <span class="hc-badge${r.tie ? ' tie' : ''}">${r.tie ? 'Izjednačeno' : `Razlika: ${homeVotes(r.margin)}`}</span>
+            <div class="hc-row"><span>${personLinkHtml(r.first.name, r.first.person_id)}</span><span>${homeNum(r.first.votes)}</span></div>
+            <div class="hc-row"><span>${personLinkHtml(r.second.name, r.second.person_id)}</span><span>${homeNum(r.second.votes)}</span></div>
+        </div>`)));
+
+    sections.push(homeSection('homeLandslides', 'Najuvjerljivije pobjede',
+        'Najveći udio glasova u utrci s barem dva kandidata.',
+        (d.landslides || []).map(r => `<div class="home-card">
+            <div class="hc-kicker">${escapeHtml(r.office)} · ${r.year}.${homeRound(r)}</div>
+            <div class="hc-big">${homePct(r.share)}</div>
+            <div class="hc-title">${personLinkHtml(r.first.name, r.first.person_id)}</div>
+            <div>${where(r)}</div>
+            <div class="hc-muted mt-auto">${homeVotes(r.first.votes)} · ${r.candidates} kandidata</div>
+        </div>`)));
+
+    for (const [key, label] of [['sabor', 'Sabor'], ['eu', 'Europski parlament']]) {
+        const p = (d.preferences || {})[key];
+        if (!p) continue;
+        sections.push(homeSection(`homePref${key}`, `Najviše preferencijskih glasova — ${label} ${p.year}.`,
+            'Osobni glasovi koje su birači dali kandidatu unutar njegove liste.',
+            p.items.map((x, i) => `<div class="home-card">
+                <div class="hc-rank">#${i + 1}</div>
+                <div class="hc-title">${personLinkHtml(x.name, x.person_id)}</div>
+                <div class="hc-muted">${escapeHtml(x.list || '')}</div>
+                <div class="hc-big mt-auto">${homeNum(x.votes)}</div>
+            </div>`)));
+    }
+
+    sections.push(homeSection('homeCareers', 'Najduže izborne karijere',
+        'Političari koji su se kandidirali na najviše izbora.',
+        (d.careers || []).map(c => `<div class="home-card">
+            <div class="hc-title">${personLinkHtml(c.name, c.person_id)}</div>
+            <div class="hc-big">${c.elections}</div>
+            <div class="hc-muted">izbora, ${c.from}.–${c.to}.</div>
+            <div class="hc-muted mt-auto">${c.kinds > 1 ? `${c.kinds} vrste izbora` : 'jedna vrsta izbora'}</div>
+        </div>`)));
+
+    const t = d.turnout || { top: [] };
+    sections.push(homeSection('homeTurnout', `Najveća izlaznost — lokalni izbori ${t.year}.`,
+        'Općine i gradovi s najviše birača koji su glasali (vijeće, 1. krug; mjesta s barem 300 birača).',
+        t.top.map((x, i) => `<div class="home-card">
+            <div class="hc-rank">#${i + 1}</div>
+            <div class="hc-title">${placeLinkHtml(x.place_id, x.name)}</div>
+            <div class="hc-big">${homePct(x.pct)}</div>
+            <div class="hc-muted mt-auto">${homeNum(x.cast)} od ${homeNum(x.registered)} birača</div>
+        </div>`)));
+
+    const un = d.unopposed || [];
+    if (un.length) {
+        const max = Math.max(...un.map(u => u.count), 1);
+        sections.push(`<section class="home-section">
+            <div class="home-section-head"><div><h5>Sve više izbora bez protukandidata</h5>
+                <small>Utrke za načelnika, gradonačelnika i župana u kojima se kandidirala samo jedna osoba.</small></div></div>
+            <div class="home-card" style="max-width: 32rem;">
+                <div class="home-bars">${un.map(u => `<div><b>${u.count}</b><i style="height:${Math.round(u.count / max * 100)}%"></i>${u.year}.</div>`).join('')}</div>
+            </div>
+        </section>`);
+    }
+    document.getElementById('homeSections').innerHTML = sections.join('');
+}
+document.addEventListener('click', e => {
+    const btn = e.target.closest && e.target.closest('[data-scroll]');
+    if (!btn) return;
+    const track = document.getElementById(btn.dataset.scroll);
+    if (track) track.scrollBy({ left: Number(btn.dataset.dir) * track.clientWidth * 0.85 });
+});
+
 let _placeShown = null;            // {id, name} of the town on show
 let _placeInit = false;
 
@@ -1639,7 +1852,7 @@ function activateModuleFromUrl() {
         izlNavigateTo('sabor', ZUP_DOM_YEARS[0]);
         return;
     }
-    const mod = SLUG_TO_MODULE[slug] || 'person';
+    const mod = SLUG_TO_MODULE[slug] || 'home';
     activateModule(mod, { pushState: false, focusInput: false });
 }
 window.addEventListener('popstate', activateModuleFromUrl);
