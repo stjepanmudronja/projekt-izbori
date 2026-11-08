@@ -2527,6 +2527,7 @@ function renderStationWinnerChart(elections) {
         return {
             label: `${datePart}\n${typePart}`,
             name: winner.name,
+            holder: winner.holder ? winner.holder.name : null,     // 2001 / 2005 councils
             votes: winner.votes,
             votePct,
             electionType: el.election_type,
@@ -2619,6 +2620,7 @@ function renderStationWinnerChart(elections) {
                             return [
                                 `Pobjednik: ${nameLines[0]}`,
                                 ...nameLines.slice(1).map(l => `    ${l}`),
+                                ...(winners[i].holder ? [`Nositelj liste: ${winners[i].holder}`] : []),
                                 `Udio: ${formatPct(pctValues[i])}`,
                                 `Glasovi: ${winnerVotes[i].toLocaleString('hr-HR')}`,
                             ];
@@ -2701,6 +2703,13 @@ function renderStationResults(container, elections) {
         const turnoutPct = el.registered_voters > 0
             ? (el.ballots_cast / el.registered_voters) * 100
             : 0;
+        // 2001 / 2005 councils name no executive, only each list's leader.
+        const top = !(el.top_candidates && el.top_candidates.length) && el.top_lists && el.top_lists[0];
+        const holderLine = top && top.holder ? `
+            <div class="mt-2" style="font-size:0.85rem;">
+                <i class="bi bi-person-badge me-1"></i>Nositelj liste s najviše glasova: <strong>${personLinkHtml(top.holder.name, top.holder.person_id)}</strong>
+                <div class="text-muted fst-italic" style="font-size:0.8rem;">* ${LIST_HOLDER_NOTE}</div>
+            </div>` : '';
 
         return `
         <div class="card result-card mb-3 p-3">
@@ -2727,6 +2736,7 @@ function renderStationResults(container, elections) {
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Poništi
                 </button>
             </div>
+            ${holderLine}
         </div>`;
     }).join('');
 

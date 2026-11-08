@@ -1575,6 +1575,22 @@ def location_results():
             .all()
         )
 
+        # 2001 / 2005 councils: each list's nositelj in this place (see
+        # ListHolder), where the place has exactly one for that list. A
+        # county view adds up many towns' councils, where no one leads; its
+        # own assembly is the one body it can name a leader for.
+        holders = {}
+        one_body = bool(station_id or municipality_id) or etype.slug == 'local_county_assembly'
+        for name, first, last, pid in [] if not one_body else (
+                db.session.query(ElectoralList.name, Person.first_name, Person.last_name, Person.id)
+                .join(ListHolder, ListHolder.electoral_list_id == ElectoralList.id)
+                .join(Person, Person.id == ListHolder.person_id)
+                .filter(ElectoralList.election_round_id == er.id,
+                        ListHolder.municipality_id.in_(
+                            db.session.query(PollingStation.municipality_id)
+                            .filter(PollingStation.id.in_(station_ids))))):
+            holders.setdefault(name, []).append({'name': f'{first} {last}', 'person_id': pid})
+
         elections.append({
             'election': election.name or f'{etype.name} {election.year}',
             'election_type': etype.name,
@@ -1586,7 +1602,8 @@ def location_results():
             'valid_ballots': td.valid_ballots,
             'invalid_ballots': td.invalid_ballots,
             'top_lists': [
-                {'name': name, 'votes': votes}
+                {'name': name, 'votes': votes,
+                 'holder': holders[name][0] if len(holders.get(name, [])) == 1 else None}
                 for name, votes in all_lists
             ],
             'top_candidates': [
