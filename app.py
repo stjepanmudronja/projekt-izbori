@@ -212,7 +212,7 @@ def index():
 SPA_ROUTES = {
     'politicar', 'stranka', 'prema-lokaciji', 'usporedba',
     'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
-    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta',
+    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto',
 }
 
 
@@ -1039,9 +1039,12 @@ def person_offices(results):
     unbroken run of wins up to the last one. From election results only:
     resignations, replacements and a mandate put on hold are not known."""
     wins = {}          # (title, place, slug) -> set of years
+    place_ids = {}     # (title, place, slug) -> municipality id, for its page
 
-    def add(title, place, slug, year):
+    def add(title, place, slug, year, place_id=None):
         wins.setdefault((title, place, slug), set()).add(year)
+        if place_id:
+            place_ids[(title, place, slug)] = place_id
 
     races = {}         # executive / presidential: election -> its last-round row
     for r in results:
@@ -1072,7 +1075,7 @@ def person_offices(results):
             if not r.get('municipality_id') or _later_round(r['_election_id'], r['round'], muni_id=r['municipality_id']):
                 continue
             muni = Municipality.query.get(r['municipality_id'])
-            add(EXEC_OFFICES[slug], muni.name if muni else None, slug, r['year'])
+            add(EXEC_OFFICES[slug], muni.name if muni else None, slug, r['year'], muni.id if muni else None)
 
     if not wins:
         return []
@@ -1091,7 +1094,8 @@ def person_offices(results):
         # The 1990 chambers, the Županijski dom and the 1990s wards are gone:
         # winning their last election is not holding office now.
         still_elected = slug in EXEC_OFFICES or slug in ('sabor', 'eu_parliament', 'presidential')
-        offices.append({'title': title, 'place': place, 'years': held, 'since': since,
+        offices.append({'title': title, 'place': place, 'place_id': place_ids.get((title, place, slug)),
+                        'years': held, 'since': since,
                         'current': still_elected and bool(record) and held[-1] == record[-1]})
     offices.sort(key=lambda o: (not o['current'], -o['years'][-1], o['title']))
     return offices
@@ -1563,6 +1567,164 @@ def stations_by_street(municipality_id):
     return jsonify(_place_options(PollingStation.query.filter(
         PollingStation.municipality_id.in_(town_muni_ids(municipality_id)),
         PollingStation.address == street).all()))
+
+
+PLACE_EXEC_TYPES = {'Načelnik', 'Gradonačelnik'}
+PLACE_COUNCIL_TYPES = {'Općinsko vijeće', 'Gradsko vijeće', 'Kotarska skupština'}
+_PROFILE_CACHE = {}     # muni id -> (time, payload); ten minutes, as _town_places
+
+
+@app.route('/api/place/<int:muni_id>')
+def place_profile(muni_id):
+    hit = _PROFILE_CACHE.get(muni_id)
+    if hit and time.time() - hit[0] < 600:
+        return jsonify(hit[1])
+    payload = _place_profile(muni_id)
+    if isinstance(payload, tuple):           # an error response
+        return payload
+    _PROFILE_CACHE[muni_id] = (time.time(), payload)
+    return jsonify(payload)
+
+
+def _place_profile(muni_id):
+    """One town's electoral history for the municipality page (an error
+    response tuple when there is none): every round
+    held there (turnout and who came first), the načelnik / gradonačelnik
+    each election returned — before 2009, when the council chose one, the
+    leader of the list with the most votes instead, marked as such — the
+    council's leading lists, and who holds office now by the latest result.
+    Covers the whole town (`town_muni_ids`: Grad Zagreb with its Sabor-only
+    units)."""
+    muni = Municipality.query.get(muni_id)
+    if not muni:
+        return jsonify({'error': 'To mjesto ne postoji.'}), 404
+    munis = town_muni_ids(muni_id)
+    station_ids = db.session.query(PollingStation.id).filter(PollingStation.municipality_id.in_(munis))
+    if not station_ids.first():
+        return jsonify({'error': 'Nema rezultata za ovo mjesto.'}), 404
+
+    rounds = (
+        db.session.query(
+            ElectionRound.id.label('er_id'),
+            db.func.sum(TurnoutData.registered_voters).label('registered'),
+            db.func.sum(TurnoutData.ballots_cast).label('cast'),
+            db.func.sum(TurnoutData.valid_ballots).label('valid'),
+        )
+        .join(ElectionRound, TurnoutData.election_round_id == ElectionRound.id)
+        .join(Election, ElectionRound.election_id == Election.id)
+        .filter(TurnoutData.polling_station_id.in_(station_ids))
+        .group_by(ElectionRound.id)
+        .order_by(db.func.min(Election.year).desc(), db.func.min(Election.date).desc().nullslast(),
+                  db.func.min(ElectionRound.round_number).desc())
+        .all()
+    )
+    # Council list leaders in this town, by (round, list name).
+    holders = {}
+    for er_id, name, pid, first, last in (
+            db.session.query(ElectoralList.election_round_id, ElectoralList.name,
+                             Person.id, Person.first_name, Person.last_name)
+            .join(ListHolder, ListHolder.electoral_list_id == ElectoralList.id)
+            .join(Person, Person.id == ListHolder.person_id)
+            .filter(ListHolder.municipality_id.in_(munis))):
+        holders[(er_id, name)] = {'name': f'{first} {last}', 'person_id': pid}
+
+    # Every round's candidate and list totals in two grouped queries (one per
+    # round took half a minute for Grad Zagreb's thousand-odd stations).
+    round_ids = [td.er_id for td in rounds]
+    cands_by_round, lists_by_round = {}, {}
+    for rid, pid, first, last, votes in (
+            db.session.query(ElectoralList.election_round_id, Person.id, Person.first_name,
+                             Person.last_name, db.func.sum(CandidateResult.votes))
+            .select_from(CandidateResult)
+            .join(Candidacy, Candidacy.id == CandidateResult.candidacy_id)
+            .join(Person, Person.id == Candidacy.person_id)
+            .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+            .filter(CandidateResult.polling_station_id.in_(station_ids),
+                    ElectoralList.election_round_id.in_(round_ids))
+            .group_by(ElectoralList.election_round_id, Person.id, Person.first_name, Person.last_name)):
+        cands_by_round.setdefault(rid, []).append(
+            type('C', (), {'id': pid, 'first_name': first, 'last_name': last, 'votes': votes}))
+    for rid, name, votes in (
+            db.session.query(ElectoralList.election_round_id, ElectoralList.name, db.func.sum(ListResult.votes))
+            .select_from(ListResult)
+            .join(ElectoralList, ElectoralList.id == ListResult.electoral_list_id)
+            .filter(ListResult.polling_station_id.in_(station_ids),
+                    ElectoralList.election_round_id.in_(round_ids))
+            .group_by(ElectoralList.election_round_id, ElectoralList.name)):
+        lists_by_round.setdefault(rid, []).append(type('L', (), {'name': name, 'votes': votes}))
+    round_objs = {er.id: er for er in ElectionRound.query.filter(ElectionRound.id.in_(round_ids))}
+
+    elections = []
+    for td in rounds:
+        er = round_objs[td.er_id]
+        election, etype = er.election, er.election.election_type
+        cands = sorted(cands_by_round.get(er.id, []), key=lambda c: -int(c.votes or 0))[:3]
+        lists = sorted(lists_by_round.get(er.id, []), key=lambda l: -int(l.votes or 0))[:3]
+        valid = int(td.valid or 0)
+        share = lambda v: round(int(v or 0) / valid * 100, 1) if valid else None
+        exec_race = etype.name in PLACE_EXEC_TYPES
+        # A head-to-head race is won by a person; a list race by a list.
+        if cands and (exec_race or etype.slug in ('presidential',) or not lists or etype.name in SABOR_1990_TYPE_NAMES):
+            top = cands[0]
+            winner = {'name': f'{top.first_name} {top.last_name}', 'person_id': top.id,
+                      'votes': int(top.votes or 0), 'share': share(top.votes)}
+        elif lists:
+            winner = {'name': lists[0].name, 'person_id': None,
+                      'votes': int(lists[0].votes or 0), 'share': share(lists[0].votes)}
+        else:
+            winner = None
+        elections.append({
+            'election_type': etype.name, 'slug': etype.slug, 'year': election.year,
+            'date': round_date_iso(er, election), 'round': er.round_number,
+            'registered': int(td.registered or 0), 'cast': int(td.cast or 0), 'valid': valid,
+            'turnout_pct': round(int(td.cast or 0) / int(td.registered) * 100, 1) if td.registered else None,
+            'winner': winner,
+            'lists': [{'name': l.name, 'votes': int(l.votes or 0), 'share': share(l.votes),
+                       'holder': holders.get((er.id, l.name))} for l in lists],
+            '_er_id': er.id, '_election_id': election.id,
+        })
+
+    # Who each election made načelnik: the top of its last round here.
+    last_round = {}
+    for e in elections:
+        if e['election_type'] in PLACE_EXEC_TYPES and e['winner']:
+            if e['_election_id'] not in last_round or e['round'] > last_round[e['_election_id']]['round']:
+                last_round[e['_election_id']] = e
+    executives = [{'year': e['year'], 'date': e['date'], 'office': e['election_type'], 'round': e['round'],
+                   'name': e['winner']['name'], 'person_id': e['winner']['person_id'],
+                   'votes': e['winner']['votes'], 'share': e['winner']['share'], 'basis': 'izbori'}
+                  for e in last_round.values()]
+    elected_years = {x['year'] for x in executives}
+    # Before 2009 the council chose; the leading list's holder is all the result says.
+    for e in elections:
+        if (e['election_type'] in PLACE_COUNCIL_TYPES and e['year'] < 2009 and e['year'] not in elected_years
+                and e['lists'] and e['lists'][0]['holder']):
+            h = e['lists'][0]['holder']
+            executives.append({'year': e['year'], 'date': e['date'], 'office': None, 'round': None,
+                               'name': h['name'], 'person_id': h['person_id'], 'votes': e['lists'][0]['votes'],
+                               'share': e['lists'][0]['share'], 'basis': 'nositelj', 'list': e['lists'][0]['name']})
+    executives.sort(key=lambda x: -x['year'])
+
+    current = None
+    direct = [x for x in executives if x['basis'] == 'izbori']
+    if direct:
+        latest = direct[0]
+        since = latest['year']
+        for x in direct[1:]:
+            if x['person_id'] != latest['person_id']:
+                break
+            since = x['year']
+        current = {**latest, 'since': since}
+
+    councils = [e for e in elections if e['election_type'] in PLACE_COUNCIL_TYPES and e['round'] == 1]
+    for e in elections:
+        e.pop('_er_id', None)
+        e.pop('_election_id', None)
+    return {
+        'id': muni.id, 'name': muni.name, 'type': muni.type,
+        'county': muni.county.name if muni.county else None, 'county_id': muni.county_id,
+        'current': current, 'executives': executives, 'councils': councils, 'elections': elections,
+    }
 
 
 @app.route('/api/location-results')
@@ -3512,6 +3674,7 @@ def lokalni_station_results():
         'station_label': f'{station.number} — {station.location or station.name or ""}'.strip(' —') if station else None,
         'station_address': (station.address if station else '') or '',
         'municipality': muni.name if muni else None,
+        'municipality_id': muni.id if muni else None,
         'municipality_type': muni.type if muni else None,
         'county': county.name if county else '',
         'kind': kind,
