@@ -1553,9 +1553,36 @@ function rerenderCompareModule(type) {
             <h5 style="border-left:4px solid ${color}; padding-left:0.75rem;" class="fw-bold mb-3">
                 ${type === 'person' ? '<i class="bi bi-person-circle me-2"></i>' : '<i class="bi bi-people-fill me-2"></i>'}${item.name}
             </h5>
+            ${type === 'person' ? officesSummaryHtml(item.data.offices) : ''}
             ${renderFn(filtered)}
         </div>`;
     }).join('');
+}
+
+function mandateWord(n) {
+    return (n % 10 === 1 && n % 100 !== 11) ? 'mandat' : 'mandata';
+}
+
+// "Na dužnosti · Načelnik, KLIS · od 2013. · 4 mandata": the offices a
+// politician won, read off their results (see person_offices in app.py).
+function officesSummaryHtml(offices) {
+    if (!offices || offices.length === 0) return '';
+    const total = offices.reduce((n, o) => n + o.years.length, 0);
+    const rows = offices.map(o => {
+        const where = o.place ? `, ${escapeHtml(o.place)}` : '';
+        const when = o.current
+            ? `od ${o.since}.`
+            : o.years.map(y => `${y}.`).join(', ');
+        return `<div class="mb-1">
+            ${o.current ? '<span class="badge bg-success me-1">Na dužnosti</span>' : ''}<strong>${escapeHtml(o.title)}</strong>${where}
+            <span class="text-muted"> · ${when} · ${o.years.length} ${mandateWord(o.years.length)}</span>
+        </div>`;
+    }).join('');
+    return `<div class="card p-3 mb-3" style="background:#f8f9fb;">
+        <div class="fw-semibold mb-2" style="color:#0f3460;"><i class="bi bi-award me-1"></i>Dužnosti · izabran(a) ${total === 1 ? 'jednom' : `${total} puta`}</div>
+        ${rows}
+        <small class="text-muted fst-italic">Prema izbornim rezultatima; ostavke, zamjene i mirovanje mandata nisu uključeni.</small>
+    </div>`;
 }
 
 async function loadDetail(type, id) {

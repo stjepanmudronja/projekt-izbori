@@ -16,10 +16,11 @@ from .local_2001_parse import check, parse_dir
 # round. Five Virovitičko-podravska sections print every leader that way
 # ("KUMRIĆ ŽELJKO"); elsewhere a single name is. Each confirmed by the same
 # person standing first-name-first in that place in another year (Željko
-# Kumrić, Suhopolje nositelj 2005 and načelnik 2009; Ivica Lulić, Špišić
-# Bukovica načelnik 2009; Anđelko Novoselnik, Crnac načelnik 2009; Zdravko
-# Dijaković, Pitomača načelnik 2021; Vladimir Janečić, Voćin načelnik 2009;
-# Dušan Hrelja, Buje nositelj 2005), and in the rest by the order alone:
+# Kumrić, Suhopolje nositelj 2005 and načelnik candidate 2009; Ivica Lulić,
+# elected načelnik of Špišić Bukovica 2009; Anđelko Novoselnik, Crnac
+# načelnik candidate 2009; Zdravko Dijaković, Pitomača načelnik candidate
+# 2021; Vladimir Janečić, Voćin načelnik candidate 2009; Dušan Hrelja, Buje
+# nositelj 2005), and in the rest by the order alone:
 # a given name second ("RENGEL ĐURO", "VUKOVIĆ BOŽO", "PAVIŠIĆ SLAVKO").
 SURNAME_FIRST_SECTIONS = {'CRNAC', 'PITOMAČA', 'SUHOPOLJE', 'ŠPIŠIĆ BUKOVICA', 'VOĆIN'}
 SURNAME_FIRST_NAMES = {('BUJE - BUIE', 'HRELJA DUŠAN'), ('VRSAR - ORSERA', 'PAVIŠIĆ SLAVKO')}

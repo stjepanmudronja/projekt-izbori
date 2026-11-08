@@ -860,6 +860,8 @@ def person_detail(person_id):
             'lokalni_kind': lokalni_kind,
             'county_id': county_id,
             'municipality_id': muni_id,
+            '_election_id': election.id,
+            '_slug': etype.slug,
         })
 
     # Sabor convocations this person sat in without a candidacy to hang the
@@ -916,6 +918,8 @@ def person_detail(person_id):
             'lokalni_kind': None,
             'county_id': None,
             'municipality_id': None,
+            '_election_id': election.id,
+            '_slug': etype.slug,
         })
     # Council lists this person led (2001-2009): no personal vote, so the
     # row carries the list's result in that municipality and its place among
@@ -972,6 +976,10 @@ def person_detail(person_id):
         })
 
     results.sort(key=lambda r: (-(r['year'] or 0), r['date'] or '', -(r['round'] or 0)))
+    offices = person_offices(results)
+    for r in results:
+        r.pop('_election_id', None)
+        r.pop('_slug', None)
 
     return jsonify({
         'id': person.id,
@@ -979,7 +987,105 @@ def person_detail(person_id):
         'last_name': person.last_name,
         'label': person_labels([person]).get(person.id, ''),
         'results': results,
+        'offices': offices,
     })
+
+
+# Offices a result can win, by election type slug.
+EXEC_OFFICES = {'local_mayor': 'Načelnik', 'local_city_mayor': 'Gradonačelnik',
+                'local_county_prefect': 'Župan'}
+SEAT_OFFICES = {'sabor': 'Zastupnik u Saboru',
+                'sabor_zupanijski': 'Zastupnik u Županijskom domu Sabora',
+                'sabor_dpv': 'Zastupnik u Društveno-političkom vijeću Sabora',
+                'sabor_vo': 'Zastupnik u Vijeću općina Sabora',
+                'sabor_vur': 'Zastupnik u Vijeću udruženog rada Sabora',
+                'eu_parliament': 'Zastupnik u Europskom parlamentu'}
+WARD_OFFICES = {'local_council_ward': 'Vijećnik (izborna jedinica)',
+                'local_county_assembly_ward': 'Vijećnik županijske skupštine (izborna jedinica)'}
+
+
+def _later_round(election_id, round_no, muni_id=None, county_id=None):
+    """Whether the race went on past `round_no` in that place (a runoff,
+    or 2021's repeat in Kraljevec na Sutli)."""
+    q = (db.session.query(CandidateResult.id)
+         .join(Candidacy, Candidacy.id == CandidateResult.candidacy_id)
+         .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+         .join(ElectionRound, ElectionRound.id == ElectoralList.election_round_id)
+         .join(PollingStation, PollingStation.id == CandidateResult.polling_station_id)
+         .filter(ElectionRound.election_id == election_id, ElectionRound.round_number > round_no))
+    if muni_id:
+        q = q.filter(PollingStation.municipality_id == muni_id)
+    elif county_id:
+        q = q.join(Municipality, Municipality.id == PollingStation.municipality_id) \
+             .filter(Municipality.county_id == county_id)
+    return q.first() is not None
+
+
+def person_offices(results):
+    """The offices a person won, by office and place, from their results:
+    načelnik / gradonačelnik / župan (first in the round that decided the
+    race), president (first in the last round), a Sabor, Županijski dom,
+    1990 chamber or EU seat, and a 1990s ward. `current` when the win was
+    the latest election of that kind on record; `since` is the first of the
+    unbroken run of wins up to the last one. From election results only:
+    resignations, replacements and a mandate put on hold are not known."""
+    wins = {}          # (title, place, slug) -> set of years
+
+    def add(title, place, slug, year):
+        wins.setdefault((title, place, slug), set()).add(year)
+
+    races = {}         # executive / presidential: election -> its last-round row
+    for r in results:
+        slug = r.get('_slug')
+        if slug in EXEC_OFFICES or slug == 'presidential':
+            key = (r['_election_id'], r.get('municipality_id') if slug != 'local_county_prefect' else r.get('county_id'))
+            if key not in races or r['round'] > races[key]['round']:
+                races[key] = r
+        elif slug in SEAT_OFFICES and (r.get('won_seat') or r.get('eu_mep')):
+            if slug != 'eu_parliament' or r.get('eu_mep'):
+                add(SEAT_OFFICES[slug], None, slug, r['year'])
+        elif slug in WARD_OFFICES and r.get('rank') == 1:
+            add(WARD_OFFICES[slug], (r.get('district') or '').split(',')[0] or None, slug, r['year'])
+    for r in races.values():
+        if r.get('rank') != 1:
+            continue
+        slug = r['_slug']
+        if slug == 'presidential':
+            if not _later_round(r['_election_id'], r['round']):
+                add('Predsjednik Republike', None, slug, r['year'])
+            continue
+        if slug == 'local_county_prefect':
+            if not r.get('county_id') or _later_round(r['_election_id'], r['round'], county_id=r['county_id']):
+                continue
+            county = County.query.get(r['county_id'])
+            add(EXEC_OFFICES[slug], county.name if county else None, slug, r['year'])
+        else:
+            if not r.get('municipality_id') or _later_round(r['_election_id'], r['round'], muni_id=r['municipality_id']):
+                continue
+            muni = Municipality.query.get(r['municipality_id'])
+            add(EXEC_OFFICES[slug], muni.name if muni else None, slug, r['year'])
+
+    if not wins:
+        return []
+    years_by_slug = {}
+    for slug, year in (db.session.query(ElectionType.slug, Election.year)
+                       .join(Election, Election.election_type_id == ElectionType.id)
+                       .filter(ElectionType.slug.in_({k[2] for k in wins})).distinct()):
+        years_by_slug.setdefault(slug, set()).add(year)
+    offices = []
+    for (title, place, slug), years in wins.items():
+        held = sorted(years)
+        record = sorted(years_by_slug.get(slug, set()))
+        since = held[-1]
+        while since in record and record.index(since) > 0 and record[record.index(since) - 1] in years:
+            since = record[record.index(since) - 1]
+        # The 1990 chambers, the Županijski dom and the 1990s wards are gone:
+        # winning their last election is not holding office now.
+        still_elected = slug in EXEC_OFFICES or slug in ('sabor', 'eu_parliament', 'presidential')
+        offices.append({'title': title, 'place': place, 'years': held, 'since': since,
+                        'current': still_elected and bool(record) and held[-1] == record[-1]})
+    offices.sort(key=lambda o: (not o['current'], -o['years'][-1], o['title']))
+    return offices
 
 
 @app.route('/api/party/<path:name>')
