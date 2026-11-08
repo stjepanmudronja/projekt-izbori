@@ -1383,7 +1383,8 @@ function activateModule(mod, opts) {
 
     if (opts.pushState) {
         const slug = MODULE_SLUGS[mod];
-        const path = slug ? `/${slug}` : '/';
+        // Back on Političar with politicians still on show: their link.
+        const path = mod === 'person' ? personPath(_compareItems.person) : (slug ? `/${slug}` : '/');
         if (window.location.pathname !== path) {
             history.pushState({ mod }, '', path);
         }
@@ -1398,8 +1399,56 @@ sidebarLinks.forEach(link => {
     });
 });
 
+// ---- Shareable links: /politicar/1952-jakov-vetma[/5-zoran-milanovic] ----
+function urlSlug(s) {
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[Đđ]/g, 'd')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function personPath(items) {
+    return items.length ? '/politicar/' + items.map(it => `${it.id}-${urlSlug(it.name)}`).join('/') : '/politicar';
+}
+let _restoringUrl = null;     // the path being restored, while it loads
+// Put the politicians on show in the address bar, so the page can be
+// bookmarked or sent. Not while a link is being restored.
+function syncPersonUrl() {
+    if (_restoringUrl) return;
+    const panel = document.getElementById('module-person');
+    if (!panel || !panel.classList.contains('active')) return;
+    const path = personPath(_compareItems.person);
+    if (window.location.pathname !== path) history.pushState({ mod: 'person' }, '', path);
+}
+async function restorePersonsFromUrl(segments) {
+    const ids = segments.map(s => parseInt(s, 10)).filter(n => n > 0);
+    const path = window.location.pathname;
+    const shown = _compareItems.person.map(it => it.id);
+    if (_restoringUrl === path || (ids.length === shown.length && ids.every((id, i) => id === shown[i]))) return;
+    _restoringUrl = path;
+    try {
+        _compareItems.person = [];
+        renderCompareTags('person');
+        rerenderCompareModule('person');
+        for (const id of ids) await loadDetail('person', id);
+    } finally {
+        _restoringUrl = null;
+    }
+}
+function copyPersonLink(id, name, btn) {
+    const url = window.location.origin + personPath([{ id, name }]);
+    navigator.clipboard.writeText(url).then(() => {
+        btn.innerHTML = '<i class="bi bi-check2"></i>';
+        setTimeout(() => { btn.innerHTML = '<i class="bi bi-link-45deg"></i>'; }, 1500);
+    });
+}
+
 // Restore the active tab from the URL on first paint and on back/forward.
 function activateModuleFromUrl() {
+    const parts = (window.location.pathname || '/').split('/').filter(Boolean);
+    // /politicar alone (back from a politician's link) shows none.
+    if (parts[0] === 'politicar') {
+        activateModule('person', { pushState: false, focusInput: false });
+        restorePersonsFromUrl(parts.slice(1));
+        return;
+    }
     const slug = (window.location.pathname || '/').replace(/^\//, '').replace(/\/$/, '');
     // The upper house lost its own sidebar tab once the Sabor year picker
     // offered 1997; the URL still resolves, to that year of that module.
@@ -1520,6 +1569,7 @@ function removeCompareItem(type, id) {
     _compareItems[type] = _compareItems[type].filter(it => it.id !== id);
     renderCompareTags(type);
     rerenderCompareModule(type);
+    if (type === 'person') syncPersonUrl();
 }
 
 function clearCompareList(type) {
@@ -1527,6 +1577,7 @@ function clearCompareList(type) {
     renderCompareTags(type);
     const panel = getModulePanel(type);
     panel.querySelector('.detail-section').style.display = 'none';
+    if (type === 'person') syncPersonUrl();
 }
 
 function rerenderCompareModule(type) {
@@ -1552,6 +1603,7 @@ function rerenderCompareModule(type) {
         return `<div class="mb-4">
             <h5 style="border-left:4px solid ${color}; padding-left:0.75rem;" class="fw-bold mb-3">
                 ${type === 'person' ? '<i class="bi bi-person-circle me-2"></i>' : '<i class="bi bi-people-fill me-2"></i>'}${item.name}
+                ${type === 'person' ? `<button class="btn btn-sm btn-link text-muted p-0 ms-2 align-baseline" title="Kopiraj poveznicu na ovog političara" onclick="copyPersonLink(${item.id}, ${escapeHtml(JSON.stringify(item.name))}, this)"><i class="bi bi-link-45deg"></i></button>` : ''}
             </h5>
             ${type === 'person' ? officesSummaryHtml(item.data.offices) : ''}
             ${renderFn(filtered)}
@@ -1613,6 +1665,7 @@ async function loadDetail(type, id) {
 
     renderCompareTags(type);
     rerenderCompareModule(type);
+    if (type === 'person') syncPersonUrl();
 }
 
 // --- Cascading dropdown logic for Prema lokaciji ---
@@ -8272,7 +8325,8 @@ function personLinkHtml(name, personId) {
 }
 
 async function navigateToPerson(name, personId) {
-    if (!activateModule('person', { pushState: true, focusInput: false })) return;
+    // No history entry for the bare module: loadDetail pushes the person's own link.
+    if (!activateModule('person', { pushState: false, focusInput: false })) return;
     if (personId) {
         _compareItems.person = [];
         renderCompareTags('person');

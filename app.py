@@ -223,6 +223,15 @@ def spa_route(slug):
     return ('Not Found', 404)
 
 
+# Shareable links: /politicar/1952-jakov-vetma (more ids after further
+# slashes compare them) and /mjesto/439-klis. Only the leading number of each
+# segment counts; the name is there for people reading the link.
+@app.route('/politicar/<path:rest>')
+@app.route('/mjesto/<path:rest>')
+def spa_deep_link(rest):
+    return render_template('index.html')
+
+
 def person_labels(persons):
     """Person id -> the label that tells namesakes apart, for persons whose
     name another Person row shares (see `split_persons`).
