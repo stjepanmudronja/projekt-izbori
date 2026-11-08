@@ -264,6 +264,16 @@ KNOWN_DISTINCT = [
     ('FRANJO TUĐMAN', 'Luka, 1997.', [('local_council_ward', 1997, 2402)],  # Luka, ward II
      '1997: an HDZ candidate in a single-member ward of the Luka općinsko '
      'vijeće — a namesake, not the President, who stood for no local office'),
+    # 1993 ward candidates whose name OCR had fused with the party column
+    # ("Dragutin Tomljenović HDZ"): once cleaned they share a name with
+    # someone in the same round, which one person cannot.
+    ('DRAGUTIN TOMLJENOVIĆ', 'Primorsko-goranska, 1993.',
+     [('local_county_assembly_ward', 1993, 803)],  # Primorsko-goranska, ward III
+     '1993: HDZ for the Primorsko-goranska skupština while the HDZ Dragutin '
+     'Tomljenović stood for the Zagrebačka one (ward XVI) the same day'),
+    ('IVAN JUKIĆ', 'Starigrad, 1993.', [('local_council_ward', 1993, 31208)],  # Starigrad, ward VIII
+     '1993: HDZ for the Starigrad vijeće the same day an Ivan Jukić stood in '
+     'Slavonski Brod (HKDS, HNS) and another in Drenje (independent)'),
     # --- Confirmed by the data's owner: nothing in the data proves these,
     # someone who knows the person does.
     ('IGOR JURIŠIĆ', 'ORaH, 2015.', [('sabor', 2015, 10)],

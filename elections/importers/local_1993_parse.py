@@ -839,6 +839,34 @@ PARTY_CODES_1993 = PARTY_CODES | {'SDH', 'SSH', 'SDU', 'KNS', 'HRZ', 'HSNZ', 'DA
                                   'HKDS', 'HDS', 'SBHS', 'HSD', 'HČSP', 'IDS', 'DS', 'SRH'}
 
 
+def _is_party_code(word):
+    """A printed party code, as OCR reads it ("HDZ,", "HDz", "HD7")."""
+    if not word[:2].isupper():
+        return False                     # a surname is printed in title case
+    tok = re.sub(r'(?<=HD)7$', 'Z', word.strip(',.;').upper())
+    return tok in PARTY_CODES_1993
+
+
+def split_fused_party(name):
+    """A name whose row OCR fused with its party column, and maybe its count:
+    "Zlatko Prpić HSS i SDH 298" -> ("Zlatko Prpić", "HSS i SDH"). The party
+    column came out empty, so the codes would end up in the surname. Two
+    name words are always kept, and text that starts with a code is a party
+    label, not a name ("HSLS, SDP, HNS"), and is left alone."""
+    words = name.split()
+    if not words or _is_party_code(words[0]):
+        return name, ''
+    while words and re.fullmatch(r'\d[\d.]*', words[-1]):
+        words.pop()
+    party = []
+    # "і" is a Cyrillic i, which Vision reads now and then ("HSLS і HNS").
+    while len(words) > 2 and (_is_party_code(words[-1]) or (party and words[-1] in ('i', 'I', 'і', ','))):
+        party.insert(0, words.pop())
+    if not party:
+        return name, ''
+    return ' '.join(words), ' '.join(party)
+
+
 def _final_party(c):
     """The crop's party label if it reads as known parties, else the
     page's if that does; else the known party codes either reading holds
@@ -927,9 +955,17 @@ def parse_report(folder):
             notes += [f'{where}: {n}' for n in sec.get('notes', [])]
             for i, w in zip(ward_numbers(sec['wards']), sec['wards']):
                 w['number'] = i
-                w['winner_name'] = clean_person(w.get('winner_name') or '')
+                w['winner_name'] = split_fused_party(clean_person(w.get('winner_name') or ''))[0]
                 for c in w['candidates']:
-                    c['party'] = _final_party(c)
+                    c['name'], fused = split_fused_party(c['name'])
+                    if c.get('crop_name'):
+                        c['crop_name'] = split_fused_party(c['crop_name'])[0]
+                    party = _final_party(c)
+                    if not party and fused:
+                        # The party column held only noise; the codes were
+                        # fused into the name.
+                        party = _final_party({**c, 'party': fused, 'crop_party': None})
+                    c['party'] = party
                     # The straightened page reads rows reliably; a crop that
                     # names someone else caught its neighbours' noise (a
                     # winners-only crop spans the row: "TT 1 Stjepan
