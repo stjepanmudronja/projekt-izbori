@@ -210,7 +210,7 @@ def index():
 # Restricted to a known whitelist so we don't accidentally swallow /api/...
 # or static asset paths.
 SPA_ROUTES = {
-    'politicar', 'stranka', 'prema-lokaciji', 'usporedba',
+    'politicar', 'prema-lokaciji', 'usporedba',
     'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
     'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto',
 }
@@ -293,32 +293,6 @@ def search():
              'label': labels.get(p.id, '')}
             for p in persons
         ])
-    elif search_type == 'party':
-        # The elections_party table isn't populated — parties live as the
-        # first line / first comma-segment of ElectoralList.name. Derive
-        # distinct primary-party names from list names directly.
-        rows = (
-            db.session.query(ElectoralList.name)
-            .filter(ElectoralList.name.ilike(f'%{q}%'))
-            .all()
-        )
-        seen = set()
-        out = []
-        for (name,) in rows:
-            primary = (name or '').split('\n', 1)[0].split(',', 1)[0].strip()
-            if not primary or primary in seen:
-                continue
-            # Only keep ones that themselves match the query (so a coalition
-            # mentioning HDZ as a member doesn't surface when the user types
-            # the leader's name as their primary).
-            if q.lower() not in primary.lower():
-                continue
-            seen.add(primary)
-            out.append({'id': primary, 'name': primary})
-            if len(out) >= 20:
-                break
-        out.sort(key=lambda x: x['name'])
-        return jsonify(out)
     else:
         # Search polling stations by location + address, deduplicated
         stations = (
@@ -1099,108 +1073,6 @@ def person_offices(results):
                         'current': still_elected and bool(record) and held[-1] == record[-1]})
     offices.sort(key=lambda o: (not o['current'], -o['years'][-1], o['title']))
     return offices
-
-
-@app.route('/api/party/<path:name>')
-def party_detail_by_name(name):
-    """Aggregate results across every ElectoralList whose primary-party label
-    matches `name`. Used in place of the legacy id-based detail because the
-    elections_party table is empty — parties live inside list-name strings."""
-    target = (name or '').strip()
-    if not target:
-        return jsonify({'error': 'missing name'}), 400
-
-    lists = ElectoralList.query.filter(ElectoralList.name.ilike(f'%{target}%')).all()
-    matching = []
-    for el in lists:
-        primary = (el.name or '').split('\n', 1)[0].split(',', 1)[0].strip()
-        if primary == target:
-            matching.append(el)
-
-    results = []
-    for el in matching:
-        er = el.election_round
-        election = er.election if er else None
-        etype = election.election_type if election else None
-        total_votes = db.session.query(db.func.sum(ListResult.votes)).filter_by(
-            electoral_list_id=el.id
-        ).scalar() or 0
-        results.append({
-            'election': (election.name if election else None) or (
-                f"{etype.name if etype else ''} {election.year if election else ''}".strip()
-            ),
-            'election_type': etype.name if etype else '',
-            'year': election.year if election else None,
-            'date': round_date_iso(er, election),
-            'round': er.round_number if er else None,
-            'list_name': el.name,
-            'district': el.district.name if el.district else None,
-            'total_votes': int(total_votes),
-        })
-    results.sort(key=lambda r: ((r['year'] or 0) * -1, r['date'] or '', -(r['round'] or 0)))
-    return jsonify({
-        'id': target,
-        'name': target,
-        'short_name': None,
-        'results': results,
-    })
-
-
-@app.route('/api/party/<int:party_id>')
-def party_detail(party_id):
-    party = Party.query.get_or_404(party_id)
-
-    # Find all electoral lists associated with this party
-    list_party = db.Table(
-        'elections_electorallist_parties',
-        db.metadata,
-        db.Column('electorallist_id', db.Integer),
-        db.Column('party_id', db.Integer),
-        autoload_with=db.engine,
-    )
-
-    lists = (
-        ElectoralList.query
-        .join(list_party, ElectoralList.id == list_party.c.electorallist_id)
-        .filter(list_party.c.party_id == party_id)
-        .join(ElectionRound)
-        .join(Election)
-        .join(ElectionType)
-        .order_by(
-            Election.year.desc(),
-            Election.date.desc().nullslast(),
-            ElectionRound.round_number.desc(),
-        )
-        .all()
-    )
-
-    results = []
-    for el in lists:
-        er = el.election_round
-        election = er.election
-        etype = election.election_type
-
-        total_votes = db.session.query(
-            db.func.sum(ListResult.votes)
-        ).filter_by(electoral_list_id=el.id).scalar() or 0
-
-        results.append({
-            'election': election.name or f'{etype.name} {election.year}',
-            'election_type': etype.name,
-            'year': election.year,
-            'date': round_date_iso(er, election),
-            'round': er.round_number,
-            'list_name': el.name,
-            'district': el.district.name if el.district else None,
-            'total_votes': total_votes,
-        })
-
-    return jsonify({
-        'id': party.id,
-        'name': party.name,
-        'short_name': party.short_name,
-        'results': results,
-    })
 
 
 @app.route('/api/station/<int:station_id>')

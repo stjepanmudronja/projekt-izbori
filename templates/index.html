@@ -680,9 +680,6 @@
             <li><a href="#" data-module="person" class="active">
                 <i class="bi bi-person"></i> Političar
             </a></li>
-            <li><a href="#" data-module="party">
-                <i class="bi bi-people"></i> Stranka
-            </a></li>
             <li>
                 <a href="#" data-module="station">
                     <i class="bi bi-geo-alt"></i> Prema lokaciji
@@ -771,47 +768,6 @@
                     <small class="text-muted fw-semibold">Usporedba:</small>
                     <div class="tags-list d-flex flex-wrap gap-1" id="personTagsList"></div>
                     <button class="btn btn-sm btn-outline-danger ms-2" id="clearPersonTags" onclick="clearCompareList('person')">
-                        <i class="bi bi-x-lg me-1"></i>Očisti
-                    </button>
-                </div>
-            </div>
-            <div class="detail-section mt-4 mb-5" style="display:none;">
-                <div class="chart-card chart-container" style="display:none;">
-                    <canvas class="votes-chart"></canvas>
-                </div>
-                <div class="detail-results"></div>
-            </div>
-        </div>
-
-        <!-- Party module -->
-        <div id="module-party" class="module-panel">
-            <div class="card search-card p-4 mb-4">
-                <div class="position-relative">
-                    <div class="input-group input-group-lg">
-                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control search-input" data-type="party"
-                               placeholder="Upiši ime stranke..." autocomplete="off">
-                    </div>
-                    <div class="dropdown-results"></div>
-                </div>
-                <div class="d-flex flex-wrap gap-3 mt-3 election-filters" data-module="party">
-                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="eu" checked><label class="form-check-label">EU parlamentarni</label></div>
-                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="local" checked><label class="form-check-label">Lokalni izbori</label></div>
-                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="predsjednicki" checked><label class="form-check-label">Predsjednički</label></div>
-                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="sabor" checked><label class="form-check-label">Sabor</label></div>
-                    <div class="form-check"><input class="form-check-input filter-election" type="checkbox" value="round2" checked><label class="form-check-label">2. krug</label></div>
-                </div>
-            </div>
-            <div class="spinner-wrapper mt-4">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Učitavanje...</span>
-                </div>
-            </div>
-            <div class="selected-tags mb-3" id="partyTags" style="display:none;">
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <small class="text-muted fw-semibold">Usporedba:</small>
-                    <div class="tags-list d-flex flex-wrap gap-1" id="partyTagsList"></div>
-                    <button class="btn btn-sm btn-outline-danger ms-2" id="clearPartyTags" onclick="clearCompareList('party')">
                         <i class="bi bi-x-lg me-1"></i>Očisti
                     </button>
                 </div>
@@ -1373,7 +1329,6 @@ const moduleTitle = document.getElementById('moduleTitle');
 
 const moduleTitles = {
     person: '<i class="bi bi-person me-2"></i>Političar',
-    party: '<i class="bi bi-people me-2"></i>Stranka',
     station: '<i class="bi bi-geo-alt me-2"></i>Prema lokaciji',
     place: '<i class="bi bi-house-door me-2"></i>Općine i gradovi',
     compare: '<i class="bi bi-arrow-left-right me-2"></i>Usporedi biračka mjesta',
@@ -1391,7 +1346,6 @@ const stationSubnav = document.getElementById('stationSubnav');
 // app.py — if a module isn't here, the URL falls back to "/".
 const MODULE_SLUGS = {
     'person': 'politicar',
-    'party': 'stranka',
     'station': 'prema-lokaciji',
     'place': 'mjesto',
     'compare': 'usporedba',
@@ -1755,18 +1709,17 @@ function getModulePanel(type) {
     return document.getElementById(`module-${type}`);
 }
 
-// Compare lists for person and party modules
-const _compareItems = { person: [], party: [] };
+// Compare list for the person module
+const _compareItems = { person: [] };
 const compareLineColors = [
     'rgb(15, 52, 96)', 'rgb(220, 53, 69)', 'rgb(25, 135, 84)', 'rgb(255, 152, 0)',
     'rgb(156, 39, 176)', 'rgb(0, 188, 212)', 'rgb(121, 85, 72)', 'rgb(233, 30, 99)',
     'rgb(63, 81, 181)', 'rgb(76, 175, 80)',
 ];
-const compareMaxItems = { person: 10, party: 10 };
+const compareMaxItems = { person: 10 };
 
 function getCompareName(type, data) {
-    if (type === 'person') return `${data.first_name} ${data.last_name}${data.label ? ` (${data.label})` : ''}`;
-    return data.short_name || data.name;
+    return `${data.first_name} ${data.last_name}${data.label ? ` (${data.label})` : ''}`;
 }
 
 function renderCompareTags(type) {
@@ -1823,7 +1776,7 @@ function rerenderCompareModule(type) {
     detailResults.innerHTML = items.map((item, i) => {
         const color = compareLineColors[i % compareLineColors.length];
         const filtered = filterResults(item.data.results, type);
-        const renderFn = type === 'person' ? renderPersonResultsHTML : renderPartyResultsHTML;
+        const renderFn = renderPersonResultsHTML;
         return `<div class="mb-4">
             <h5 style="border-left:4px solid ${color}; padding-left:0.75rem;" class="fw-bold mb-3">
                 ${type === 'person' ? '<i class="bi bi-person-circle me-2"></i>' : '<i class="bi bi-people-fill me-2"></i>'}${item.name}
@@ -1871,7 +1824,7 @@ async function loadDetail(type, id) {
 
     spinner.classList.add('show');
 
-    const urls = { person: `/api/person/${id}`, party: `/api/party/${id}` };
+    const urls = { person: `/api/person/${id}` };
     const res = await fetch(urls[type]);
     const data = await res.json();
 
@@ -2082,7 +2035,6 @@ btnShowResults.addEventListener('click', loadLocationResults);
 // Stores raw data per module so checkboxes can re-render without re-fetching
 const _rawData = {
     person: null,   // { type: 'person', data: apiResponse }
-    party: null,    // { type: 'party', data: apiResponse }
     station: null,  // { elections: [...] }
     compare: null,  // handled via compareState
 };
@@ -2126,8 +2078,6 @@ function applyFilters(moduleName) {
         renderStationResults(detailResults, filtered);
     } else if (moduleName === 'person' && _compareItems.person.length > 0) {
         rerenderCompareModule('person');
-    } else if (moduleName === 'party' && _compareItems.party.length > 0) {
-        rerenderCompareModule('party');
     } else if (moduleName === 'compare') {
         renderComparisons();
     }
@@ -2599,36 +2549,6 @@ function renderPersonResultsHTML(results) {
     }).join('');
 }
 
-function renderPartyResultsHTML(results) {
-    if (results.length === 0) return '<p class="text-muted">Nema izbornih podataka.</p>';
-    return results.map(r => {
-        const cat = electionTypeToCategory(r.election_type);
-        const lokAttrs = cat === 'lokalni'
-            ? ` data-kind="${escapeHtml(r.lokalni_kind || '')}" data-county-id="${r.county_id || ''}" data-muni-id="${r.municipality_id || ''}"`
-            : '';
-        const linkAttrs = cat
-            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}"${lokAttrs} role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
-            : `class="result-badges"`;
-        return `
-            <div class="card result-card mb-3 p-3">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                    <div ${linkAttrs}>
-                        <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
-                        <span class="badge bg-dark badge-election">${r.year}</span>
-                        ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
-                    </div>
-                    <div class="text-end">
-                        ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <div class="fw-semibold">${r.list_name}</div>
-                    ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
-                </div>
-            </div>`;
-    }).join('');
-}
-
 function electionBadgeColor(type) {
     const colors = {
         'Predsjednički izbori': 'bg-danger',
@@ -2764,40 +2684,6 @@ function renderPersonResults(container, results) {
                 ${r.list_votes && r.list_votes !== r.candidate_votes && !r.list_holder ? `<small class="text-muted"><i class="bi bi-list-ul me-1"></i>Glasovi za listu: <strong>${formatNumber(r.list_votes)}</strong></small>` : ''}
             </div>
         </div>`;
-    }).join('');
-}
-
-function renderPartyResults(container, results) {
-    if (results.length === 0) {
-        container.innerHTML = '<p class="text-muted">Nema izbornih podataka.</p>';
-        return;
-    }
-
-    container.innerHTML = results.map(r => {
-        const cat = electionTypeToCategory(r.election_type);
-        const lokAttrs = cat === 'lokalni'
-            ? ` data-kind="${escapeHtml(r.lokalni_kind || '')}" data-county-id="${r.county_id || ''}" data-muni-id="${r.municipality_id || ''}"`
-            : '';
-        const linkAttrs = cat
-            ? `class="result-badges result-badges-link" data-cat="${cat}" data-year="${r.year}"${lokAttrs} role="button" tabindex="0" title="Otvori ${escapeHtml(r.election_type)} ${r.year}."`
-            : `class="result-badges"`;
-        return `
-            <div class="card result-card mb-3 p-3">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                    <div ${linkAttrs}>
-                        <span class="badge ${electionBadgeColor(r.election_type)} badge-election me-1">${r.election_type}</span>
-                        <span class="badge bg-dark badge-election">${r.year}</span>
-                        ${r.round > 1 ? `<span class="badge bg-warning text-dark badge-election">${r.round}. krug</span>` : ''}
-                    </div>
-                    <div class="text-end">
-                        ${r.total_votes ? `<div class="vote-number">${formatNumber(r.total_votes)}</div><small class="text-muted">glasova</small>` : ''}
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <div class="fw-semibold">${r.list_name}</div>
-                    ${r.district ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.district}</small>` : ''}
-                </div>
-            </div>`;
     }).join('');
 }
 
