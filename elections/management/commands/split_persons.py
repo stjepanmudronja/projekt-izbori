@@ -42,7 +42,9 @@ from elections.models import Candidacy, County, Municipality, ParliamentMember, 
 # district number or None, list-name prefix or None) and picks the candidacies
 # of that name that belong to the labelled person; the rest stay put. The
 # label is what tells the namesakes apart on screen: place and year where the
-# report gives one, else party and year.
+# report gives one, else party and year. An optional fifth field names the
+# carved-off person, where the namesake was only ever printed under a shorter
+# name and a curated alias in `merge_person_aliases` folded them in.
 KNOWN_DISTINCT = [
     # --- Two candidacies in one election round under different parties. A
     # person may stand on one list only, so each pair is two people; the
@@ -291,6 +293,11 @@ KNOWN_DISTINCT = [
      'Oroslavje'),
     # --- Confirmed by the data's owner: nothing in the data proves these,
     # someone who knows the person does.
+    ('IVAN VILIBOR SINČIĆ', 'Zagreb, 1993.', [('local_council_ward', 1993)],
+     'local_council_ward 1993: HSS candidate in a Grad Zagreb ward, printed '
+     '"Ivan Sinčić" and folded in by the IVAN SINČIĆ alias; Ivan Vilibor '
+     'Sinčić (Živi zid) was born in 1990',
+     'IVAN SINČIĆ'),
     ('IGOR JURIŠIĆ', 'ORaH, 2015.', [('sabor', 2015, 10)],
      'sabor 2015: ORaH #7 in X. IJ — confirmed not the načelnik of Vrbje '
      '(2009-2025)'),
@@ -328,20 +335,22 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
         self._label_birth_years(dry_run)
         moved = 0
-        for name, label, selectors, evidence in KNOWN_DISTINCT:
+        for name, label, selectors, evidence, *as_name in KNOWN_DISTINCT:
+            as_name = as_name[0] if as_name else name
             normalized = normalize_person_name(name)
             picked = [c for c in self._candidacies(normalized)
                       if any(self._matches(c, sel) for sel in selectors)
-                      and c.person.disambiguation != label]
+                      and (c.person.disambiguation != label
+                           or c.person.normalized_name != normalize_person_name(as_name))]
             if not picked:
                 if not dry_run:
                     self._drop_empty(normalized)
                 continue
-            self.stdout.write(f'  {name} -> "{label}": {len(picked)} candidacy(ies)\n     {evidence}')
+            self.stdout.write(f'  {name} -> {as_name} "{label}": {len(picked)} candidacy(ies)\n     {evidence}')
             for c in picked:
                 self.stdout.write(f'       {self._describe(c)}')
             if not dry_run:
-                self._move(normalized, label, picked)
+                self._move(normalized, label, picked, as_name)
             moved += len(picked)
 
         action = 'Would move' if dry_run else 'Moved'
@@ -396,7 +405,7 @@ class Command(BaseCommand):
         return prefix is None or el.name.upper().startswith(prefix.upper())
 
     @staticmethod
-    def _move(normalized, label, candidacies):
+    def _move(normalized, label, candidacies, as_name=None):
         """Repoint the candidacies, and the seats won with them, to the
         labelled namesake, creating it on first use.
 
@@ -406,9 +415,14 @@ class Command(BaseCommand):
         """
         source = candidacies[0].person
         with transaction.atomic():
+            if as_name:
+                first, last = parse_person_name(as_name)
+                defaults = {'first_name': first, 'last_name': last}
+            else:
+                defaults = {'first_name': source.first_name, 'last_name': source.last_name}
             target, _ = Person.objects.get_or_create(
-                normalized_name=normalized, disambiguation=label,
-                defaults={'first_name': source.first_name, 'last_name': source.last_name})
+                normalized_name=normalize_person_name(as_name) if as_name else normalized,
+                disambiguation=label, defaults=defaults)
             ids = [c.pk for c in candidacies]
             Candidacy.objects.filter(pk__in=ids).update(person=target)
             seats = ParliamentMember.objects.filter(candidacy_id__in=ids).exclude(person=target)
