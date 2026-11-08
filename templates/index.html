@@ -92,16 +92,21 @@
             flex-direction: column;
         }
         .main-content > .content-area { flex: 1 0 auto; }
+        /* Pinned to the bottom of the window, so the notice and source are
+           seen on every page without scrolling to the end of a long one. */
         .site-footer {
             margin-top: auto;
-            padding: 1rem 2rem;
+            position: sticky;
+            bottom: 0;
+            z-index: 900;   /* under dropdowns (1000) and modals */
+            padding: .4rem 2rem;
             border-top: 1px solid #e0e0e0;
-            background: white;
+            background: rgba(255, 255, 255, .97);
             color: #6c757d;
-            font-size: .8rem;
-            line-height: 1.5;
+            font-size: .75rem;
+            line-height: 1.4;
         }
-        .site-footer-note { color: #8a6d1d; margin-bottom: .25rem; }
+        .site-footer-note { color: #8a6d1d; }
         .site-footer a { color: inherit; text-decoration: underline; }
         .top-bar {
             background: white;
