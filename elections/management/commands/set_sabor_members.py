@@ -552,7 +552,7 @@ MEMBERS_BY_YEAR = {
         ('DUNJA ŠPOLJAR', 'SDP', False, ''),
         ('IVAN ŠUKER', 'HDZ', False, ''),
         ('NANSI TIRELI', 'Hrvatski laburisti - Stranka rada', False, ''),
-        ('RUŽA TOMAŠIĆ', 'HSP dr. Ante Starčević', False, 'mandat do 1. srpnja 2013. — odlazak u Europski parlament'),
+        ('RUŽA TOMAŠIĆ', 'HSP dr. Ante Starčević', False, 'mandat do 1. srpnja 2013. - odlazak u Europski parlament'),
         ('DAMIR TOMIĆ', 'SDP', False, ''),
         ('MIROSLAV TUĐMAN', 'HDZ', False, ''),
         ('NADA TURINA-ĐURIĆ', 'HNS', False, ''),

@@ -365,8 +365,8 @@ MINORITY_SEATS_BY_YEAR = {2000: 5}
 # assembly had single-member wards, stored as their own election types so
 # ward votes never add into a list total (see local_1997.py).
 LOKALNI_WARD_TYPES = {
-    'vijece_ij': 'Vijeće — izborne jedinice',
-    'zup_skupstina_ij': 'Županijska skupština — izborne jedinice',
+    'vijece_ij': 'Vijeće - izborne jedinice',
+    'zup_skupstina_ij': 'Županijska skupština - izborne jedinice',
 }
 
 # Elections whose per-station files give only the station's number, no name
@@ -2125,7 +2125,7 @@ def national_results(category, year):
             PollingStation.id.in_(station_place_ids(ps)))
         ps = PollingStation.query.get(station_id)
         if ps:
-            scope_label = f'{ps.number} — {ps.location or ps.name or ""}'.strip(' —')
+            scope_label = f'{ps.number} - {ps.location or ps.name or ""}'.strip(' -')
     elif muni_id:
         scope_station_ids = db.session.query(PollingStation.id).filter(
             PollingStation.municipality_id == muni_id
@@ -2722,7 +2722,7 @@ def _mixed_race(d, cands, winners, group_of, label=None, extra=None):
         key=lambda c: -c['votes'])
     reg, cast, inv = d.registered_voters or 0, d.ballots_cast or 0, d.invalid_ballots or 0
     out = {
-        'number': d.number, 'label': label or d.name.replace(' - ', ' — '),
+        'number': d.number, 'label': label or d.name,
         'registered': reg, 'cast': cast, 'invalid': inv, 'valid': cast - inv,
         'turnout_pct': round(cast / reg * 100, 2) if reg else 0,
         'candidates': rows,
@@ -2835,7 +2835,7 @@ def sabor_1995_results():
         'date': round_date_iso(er, election) if er else None,
         'total_seats': sum(len(v) for v in members.values()),
         'national': proportional(SABOR_1995_NATIONAL_DISTRICT, 'Državna lista'),
-        'diaspora': proportional(SABOR_1995_DIASPORA_DISTRICT, 'Posebne liste — dijaspora'),
+        'diaspora': proportional(SABOR_1995_DIASPORA_DISTRICT, 'Posebne liste - dijaspora'),
         'districts': single,
         'minorities': minorities,
         'parties': sorted(({'name': k, 'seats': v} for k, v in seat_tally.items()),
@@ -3101,7 +3101,7 @@ def sabor_1990_results(chamber, year):
             seat_tally[winner['group']] += 1
         name = d.name.split(' - ', 1)[1] if ' - ' in d.name else d.name
         units.append({'number': d.number, 'name': name,
-                      'label': f'{d.number}. izborna jedinica — {name}',
+                      'label': f'{d.number}. izborna jedinica - {name}',
                       'winner': winner, 'decided_in_round': len(out_rounds),
                       'rounds': out_rounds})
 
@@ -3255,7 +3255,7 @@ def eu_seats(year):
             PollingStation.id.in_(station_place_ids(ps)))
         ps = PollingStation.query.get(station_id)
         if ps:
-            scope_label = f'{ps.number} — {ps.location or ps.name or ""}'.strip(' —')
+            scope_label = f'{ps.number} - {ps.location or ps.name or ""}'.strip(' -')
     elif muni_id:
         scope_station_ids = db.session.query(PollingStation.id).filter(PollingStation.municipality_id == muni_id)
         m = Municipality.query.get(muni_id)
@@ -3654,7 +3654,7 @@ def lokalni_station_results():
         # Before 2009 mayors and župani were chosen by the councils, so 2005
         # has only vijeća and skupštine.
         if year and int(year) < 2009 and kind in ('nacelnik', 'zupan'):
-            return jsonify({'error': f'{type_name}: {year}. nije bilo neposrednih izbora — '
+            return jsonify({'error': f'{type_name}: {year}. nije bilo neposrednih izbora - '
                                      'načelnike, gradonačelnike i župane neposredno se bira od 2009. '
                                      'Nositelja liste s najviše glasova prikazuje '
                                      + ('Županijska skupština.' if kind == 'zupan' else 'Vijeće.')}), 404
@@ -3807,7 +3807,7 @@ def lokalni_station_results():
     return jsonify({
         'scope': scope_kind,
         'station_id': station_id,
-        'station_label': f'{station.number} — {station.location or station.name or ""}'.strip(' —') if station else None,
+        'station_label': f'{station.number} - {station.location or station.name or ""}'.strip(' -') if station else None,
         'station_address': (station.address if station else '') or '',
         'municipality': muni.name if muni else None,
         'municipality_id': muni.id if muni else None,
@@ -3957,7 +3957,7 @@ def analytics_elections():
     )
     for i, g in enumerate(result):
         g['id'] = f"{g['category']}-{g['year']}-{g['round_number']}"
-        round_suffix = f" — {g['round_number']}. krug" if g['round_number'] > 1 else ""
+        round_suffix = f" - {g['round_number']}. krug" if g['round_number'] > 1 else ""
         # Display only — filters are keyed on `id`, never the label.
         gap = INCOMPLETE_COVERAGE.get((g['category'], g['year']))
         g['coverage_note'] = gap
@@ -4134,7 +4134,7 @@ def analytics_turnout():
                 'year': g['year'], 'round_number': g['round_number'],
                 'rows': [{
                     'id': r[0],
-                    'name': f"{r[1]} — {r[3] or r[2] or ''}".strip(' —'),
+                    'name': f"{r[1]} - {r[3] or r[2] or ''}".strip(' -'),
                     'address': r[4] or '',
                     'registered': r[5] or 0, 'cast': r[6] or 0,
                     'valid': r[7] or 0, 'invalid': r[8] or 0,

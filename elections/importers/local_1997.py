@@ -28,8 +28,8 @@ from .local_1997_parse import ROMAN_OF, _tokens, choose_name, fold, parse_report
 from .name_utils import clean_candidate_name
 
 WARD_TYPES = {
-    'muni': ('local_council_ward', 'Vijeće — izborne jedinice'),
-    'county': ('local_county_assembly_ward', 'Županijska skupština — izborne jedinice'),
+    'muni': ('local_council_ward', 'Vijeće - izborne jedinice'),
+    'county': ('local_county_assembly_ward', 'Županijska skupština - izborne jedinice'),
 }
 
 
