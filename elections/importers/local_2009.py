@@ -84,10 +84,11 @@ class Local2009Importer(BaseImporter):
     year = YEAR
     text_glob = 'i_06_*.txt'
     display = DISPLAY
-    # Store each council list's nositelj liste (`ListHolder`): set for the
-    # years before 2009, when the body chose the executive and the leading
-    # list's holder is the nearest the result comes to naming one.
-    store_holders = False
+    # Store each council list's nositelj liste (`ListHolder`): the 2001,
+    # 2005 and 2009 reports print one for every list. Before 2009 the body
+    # chose the executive, and the leading list's holder is the nearest the
+    # result comes to naming one. The 1993 / 1997 scans are off (see there).
+    store_holders = True
 
     def _county_code(self, path):
         return path.stem.split('_')[2]
@@ -216,7 +217,7 @@ class Local2009Importer(BaseImporter):
         # lower case or with dots ("MILIVOJ DUJMOVIĆ dr.med.", "Prim. NINO
         # ŠIKIĆ", "ING.STROJARSTVA"); a father's name ("pok. ANTE"), a
         # nickname in brackets and "ML." are not the person's name either.
-        bare = re.sub(r'\s*\([^)]*\)|-?"[^"]*"|\bpok\.\s*\S+', ' ', name)
+        bare = re.sub(r'\s*\([^)]*\)|-?"[^"]*"|\bpok\.\s*\S+|\bzv\.\s*\S+', ' ', name, flags=re.I)  # "zv. VICKO"
         # A surname's stray dot goes ("LOŽAR. prof."); "DR.", "ML." and an
         # initial ("L.") are too short to be one and are dropped below.
         words = [w[:-1] if w.endswith('.') and len(w) > 4 else w for w in bare.split()]

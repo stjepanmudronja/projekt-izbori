@@ -54,7 +54,7 @@ class Candidacy(db.Model):
 
 
 class ListHolder(db.Model):
-    """Nositelj liste of a council list in one municipality (2001, 2005);
+    """Nositelj liste of a council list in one municipality (2001-2009);
     mirrors the Django model, see participants.py."""
     __tablename__ = 'elections_listholder'
     id = db.Column(db.Integer, primary_key=True)
@@ -917,7 +917,7 @@ def person_detail(person_id):
             'county_id': None,
             'municipality_id': None,
         })
-    # Council lists this person led (2001, 2005): no personal vote, so the
+    # Council lists this person led (2001-2009): no personal vote, so the
     # row carries the list's result in that municipality and its place among
     # the lists, never a rank or seat badge. Before 2009 the council chose
     # the executive; leading the first list did not make anyone načelnik.
@@ -1575,7 +1575,7 @@ def location_results():
             .all()
         )
 
-        # 2001 / 2005 councils: each list's nositelj in this place (see
+        # 2001-2009 councils: each list's nositelj in this place (see
         # ListHolder), where the place has exactly one for that list. A
         # county view adds up many towns' councils, where no one leads; its
         # own assembly is the one body it can name a leader for.
@@ -3298,7 +3298,7 @@ def lokalni_station_results():
     } for r in list_rows]
 
     # Before 2009 the council chose the executive, so the result names only
-    # each list's nositelj (2001, 2005). Council lists are shared across
+    # each list's nositelj (2001, 2005; 2009 too). Council lists are shared across
     # municipalities, so a leader is looked up within the scope's own.
     if is_county_kind:
         scope_munis = db.session.query(Municipality.id).filter(Municipality.county_id == county.id)

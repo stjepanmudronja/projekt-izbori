@@ -74,7 +74,7 @@ class ListHolder(models.Model):
     Council lists are shared by name across municipalities (one "HDZ" list
     per round), each with a different leader in each, hence a row per
     (list, municipality) rather than a field on the list. Seeded from DIP's
-    2001 and 2005 reports, which print a "Nositelj liste" for every list.
+    2001, 2005 and 2009 reports, which print a "Nositelj liste" for every list.
     `person` is protected: a command merging or deleting people must move
     these rows as it moves candidacies.
     """

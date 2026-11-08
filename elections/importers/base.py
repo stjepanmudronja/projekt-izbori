@@ -277,11 +277,13 @@ class BaseImporter:
     def get_or_create_candidacy(self, person, electoral_list, position):
         if self.remap is not None:
             return Candidacy(electoral_list=electoral_list, position_on_list=position)
-        # On a re-import the candidacy may already hang off a namesake that
-        # `split_persons` moved it to; keep it there rather than create a twin.
+        # A list's position holds one candidacy. On a re-import it may already
+        # hang off another row of the same person: a namesake `split_persons`
+        # moved it to, or the spelling `merge_person_aliases` merged it into
+        # ("MLADEN SEDAK BENČIĆ" in the file, "SEDAK-BENČIĆ" after the
+        # hyphen merge). Keep it there rather than collide with it.
         existing = Candidacy.objects.filter(
-            electoral_list=electoral_list, position_on_list=position,
-            person__normalized_name=person.normalized_name).first()
+            electoral_list=electoral_list, position_on_list=position).first()
         if existing:
             return existing
         obj, _ = Candidacy.objects.get_or_create(

@@ -41,6 +41,9 @@ FORMER_MUNICIPALITIES = {'TENJA': 'TENJA', 'MIRKOVCI': 'MIRKOVCI', 'ORLIĆ': 'OR
 class Local1997Importer(Local2009Importer):
 
     year = 1997
+    # The OCR'd scans name a holder only for independent lists, where it is
+    # already part of the list's name; no ListHolder rows (also for 1993).
+    store_holders = False
 
     def _municipality(self, county, unit):
         if unit in FORMER_MUNICIPALITIES:
