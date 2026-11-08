@@ -9,7 +9,11 @@ import unicodedata
 # election years.
 # NB: 'sci' precedes 'sc' so the longer spelling wins the alternation — 2003
 # writes "mr.sci. STIPE ČIZMIĆ" where other years write "mr.sc.".
-_TITLE_TOKENS = r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing|spec|oec|iur|med|sci|sc|akad|struc|struč)'
+# 'oecc' and 'akad' likewise precede 'oec' and 'ak' ("OECC. NADAN VIDOŠEVIĆ",
+# "AK. ŽELJKO BUJAS"); 'stom' and 'prim' are the dental and senior-physician
+# titles ("DR.STOM.", "prim. dr. med.").
+_TITLE_TOKENS = (r'(prof|doc|dr|mr|mag|dipl|univ|bacc|ing|spec|oecc|oec|iur|med|stom|prim'
+                 r'|sci|sc|akad|ak|art|struc|struč)')
 
 # A leading run of academic-title tokens, each either a title word followed by
 # a dot — run together ("prof.dr.sc.") or space-separated ("prof. dr. sc.") —
@@ -29,9 +33,65 @@ def _strip_titles(s):
     return re.sub(r',\s*' + _TITLE_TOKENS + r'\b.*$', '', s, flags=re.IGNORECASE)
 
 
+# One whitespace-separated token made only of dotted titles ("DR.MED.", "dr.").
+_TITLE_WORD_RE = re.compile(r'^(?:' + _TITLE_TOKENS + r'\.)+$', re.IGNORECASE)
+# Titles whose dot was lost: OCR of the 1993/1997 scans ("MED BRANKO FOTIVEC",
+# "ING LIVIO BOLKOVIĆ"), the 1990 report ("MR MIROSLAV KIRINČIĆ") and list
+# leaders ("DR BRUNO SAVRON"). Only ever leading, and only before a full name.
+_BARE_LEADING_TITLES = {'DR', 'MR', 'MED', 'ING', 'INŽ', 'OECC'}
+# A father's name telling namesakes apart ("IVICA KLANAC, sin IVE"):
+# `split_birth_year` makes it the person's label, so it must survive here.
+_PATRONYMIC_RE = re.compile(r'\s+(?:sin|kći)\s+\S+$', re.IGNORECASE)
+# "pok. Ivan" / "POK DARKA": a late father's name, not part of the person's.
+_LATE_FATHER_RE = re.compile(r'\s+pok\.?\s+\S+$', re.IGNORECASE)
+# A word of a name or a title: letters, with inner hyphens, apostrophes, dots,
+# and maybe the comma the 2013/2017 files put before an occupation
+# ("MILAN RODIĆ, magistar prava").
+_PLAIN_WORD_RE = re.compile(r"^[^\W\d_][^\W\d_.'-]*(?:[.'-][^\W\d_]*)*\.?,?$")
+
+
+def _strip_loose_titles(s):
+    """Remove titles and occupations written without the comma the trailing
+    rule needs, from a name printed in capitals.
+
+    The 2013/2017 lokalni files type occupations into the name column in
+    lowercase ("IVAN TRGOVEC magistar prava", "PERO VRŽOGIĆ prim. dr. med."),
+    the 1995 Sabor report appends titles in capitals ("BOŽIDAR ČOHAR DR.MED."),
+    and one ethnicity slipped in ("ROBERT RADOJKOVIĆ Talijan"). In a name
+    whose own words are all capitals, any leading or trailing word with a
+    lowercase letter is therefore not part of it; a dotted title word is
+    dropped at either end whatever the case. Names written in title case
+    ("Zlatko Prpić") only lose dotted title words.
+    """
+    patronymic = ''
+    m = _PATRONYMIC_RE.search(s)
+    if m:
+        s, patronymic = s[:m.start()], m.group(0)
+    s = _LATE_FATHER_RE.sub('', s)
+    words = s.split()
+    # Only a bare name: the cleaner also sees list labels ("Hrvatska stranka
+    # prava - HSP", "DAVOR FERENC (Nezavisni kandidat)"), which carry a dash,
+    # brackets, commas or digits and must come through untouched.
+    if not all(_PLAIN_WORD_RE.match(w) for w in words):
+        return s + patronymic
+    caps = [i for i, w in enumerate(words) if not any(c.islower() for c in w)
+            and not _TITLE_WORD_RE.match(w)]
+    in_caps = len(caps) >= 2 and caps == list(range(caps[0], caps[-1] + 1))
+
+    def junk(w):
+        return bool(_TITLE_WORD_RE.match(w)) or (in_caps and any(c.islower() for c in w))
+
+    while len(words) > 2 and junk(words[-1]):
+        words.pop()
+    while len(words) > 2 and (junk(words[0]) or (
+            words[0] in _BARE_LEADING_TITLES and len(words) >= 3)):
+        words.pop(0)
+    return ' '.join(words) + patronymic
+
+
 def clean_candidate_name(raw):
     """Strip academic titles and stray commas from a CSV candidate column."""
-    s = _strip_titles((raw or '').strip())
+    s = _strip_loose_titles(_strip_titles((raw or '').strip()))
     # Collapse stray ", " into a single space; drop any remaining bare commas.
     # NB: a ", rođ. 1962." disambiguator survives this (minus its comma) on
     # purpose — DIP uses it to tell two same-named candidates apart, so
@@ -61,9 +121,14 @@ def split_birth_year(name):
     every other election they stood in.
     """
     m = _BIRTH_SUFFIX_RE.search(name or '')
-    if not m:
-        return name, ''
-    return name[:m.start()].strip(), f'rođ. {m.group(1)}.'
+    if m:
+        return name[:m.start()].strip(), f'rođ. {m.group(1)}.'
+    # A father's name does the same job: 2017 ran two "IVICA KLANAC" for one
+    # načelnik, printed "IVICA KLANAC, sin IVE" and "…, sin DRAGUTINA".
+    m = re.search(r'[,;]?\s+(sin|kći)\s+(\S+)$', name or '', re.IGNORECASE)
+    if m:
+        return name[:m.start()].strip(), f'{m.group(1).lower()} {m.group(2).capitalize()}'
+    return name, ''
 
 
 # A personal-name token: letters only, optionally hyphenated or apostrophed.

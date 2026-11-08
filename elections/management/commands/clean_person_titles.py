@@ -1,10 +1,12 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from elections.models import Person
+from elections.models import ElectoralList, Person
 from elections.importers.name_utils import (
     clean_candidate_name, normalize_person_name, parse_person_name,
 )
+
+WARD_TYPES = ('local_council_ward', 'local_county_assembly_ward')
 
 
 class Command(BaseCommand):
@@ -31,6 +33,18 @@ class Command(BaseCommand):
         # comma-separated suffixes (", dipl.iur.").
         merged = updated = skipped = 0
         with transaction.atomic():
+            # 1993/1997 ward lists are named "<cleaned name> (<party>)" by the
+            # importer, so a name the cleaner now shortens must rename its list
+            # too, or a re-import would add a second list beside it.
+            for el in ElectoralList.objects.filter(
+                    election_round__election__election_type__slug__in=WARD_TYPES):
+                base, sep, rest = el.name.partition(' (')
+                new = clean_candidate_name(base) + sep + rest
+                if new != el.name:
+                    self.stdout.write(f'  [list]  {el.name!r} → {new!r}')
+                    if not dry_run:
+                        el.name = new
+                        el.save(update_fields=['name'])
             for p in Person.objects.all().order_by('id'):
                 full = f'{p.first_name} {p.last_name}'.strip()
                 cleaned_full = clean_candidate_name(full)
@@ -48,9 +62,10 @@ class Command(BaseCommand):
                         f'({target.first_name} {target.last_name!r}); moving {cand_count} candidacies'
                     )
                     if not dry_run:
-                        p.candidacies.update(person=target)
-                        p.held_lists.update(person=target)
-                        p.delete()
+                        # Roster rows too: deleting the titled row would
+                        # cascade away a Sabor seat ("AK. VLATKO PAVLETIĆ").
+                        from .merge_person_aliases import Command as Merge
+                        Merge._absorb(target, p)
                     merged += 1
                 else:
                     new_first, new_last = parse_person_name(cleaned_full)

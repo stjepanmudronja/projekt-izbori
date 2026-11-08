@@ -355,7 +355,7 @@ class Command(BaseCommand):
         person from a plain-name search. The importer now splits it off on the
         way in; this converts rows stored before that.
         """
-        for person in Person.objects.filter(disambiguation='', normalized_name__iregex=r'ROD\.?\s*[0-9]{4}'):
+        for person in Person.objects.filter(disambiguation='', normalized_name__iregex=r'ROD\.?\s*[0-9]{4}| (SIN|KCI) \S+$'):
             full = f'{person.first_name} {person.last_name}'
             bare, label = split_birth_year(full)
             if not label:
