@@ -1382,7 +1382,7 @@
         </div>
         <div>
             Izvor podataka: <a href="https://www.izbori.hr/" target="_blank" rel="noopener">Državno izborno povjerenstvo Republike Hrvatske (izbori.hr)</a>
-            — službeni rezultati i izvješća o provedenim izborima.
+            - službeni rezultati i izvješća o provedenim izborima.
         </div>
     </footer>
 </div>
@@ -1586,6 +1586,28 @@ function renderHome(d) {
     const where = r => r.place_id ? placeLinkHtml(r.place_id, r.name) : escapeHtml(r.name || '');
     const sections = [];
 
+    const pres = d.presidential || { elections: [], records: [] };
+    const resultsLink = year => `<a href="#" class="home-results mt-auto small" data-cat="predsjednicki" data-year="${year}">Rezultati izbora <i class="bi bi-arrow-right"></i></a>`;
+    sections.push(homeSection('homePresidents', 'Predsjednici Republike Hrvatske',
+        'Tko je pobijedio na svakim predsjedničkim izborima i s kolikim udjelom u odlučujućem krugu.',
+        pres.elections.map(e => `<div class="home-card">
+            <div class="hc-kicker">Izbori ${e.year}. · ${e.rounds > 1 ? 'odlučeno u 2. krugu' : 'pobjeda u 1. krugu'}</div>
+            <div class="hc-title">${personLinkHtml(e.winner.name, e.winner.person_id)}</div>
+            ${e.term > 1 ? `<span class="hc-badge">${e.term}. mandat</span>` : ''}
+            <div class="hc-big">${homePct(e.winner.share)}</div>
+            ${e.runner_up ? `<div class="hc-row hc-muted"><span>${e.rounds > 1 ? 'Protukandidat' : 'Drugi'}: ${personLinkHtml(e.runner_up.name, e.runner_up.person_id)}</span><span>${homePct(e.runner_up.share)}</span></div>` : ''}
+            <div class="hc-muted">${e.first_round.candidates} kandidata u 1. krugu · izlaznost ${homePct(e.turnout)}</div>
+            ${resultsLink(e.year)}
+        </div>`)));
+    sections.push(homeSection('homePresRecords', 'Rekordi predsjedničkih izbora', '',
+        pres.records.map(r => `<div class="home-card">
+            <div class="hc-kicker">${escapeHtml(r.kind)}</div>
+            <div class="hc-big">${escapeHtml(r.value)}</div>
+            ${r.person_id ? `<div class="fw-semibold">${personLinkHtml(r.name, r.person_id)}</div>` : ''}
+            <div class="hc-muted">${escapeHtml(r.text)}</div>
+            ${resultsLink(r.year)}
+        </div>`)));
+
     const streaks = d.streaks || { items: [] };
     sections.push(homeSection('homeStreaks', `Na vlasti bez prekida od ${streaks.since}.`,
         `${homeNum(streaks.count)} načelnika, gradonačelnika i župana pobijedilo je na svim neposrednim izborima od ${streaks.since}.`,
@@ -1620,7 +1642,7 @@ function renderHome(d) {
     for (const [key, label] of [['sabor', 'Sabor'], ['eu', 'Europski parlament']]) {
         const p = (d.preferences || {})[key];
         if (!p) continue;
-        sections.push(homeSection(`homePref${key}`, `Najviše preferencijskih glasova — ${label} ${p.year}.`,
+        sections.push(homeSection(`homePref${key}`, `Najviše preferencijskih glasova - ${label} ${p.year}.`,
             'Osobni glasovi koje su birači dali kandidatu unutar njegove liste.',
             p.items.map((x, i) => `<div class="home-card">
                 <div class="hc-rank">#${i + 1}</div>
@@ -1640,7 +1662,7 @@ function renderHome(d) {
         </div>`)));
 
     const t = d.turnout || { top: [] };
-    sections.push(homeSection('homeTurnout', `Najveća izlaznost — lokalni izbori ${t.year}.`,
+    sections.push(homeSection('homeTurnout', `Najveća izlaznost - lokalni izbori ${t.year}.`,
         'Općine i gradovi s najviše birača koji su glasali (vijeće, 1. krug; mjesta s barem 300 birača).',
         t.top.map((x, i) => `<div class="home-card">
             <div class="hc-rank">#${i + 1}</div>
@@ -1662,6 +1684,12 @@ function renderHome(d) {
     }
     document.getElementById('homeSections').innerHTML = sections.join('');
 }
+document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('.home-results');
+    if (!a) return;
+    e.preventDefault();
+    izlNavigateTo(a.dataset.cat, Number(a.dataset.year));
+});
 document.addEventListener('click', e => {
     const btn = e.target.closest && e.target.closest('[data-scroll]');
     if (!btn) return;

@@ -1614,6 +1614,8 @@ def _home_highlights():
                        'pct': round(int(c) / int(reg) * 100, 1)} for mid, name, reg, c in turnout if reg),
                      key=lambda t: -t['pct'])
 
+    presidential = _home_presidential(sql)
+
     counts = sql("""select (select count(*) from elections_person),
                            (select count(*) from elections_election),
                            (select min(year) from elections_election), (select max(year) from elections_election),
@@ -1631,7 +1633,93 @@ def _home_highlights():
                     for pid, name, n, a, b, k in careers],
         'preferences': {'sabor': top_preferences('sabor'), 'eu': top_preferences('eu_parliament')},
         'turnout': {'year': local_year, 'top': turnout[:10]},
+        'presidential': presidential,
     }
+
+
+def _home_presidential(sql):
+    """Every presidential election — who won, in which round and by how
+    much — and the records across them. The deciding round is the last one
+    held (1992 and 1997 were won outright in round 1). `year` is the
+    election's, which for a runoff in January is the year before its date."""
+    rows = sql("""
+        select e.year, er.round_number, er.date, p.id, p.first_name || ' ' || p.last_name, sum(lr.votes)
+        from elections_listresult lr
+        join elections_electorallist el on el.id = lr.electoral_list_id
+        join elections_candidacy c on c.electoral_list_id = el.id
+        join elections_person p on p.id = c.person_id
+        join elections_electionround er on er.id = el.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        where et.slug = 'presidential'
+        group by 1, 2, 3, 4, 5""")
+    turnout = {(y, r): (int(reg), int(cast)) for y, r, reg, cast in sql("""
+        select e.year, er.round_number, sum(t.registered_voters), sum(t.ballots_cast)
+        from elections_turnoutdata t
+        join elections_electionround er on er.id = t.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        where et.slug = 'presidential' group by 1, 2""") if reg}
+    rounds = defaultdict(list)
+    dates = {}
+    for year, rnd, date, pid, name, votes in rows:
+        rounds[(year, rnd)].append({'person_id': pid, 'name': name, 'votes': int(votes or 0)})
+        dates[(year, rnd)] = date.isoformat() if date else None
+    for cands in rounds.values():
+        total = sum(c['votes'] for c in cands) or 1
+        cands.sort(key=lambda c: -c['votes'])
+        for c in cands:
+            c['share'] = round(c['votes'] / total * 100, 2)
+
+    def pct(year, rnd):
+        reg, cast = turnout.get((year, rnd), (0, 0))
+        return round(cast / reg * 100, 2) if reg else None
+
+    elections, seen_winners = [], {}
+    for year in sorted({y for y, _ in rounds}):
+        last = max(r for y, r in rounds if y == year)
+        decided, first = rounds[(year, last)], rounds[(year, 1)]
+        winner = decided[0]
+        term = seen_winners.get(winner['person_id'], 0) + 1
+        seen_winners[winner['person_id']] = term
+        elections.append({
+            'year': year, 'date': dates[(year, last)], 'rounds': last, 'term': term,
+            'winner': winner, 'runner_up': decided[1] if len(decided) > 1 else None,
+            'first_round': {'winner': first[0], 'candidates': len(first)},
+            'turnout': pct(year, last),
+        })
+
+    runoffs = [e for e in elections if e['rounds'] > 1]
+    all_rounds = [(y, r) for (y, r) in rounds if pct(y, r) is not None]
+    top_votes = max(((y, r, c) for (y, r), cs in rounds.items() for c in cs[:1]), key=lambda x: x[2]['votes'])
+    records = []
+    if runoffs:
+        close = min(runoffs, key=lambda e: e['winner']['share'])
+        margin = f"{close['winner']['votes'] - close['runner_up']['votes']:,}".replace(',', '.')
+        records.append({'kind': 'Najtješnji drugi krug', 'year': close['year'],
+                        'value': f"{close['winner']['share']:.2f} : {close['runner_up']['share']:.2f}".replace('.', ','),
+                        'name': close['winner']['name'], 'person_id': close['winner']['person_id'],
+                        'text': f"protiv: {close['runner_up']['name']}, razlika {margin} glasova"})
+    big = max(elections, key=lambda e: e['winner']['share'])
+    records.append({'kind': 'Najuvjerljivija pobjeda', 'year': big['year'],
+                    'value': f"{big['winner']['share']:.2f} %".replace('.', ','),
+                    'name': big['winner']['name'], 'person_id': big['winner']['person_id'],
+                    'text': f"{big['rounds']}. krug izbora {big['year']}."})
+    if all_rounds:
+        hi = max(all_rounds, key=lambda k: pct(*k))
+        lo = min(all_rounds, key=lambda k: pct(*k))
+        records.append({'kind': 'Najveća izlaznost', 'year': hi[0], 'value': f"{pct(*hi):.2f} %".replace('.', ','),
+                        'text': f"{hi[1]}. krug izbora {hi[0]}."})
+        records.append({'kind': 'Najmanja izlaznost', 'year': lo[0], 'value': f"{pct(*lo):.2f} %".replace('.', ','),
+                        'text': f"{lo[1]}. krug izbora {lo[0]}."})
+    most = max(elections, key=lambda e: e['first_round']['candidates'])
+    records.append({'kind': 'Najviše kandidata', 'year': most['year'], 'value': str(most['first_round']['candidates']),
+                    'text': f"u 1. krugu izbora {most['year']}."})
+    records.append({'kind': 'Najviše glasova u jednom krugu', 'year': top_votes[0],
+                    'value': f"{top_votes[2]['votes']:,}".replace(',', '.'),
+                    'name': top_votes[2]['name'], 'person_id': top_votes[2]['person_id'],
+                    'text': f"{top_votes[1]}. krug izbora {top_votes[0]}."})
+    return {'elections': elections[::-1], 'records': records}
 
 
 def _place_profile(muni_id):
