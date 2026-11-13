@@ -2812,6 +2812,9 @@ function electionBadgeColor(type) {
 // the category key used by izlNavigateTo() and the results-* modules.
 function electionTypeToCategory(type) {
     const t = (type || '').toLowerCase();
+    // The Sabor's own chambers (1990's three, the Županijski dom) before the
+    // checks below, which would read their "vijeće" / "župan" as local.
+    if (t.endsWith('sabora')) return 'sabor';
     if (t.includes('predsjednič')) return 'predsjednicki';
     if (t.includes('europski') || t.includes('eu parlament')) return 'eu';
     if (t.includes('parlamentarni') || t === 'sabor') return 'sabor';
@@ -2966,6 +2969,7 @@ function renderStationWinnerChart(elections) {
         let typePart = el.election_type.replace('izbori', '').trim();
         if (el.round > 1) typePart += ` (${el.round}. krug)`;
 
+        const cat = electionTypeToCategory(el.election_type);
         return {
             label: `${datePart}\n${typePart}`,
             name: winner.name,
@@ -2973,6 +2977,10 @@ function renderStationWinnerChart(elections) {
             votes: winner.votes,
             votePct,
             electionType: el.election_type,
+            // Where a click on the point leads: that election's results page,
+            // scoped to this place for a local one.
+            target: cat ? { cat, year: el.year, kind: el.lokalni_kind || null,
+                            countyId: el.county_id || null, municipalityId: el.municipality_id || null } : null,
         };
     }).filter(Boolean);
 
@@ -3032,6 +3040,14 @@ function renderStationWinnerChart(elections) {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
+            onClick: (evt, items) => {
+                const t = items && items.length && winners[items[0].index].target;
+                if (t) izlNavigateTo(t.cat, t.year, t);
+            },
+            onHover: (evt, items) => {
+                const hit = items && items.length && winners[items[0].index].target;
+                if (evt && evt.native) evt.native.target.style.cursor = hit ? 'pointer' : 'default';
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -3042,6 +3058,7 @@ function renderStationWinnerChart(elections) {
                     cornerRadius: 8,
                     displayColors: false,
                     callbacks: {
+                        footer: ctx => ctx.length && winners[ctx[0].dataIndex].target ? 'Klikni za otvaranje rezultata.' : '',
                         label: function(ctx) {
                             const i = ctx.dataIndex;
                             // Chart.js draws each line on one row, newlines and
@@ -3198,12 +3215,15 @@ function renderStationResults(container, elections) {
             votes: it.votes,
             color: barColors[i % barColors.length],
             origNames: [it.name],
+            personId: it.person_id || null,
         }));
 
         window._electionBarData[idx] = {
             original: JSON.parse(JSON.stringify(originalItems)),
             current: originalItems,
             validBallots: el.valid_ballots,
+            // Candidates are people: their names open the politician page.
+            kind: hasCandidates ? 'person' : 'list',
         };
 
         buildBarChart(idx);

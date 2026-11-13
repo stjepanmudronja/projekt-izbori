@@ -369,6 +369,22 @@ LOKALNI_WARD_TYPES = {
     'zup_skupstina_ij': 'Županijska skupština - izborne jedinice',
 }
 
+# Maps election_type.name → kind key used by the lokalni results module
+# dropdown (selLokKind). Used to deep-link from a politician's badge/chart
+# point, or a Prema lokaciji chart point, straight into the matching scope
+# (county / muni + kind).
+LOKALNI_KIND_MAP = {
+    'Gradonačelnik': 'nacelnik',
+    'Načelnik': 'nacelnik',
+    'Gradsko vijeće': 'vijece',
+    'Općinsko vijeće': 'vijece',
+    'Kotarska skupština': 'vijece',
+    'Župan': 'zupan',
+    'Županijska skupština': 'zup_skupstina',
+    LOKALNI_WARD_TYPES['vijece_ij']: 'vijece_ij',
+    LOKALNI_WARD_TYPES['zup_skupstina_ij']: 'zup_skupstina_ij',
+}
+
 # Elections whose per-station files give only the station's number, no name
 # or address. A place shows one only where its town's number always meant
 # that place (`rekey_stations`); elsewhere it counts in the town total only.
@@ -617,20 +633,6 @@ def person_detail(person_id):
     RANK_BY_MUNI = {'Gradonačelnik', 'Načelnik'}
     RANK_BY_COUNTY = {'Župan'}
     LOKALNI_EXEC = RANK_BY_MUNI | RANK_BY_COUNTY
-    # Maps election_type.name → kind key used by the lokalni results module
-    # dropdown (selLokKind). Used to deep-link from a politician's badge/chart
-    # point straight into the matching scope (county / muni + kind).
-    LOKALNI_KIND_MAP = {
-        'Gradonačelnik': 'nacelnik',
-        'Načelnik': 'nacelnik',
-        'Gradsko vijeće': 'vijece',
-        'Općinsko vijeće': 'vijece',
-        'Kotarska skupština': 'vijece',
-        'Župan': 'zupan',
-        'Županijska skupština': 'zup_skupstina',
-        LOKALNI_WARD_TYPES['vijece_ij']: 'vijece_ij',
-        LOKALNI_WARD_TYPES['zup_skupstina_ij']: 'zup_skupstina_ij',
-    }
     ALL_LOKALNI = set(LOKALNI_KIND_MAP.keys())
 
     # For lokalni we need the muni each candidacy ran in (and the
@@ -1897,6 +1899,12 @@ def location_results():
     if not station_ids:
         return jsonify({'elections': [], 'label': ''})
 
+    # Where a chart point should open the Lokalni page: the town in scope (a
+    # station's or street's town, or the town itself), else just the county.
+    nav_muni = (PollingStation.query.get(station_id).municipality_id if station_id
+                else municipality_id)
+    nav_county = (Municipality.query.get(nav_muni).county_id if nav_muni else county_id)
+
     # Build label
     if station_id:
         station = PollingStation.query.get(station_id)
@@ -1974,6 +1982,7 @@ def location_results():
                 Person.last_name,
                 db.func.sum(CandidateResult.votes).label('total_votes'),
                 ElectoralList.name.label('list_name'),
+                Person.id,
             )
             .join(Candidacy, CandidateResult.candidacy_id == Candidacy.id)
             .join(Person, Candidacy.person_id == Person.id)
@@ -1982,7 +1991,7 @@ def location_results():
                 CandidateResult.polling_station_id.in_(station_ids),
                 ElectoralList.election_round_id == er.id,
             )
-            .group_by(Person.first_name, Person.last_name, ElectoralList.name)
+            .group_by(Person.id, Person.first_name, Person.last_name, ElectoralList.name)
             .order_by(db.func.sum(CandidateResult.votes).desc())
             .limit(5)
             .all()
@@ -2014,6 +2023,9 @@ def location_results():
             'ballots_cast': td.ballots_cast,
             'valid_ballots': td.valid_ballots,
             'invalid_ballots': td.invalid_ballots,
+            'lokalni_kind': LOKALNI_KIND_MAP.get(etype.name),
+            'county_id': nav_county,
+            'municipality_id': nav_muni,
             'top_lists': [
                 {'name': name, 'votes': votes,
                  'holder': holders[name][0] if len(holders.get(name, [])) == 1 else None}
@@ -2024,8 +2036,9 @@ def location_results():
                     'name': f'{first} {last}',
                     'votes': votes,
                     'list_name': list_name,
+                    'person_id': pid,
                 }
-                for first, last, votes, list_name in all_candidates
+                for first, last, votes, list_name, pid in all_candidates
             ],
         })
 
