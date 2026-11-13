@@ -40,6 +40,8 @@
         .party-status { font-size: .72rem; font-weight: 600; border-radius: 999px; padding: .1rem .55rem; white-space: nowrap; }
         .party-status.active { background: #e6f4ea; color: #1e7e34; }
         .party-status.ceased { background: #f1f3f5; color: #6c757d; }
+        .party-source { font-size: .78rem; color: #6c757d; margin: -.5rem 0 1.5rem; line-height: 1.5; }
+        .party-source a { color: inherit; text-decoration: underline; }
 
         /* ---- Municipality map ---- */
         .map-svg-wrap { position: relative; }
@@ -1445,7 +1447,6 @@
             <div id="partyListWrap">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <small class="text-muted" id="partyCount"></small>
-                    <small class="text-muted">Izvor: Registar političkih stranaka RH (data.gov.hr)</small>
                 </div>
                 <div class="card p-0 mb-4">
                     <div class="table-responsive">
@@ -1458,6 +1459,7 @@
                         </table>
                     </div>
                 </div>
+                <div class="party-source" id="partyListSource"></div>
             </div>
         </div>
 
@@ -1690,6 +1692,15 @@ function copyPersonLink(id, name, btn) {
 // ---- Općine i gradovi: one town's electoral history (/mjesto/439-klis) ----
 // ---- Stranke: party register (/api/stranke) ----
 let _parties = null, _partyShown = null, _partyChart = null, _partyStatus = '';
+// Where the Stranke data comes from, under the list and every party page.
+const PARTY_SOURCE_HTML = `<i class="bi bi-info-circle me-1"></i><b>Izvor:</b>
+    podaci o strankama (naziv, kratica, sjedište, datum upisa i prestanka) iz
+    <a href="https://registri-npo-mpu.gov.hr/#!stranke" target="_blank" rel="noopener">Registra političkih stranaka Republike Hrvatske</a>,
+    koji vodi Ministarstvo pravosuđa, uprave i digitalne transformacije
+    (<a href="https://data.gov.hr/ckan/dataset/registar-politickih-stranaka-republike-hrvatske" target="_blank" rel="noopener">otvoreni podaci, data.gov.hr</a>,
+    Otvorena dozvola); izborni rezultati iz službenih izvješća
+    <a href="https://www.izbori.hr/" target="_blank" rel="noopener">Državnog izbornog povjerenstva</a>.
+    Stranka je povezana s izbornom listom prema nazivu ili kratici, pa male stranke koje nastupaju pod drugim imenom mogu nedostajati.`;
 function partyPath(p) {
     return p ? `/stranke/${p.registry_number}-${urlSlug(p.short_name || p.name)}` : '/stranke';
 }
@@ -1707,6 +1718,7 @@ async function initPartiesModule() {
     } finally {
         spinner.classList.remove('show');
     }
+    document.getElementById('partyListSource').innerHTML = PARTY_SOURCE_HTML;
     document.getElementById('partySearch').addEventListener('input', renderPartyList);
     document.getElementById('partyOnlyElections').addEventListener('change', renderPartyList);
     document.querySelectorAll('#partyStatusGroup button').forEach(b => b.addEventListener('click', () => {
@@ -1812,7 +1824,8 @@ function renderPartyDetail(d) {
                 <tbody>${rows}</tbody>
             </table></div>
         </div>` : `<div class="alert alert-light">Stranka nije pronađena ni na jednoj izbornoj listi u bazi.
-            Male i lokalne stranke često nastupaju pod drugim nazivom ili samo u koaliciji.</div>`}`;
+            Male i lokalne stranke često nastupaju pod drugim nazivom ili samo u koaliciji.</div>`}
+        <div class="party-source">${PARTY_SOURCE_HTML}</div>`;
     document.getElementById('partyBack').addEventListener('click', () => closeParty({ push: true }));
     renderPartyChart(d);
 }
