@@ -64,6 +64,21 @@ class ListHolder(db.Model):
     printed_name = db.Column(db.String)
 
 
+class RegisteredParty(db.Model):
+    """A party in the official register; mirrors the Django model, see
+    participants.py."""
+    __tablename__ = 'elections_registeredparty'
+    id = db.Column(db.Integer, primary_key=True)
+    registry_number = db.Column(db.Integer)
+    name = db.Column(db.String)
+    short_name = db.Column(db.String)
+    oib = db.Column(db.String)
+    seat = db.Column(db.String)
+    status = db.Column(db.String)
+    registered_on = db.Column(db.Date)
+    status_on = db.Column(db.Date)
+
+
 class ElectedMandate(db.Model):
     __tablename__ = 'elections_electedmandate'
     id = db.Column(db.Integer, primary_key=True)
@@ -210,7 +225,7 @@ def index():
 # Restricted to a known whitelist so we don't accidentally swallow /api/...
 # or static asset paths.
 SPA_ROUTES = {
-    'politicar', 'prema-lokaciji', 'usporedba',
+    'politicar', 'prema-lokaciji', 'usporedba', 'stranke',
     'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
     'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto',
 }
@@ -228,6 +243,7 @@ def spa_route(slug):
 # segment counts; the name is there for people reading the link.
 @app.route('/politicar/<path:rest>')
 @app.route('/mjesto/<path:rest>')
+@app.route('/stranke/<path:rest>')
 def spa_deep_link(rest):
     return render_template('index.html')
 
@@ -1737,12 +1753,21 @@ def map_data():
     rnd = request.args.get('round', 1, type=int)
     if kind not in MAP_KINDS or not year:
         return jsonify({'error': 'Nepoznati izbori.'}), 400
+    payload = _map_payload(kind, year, rnd)
+    if payload is None:
+        return jsonify({'error': 'Nema tih izbora.'}), 404
+    return jsonify(payload)
+
+
+def _map_payload(kind, year, rnd=1):
+    """The map's figures for one election (see map_data), cached; None when
+    there is no such election."""
     cache_key = (kind, year, rnd)
     if cache_key in _MAP_CACHE:
-        return jsonify(_MAP_CACHE[cache_key])
+        return _MAP_CACHE[cache_key]
     round_ids = [r for r, _, n in _map_rounds(kind, year) if n == rnd]
     if not round_ids:
-        return jsonify({'error': 'Nema tih izbora.'}), 404
+        return None
 
     real = {m.id: m for m in Municipality.query.filter(Municipality.type.in_(('grad', 'općina')))}
     zagreb = Municipality.query.filter_by(name='GRAD ZAGREB').first()
@@ -1808,7 +1833,187 @@ def map_data():
                                  key=lambda w: -w['count']),
                'munis': munis}
     _MAP_CACHE[cache_key] = payload
-    return jsonify(payload)
+    return payload
+
+
+# ---- Stranke: the official party register linked to the election lists ----
+# Election types whose lists are parties (or coalitions of them). Executive
+# races (a list per candidate) and the 1993/1997 wards ("NAME (PARTY)") are not.
+PARTY_LIST_TYPES = ('sabor', 'eu_parliament', 'local_municipal_council', 'local_city_council',
+                    'local_county_assembly', 'local_kotar_assembly', 'sabor_zupanijski',
+                    'sabor_dpv', 'sabor_vo', 'sabor_vur')
+_PARTY_CACHE = {}
+# Town and municipal councils are one race in practice (the map shows them
+# together); a party's page shows them as one row.
+PARTY_KIND_MERGE = {'local_municipal_council': ('vijeca', 'Gradska i općinska vijeća'),
+                    'local_city_council': ('vijeca', 'Gradska i općinska vijeća')}
+
+
+def _norm_party(text):
+    return re.sub(r'[^A-Z0-9]', '', strip_diacritics((text or '').upper()))
+
+
+def _party_links():
+    """Which register party each election list names, as leader (first-named)
+    or partner, cached until the server restarts.
+
+    A list's parties are its comma- or line-separated parts. Each is matched
+    by, in turn: its whole name, its name without a trailing abbreviation
+    ("HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ"), its abbreviation, its leading
+    name; punctuation and spacing are ignored ("SOCIJALNO - LIBERALNA"). A
+    party only matches an election held while it existed (registered by that
+    year, and not ceased before it), which is what tells apart an abbreviation
+    used twice ("MOŽEMO!", 2017 and 2019); a part still matching two parties is
+    left unlinked."""
+    if 'links' in _PARTY_CACHE:
+        return _PARTY_CACHE['links']
+    parties = RegisteredParty.query.all()
+    by_key = defaultdict(set)
+    for p in parties:
+        keys = {_norm_party(p.name)}
+        if p.short_name and len(p.short_name) <= 30:
+            keys.add(_norm_party(p.short_name))
+        for k in keys:
+            if len(k) >= 2:
+                by_key[k].add(p.id)
+    alive = {p.id: ((p.registered_on.year if p.registered_on else 1989),
+                    (p.status_on.year if p.status == 'PRESTANAK' and p.status_on else 9999))
+             for p in parties}
+
+    def match(part, year):
+        head, abbr = _split_party(part)
+        tries = [part]
+        if abbr:
+            tries += [part[:part.rfind(' - ')], abbr]
+        tries.append(head)
+        for t in tries:
+            ids = {i for i in by_key.get(_norm_party(t), ()) if alive[i][0] <= year <= alive[i][1]}
+            if len(ids) == 1:
+                return ids.pop()
+            if ids:
+                return None                       # two parties fit: leave it
+        return None
+
+    rows = (db.session.query(ElectoralList.id, ElectoralList.name, Election.year)
+            .join(ElectionRound, ElectoralList.election_round_id == ElectionRound.id)
+            .join(Election, ElectionRound.election_id == Election.id)
+            .join(ElectionType, Election.election_type_id == ElectionType.id)
+            .filter(ElectionType.slug.in_(PARTY_LIST_TYPES)).all())
+    links = defaultdict(list)                    # party id -> [(list id, role)]
+    for list_id, name, year in rows:
+        parts = [x.strip() for x in re.split(r'\n|,\s+', name or '') if x.strip()]
+        seen = set()
+        for i, part in enumerate(parts):
+            pid = match(part, year)
+            if pid and pid not in seen:
+                seen.add(pid)
+                links[pid].append((list_id, 'leader' if i == 0 else 'partner'))
+    _PARTY_CACHE['links'] = links
+    return links
+
+
+def _party_list_votes():
+    """Every party list's votes, its election, and each election's total of
+    party-list votes (the share's denominator); Sabor's minority districts
+    (121+) are a separate ballot and left out of both, and so are 1992's and
+    1995's constituency races, cast on a second ballot beside the national
+    list. Cached."""
+    if 'votes' in _PARTY_CACHE:
+        return _PARTY_CACHE['votes']
+    sql = lambda q, **kw: db.session.execute(db.text(q), kw).fetchall()
+    rows = sql("""
+        select el.id, el.name, er.id, er.round_number, e.year, e.id, et.slug, et.name, coalesce(t.v, 0)
+        from elections_electorallist el
+        join elections_electionround er on er.id = el.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        left join elections_electoraldistrict ed on ed.id = el.district_id
+        left join (select electoral_list_id, sum(votes) v from elections_listresult group by 1) t
+               on t.electoral_list_id = el.id
+        where et.slug in :types and (ed.number is null or ed.number < 121)
+          -- 1992 and 1995: two ballots; only the national list (65 / 29) is the party vote
+          and not (et.slug = 'sabor' and e.year = 1992 and coalesce(ed.number, 0) <> 65)
+          and not (et.slug = 'sabor' and e.year = 1995 and coalesce(ed.number, 0) <> 29)""", types=PARTY_LIST_TYPES)
+    lists, totals = {}, defaultdict(int)
+    for lid, name, er_id, rnd, year, e_id, slug, tname, v in rows:
+        slug, tname = PARTY_KIND_MERGE.get(slug, (slug, tname))
+        lists[lid] = {'name': name, 'round_id': er_id, 'round': rnd, 'year': year,
+                      'election_id': e_id, 'slug': slug, 'type': tname, 'votes': int(v)}
+        totals[er_id] += int(v)
+    _PARTY_CACHE['votes'] = (lists, totals)
+    return lists, totals
+
+
+def _party_summary(p, links, lists):
+    elections = {(lists[l]['slug'], lists[l]['year']) for l, _ in links.get(p.id, []) if l in lists}
+    years = [y for _, y in elections]
+    return {
+        'registry_number': p.registry_number, 'name': p.name, 'short_name': p.short_name,
+        'city': (p.seat or '').split(',')[0].strip(), 'status': p.status,
+        'registered_on': p.registered_on.isoformat() if p.registered_on else None,
+        'status_on': p.status_on.isoformat() if p.status_on else None,
+        'elections': len(elections), 'first_year': min(years) if years else None,
+        'last_year': max(years) if years else None,
+    }
+
+
+@app.route('/api/stranke')
+def parties_list():
+    """Every party in the official register with how many elections it stood
+    in (by the lists it led or joined)."""
+    if 'list' not in _PARTY_CACHE:
+        links = _party_links()
+        lists, _ = _party_list_votes()
+        _PARTY_CACHE['list'] = [_party_summary(p, links, lists)
+                                for p in RegisteredParty.query.order_by(RegisteredParty.name)]
+    return jsonify(_PARTY_CACHE['list'])
+
+
+@app.route('/api/stranke/<int:registry_number>')
+def party_page(registry_number):
+    """One registered party: its register entry and, per election it stood in,
+    the votes and share of the lists it led, the lists it joined as a partner,
+    and for local councils in how many municipalities its list came first."""
+    p = RegisteredParty.query.filter_by(registry_number=registry_number).first()
+    if not p:
+        return jsonify({'error': 'Ta stranka nije u registru.'}), 404
+    links = _party_links()
+    lists, totals = _party_list_votes()
+    rows = defaultdict(lambda: {'led_votes': 0, 'led_lists': 0, 'partner_votes': 0,
+                                'partner_lists': 0, 'round_ids': set(), 'map_keys': set(), 'top_list': None})
+    for list_id, role in links.get(p.id, []):
+        info = lists.get(list_id)
+        if not info or info['round'] != 1:
+            continue
+        r = rows[(info['slug'], info['type'], info['year'])]
+        r['round_ids'].add(info['round_id'])
+        if role == 'leader':
+            r['led_votes'] += info['votes']
+            r['led_lists'] += 1
+            r['map_keys'].add(_map_party(info['name'])[0])
+            if not r['top_list'] or info['votes'] > r['top_list'][1]:
+                r['top_list'] = (info['name'], info['votes'])
+        else:
+            r['partner_votes'] += info['votes']
+            r['partner_lists'] += 1
+    history = []
+    for (slug, tname, year), r in rows.items():
+        total = sum(totals[i] for i in r['round_ids'])
+        won = None
+        if slug == 'vijeca' and r['map_keys']:
+            payload = _map_payload('vijece', year)
+            if payload:
+                won = sum(w['count'] for w in payload['winners'] if w['key'] in r['map_keys'])
+        history.append({
+            'slug': slug, 'election_type': tname, 'year': year,
+            'led_votes': r['led_votes'], 'led_lists': r['led_lists'],
+            'led_share': round(r['led_votes'] / total * 100, 2) if total and r['led_votes'] else None,
+            'partner_votes': r['partner_votes'], 'partner_lists': r['partner_lists'],
+            'top_list': r['top_list'][0] if r['top_list'] else None,
+            'municipalities_won': won,
+        })
+    history.sort(key=lambda h: (-h['year'], h['election_type']))
+    return jsonify({**_party_summary(p, links, lists), 'seat': p.seat, 'oib': p.oib, 'history': history})
 
 
 def _home_presidential(sql):

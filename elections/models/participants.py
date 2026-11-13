@@ -90,6 +90,29 @@ class ListHolder(models.Model):
         return f"{self.person} - nositelj {self.electoral_list} ({self.municipality})"
 
 
+class RegisteredParty(models.Model):
+    """A party in the official Registar političkih stranaka (Ministarstvo
+    pravosuđa, uprave i digitalne transformacije), published daily as open
+    data on data.gov.hr and loaded by `import_party_register`. Kept apart from
+    `Party`, which the election imports leave empty: parties in results live
+    inside ElectoralList names, and the Stranke page links the two by name,
+    abbreviation and the years the party existed (app.py `_party_links`)."""
+    registry_number = models.IntegerField(unique=True)
+    name = models.CharField(max_length=500)
+    short_name = models.CharField(max_length=200, blank=True)
+    oib = models.CharField(max_length=11, blank=True)
+    seat = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=20)            # AKTIVAN / PRESTANAK
+    registered_on = models.DateField(null=True, blank=True)
+    status_on = models.DateField(null=True, blank=True)  # for PRESTANAK: when it ceased
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.short_name or self.registry_number})"
+
+
 class ElectedMandate(models.Model):
     """A candidacy that actually took a seat/mandate.
 
