@@ -1805,6 +1805,30 @@ def _map_payload(kind, year, rnd=1):
             r, c = turnout.get(mid, (0, 0))
             turnout[mid] = (r + int(reg), c + int(cast or 0))
 
+    # Sabor: the district a town votes in, for opening it on the Sabor page.
+    # Mobile and special stations put a handful of a town's votes into other
+    # districts (in July 2020, holidaymakers: Krk 78 %), so it is the district holding at least 70 % of the town's
+    # votes; a town split for real (Zagreb's units, mapped to Grad Zagreb) gets
+    # none and the map opens the town's page instead.
+    sabor_district = {}
+    if kind == 'sabor':
+        by_district = defaultdict(lambda: defaultdict(int))
+        for mid, did, v in sql("""
+                select ps.municipality_id, el.district_id, sum(lr.votes)
+                from elections_listresult lr
+                join elections_electorallist el on el.id = lr.electoral_list_id
+                join elections_electoraldistrict ed on ed.id = el.district_id
+                join elections_pollingstation ps on ps.id = lr.polling_station_id
+                where el.election_round_id in :rounds and ed.number < 121
+                group by 1, 2""", rounds=tuple(round_ids)):
+            mid = muni_of(mid)
+            if mid in real and v:
+                by_district[mid][did] += int(v)
+        for mid, dv in by_district.items():
+            did = max(dv, key=dv.get)
+            if dv[did] >= 0.7 * sum(dv.values()):
+                sabor_district[mid] = did
+
     total = sum(national.values()) or 1
     top = sorted(national, key=lambda k: -national[k])[:MAP_TOP_PARTIES]
     parties = [{'key': k, 'label': labels[k], 'name': max(fulls[k], key=fulls[k].get),
@@ -1814,6 +1838,8 @@ def _map_payload(kind, year, rnd=1):
         pv = votes.get(mid, {})
         all_votes = sum(pv.values())
         entry = {'name': real[mid].name, 'county_id': real[mid].county_id}
+        if mid in sabor_district:
+            entry['district_id'] = sabor_district[mid]
         if all_votes:
             win = max(pv, key=pv.get)
             entry.update(winner=win, winner_label=labels[win],

@@ -1939,7 +1939,44 @@ function mapOpenElection(muniId) {
         resultsPreselect(_map.kind, year, m.county_id, muniId);
         return true;
     }
+    if (_map.kind === 'sabor' && m.district_id) {
+        saborPreselect(year, m.district_id, muniId);
+        return true;
+    }
     return false;
+}
+
+// Open the Sabor page on one year, scoped to an izborna jedinica and a town.
+// The module's own init loads the newest year's districts, and loading a year
+// clears the scope and reloads its districts, so each step waits for the one
+// before: init's district list, then the year (_sabor.year is reset first so
+// re-picking the year on show is waited for too), then the district's towns.
+function saborPreselect(year, districtId, muniId) {
+    const link = document.querySelector('.sidebar-nav a[data-module="sabor-analysis"]');
+    if (link) link.click();
+    const waitFor = (test, cb, attempts = 0) => {
+        if (test()) cb();
+        else if (attempts < 80) setTimeout(() => waitFor(test, cb, attempts + 1), 100);
+    };
+    const hasOption = (sel, v) => sel && Array.from(sel.options).some(o => o.value === String(v));
+    const selD = () => document.getElementById('saborSelDistrict');
+    const selM = () => document.getElementById('saborSelMuni');
+    waitFor(() => document.querySelector(`.sa-year-btn[data-year="${year}"]`)
+                  && _sabor.initialized && selD().options.length > 1, () => {
+        _sabor.year = null;
+        setSaborYears([year]);
+        waitFor(() => _sabor.year === year && hasOption(selD(), districtId), () => {
+            const d = selD();
+            d.value = String(districtId);
+            d.dispatchEvent(new Event('change'));
+            waitFor(() => hasOption(selM(), muniId), () => {
+                const mSel = selM();
+                mSel.value = String(muniId);
+                mSel.dispatchEvent(new Event('change'));
+                document.getElementById('saborScopeArea')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    });
 }
 
 // Open the Predsjednički or EU page on one year, scoped to a county and
@@ -2088,7 +2125,8 @@ function mapHover(e) {
         if (_map.mode === 'share' && party && m.shares) html += `<br>${escapeHtml(party.label)}: ${homePct(m.shares[party.key] || 0)}`;
         if (m.turnout != null) html += `<br>Izlaznost: ${homePct(m.turnout)}`;
     }
-    const opensElection = m && m.county_id && ['predsjednicki', 'eu', 'vijece'].includes(_map.kind);
+    const opensElection = m && m.county_id && (['predsjednicki', 'eu', 'vijece'].includes(_map.kind)
+        || (_map.kind === 'sabor' && m.district_id));
     html += `<div class="text-muted mt-1" style="font-size:.72rem;">Klikni za ${opensElection ? 'rezultate ovih izbora u mjestu' : 'stranicu mjesta'}</div>`;
     tip.innerHTML = html;
     const box = document.getElementById('mapSvgWrap').getBoundingClientRect();
@@ -5918,7 +5956,7 @@ async function loadSaborMixedInto(area, year, seq) {
 }
 
 // === Sabor scope dropdowns + map + compare chips
-const _sabor = { initialized: false, mapPaths: [], compareScopes: [], year: null };
+const _sabor = { initialized: false, mapPaths: [], compareScopes: [], year: null, scopeSeq: 0 };
 
 async function initSaborScope() {
     const selD = document.getElementById('saborSelDistrict');
@@ -6139,6 +6177,9 @@ async function refreshSaborScopeArea() {
 
     area.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Učitavam podatke za odabir...</div>';
 
+    // Picking a district and then a town starts two loads; the later pick wins
+    // even when the earlier (bigger) one answers last.
+    const seq = ++_sabor.scopeSeq;
     const results = await Promise.all(scopes.map(async (sc, i) => {
         const p = new URLSearchParams();
         if (sc.type === 'station') p.set('station_id', sc.id);
@@ -6150,6 +6191,7 @@ async function refreshSaborScopeArea() {
         data._scope = sc;
         return data;
     }));
+    if (seq !== _sabor.scopeSeq) return;
     renderSaborScopeBlocks(results);
 }
 
