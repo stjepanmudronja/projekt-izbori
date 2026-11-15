@@ -1813,7 +1813,7 @@ def _map_payload(kind, year, rnd=1):
     for mid in set(votes) | set(turnout):
         pv = votes.get(mid, {})
         all_votes = sum(pv.values())
-        entry = {'name': real[mid].name}
+        entry = {'name': real[mid].name, 'county_id': real[mid].county_id}
         if all_votes:
             win = max(pv, key=pv.get)
             entry.update(winner=win, winner_label=labels[win],

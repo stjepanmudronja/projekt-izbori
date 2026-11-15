@@ -1904,7 +1904,9 @@ async function initMapModule() {
         svg.addEventListener('mouseleave', () => { document.getElementById('mapTooltip').style.display = 'none'; });
         svg.addEventListener('click', e => {
             const id = parseInt(e.target.dataset && e.target.dataset.id, 10);
-            if (!id || !activateModule('place', { pushState: false, focusInput: false })) return;
+            if (!id) return;
+            if (mapOpenElection(id)) return;
+            if (!activateModule('place', { pushState: false, focusInput: false })) return;
             openPlace(id, { push: true });
         });
         _map.ready = true;
@@ -1918,6 +1920,66 @@ async function initMapModule() {
 }
 
 function mapKindSpec() { return _map.elections.find(k => k.kind === _map.kind) || _map.elections[0]; }
+
+// A click on a municipality opens the election on show, scoped to that town:
+// Predsjednički / EU at its county + municipality and year, local councils on
+// the Lokalni page. Sabor has no municipality scope of its own (its pages go by
+// electoral district), and a town with no result on the map has nothing to
+// open, so both fall back to the town's page. Returns true when it navigated.
+function mapOpenElection(muniId) {
+    const d = _map.data;
+    const m = d && d.munis[muniId];
+    if (!m || !m.county_id) return false;
+    const year = d.year;
+    if (_map.kind === 'vijece') {
+        izlNavigateTo('lokalni', year, { kind: 'vijece', countyId: m.county_id, municipalityId: muniId });
+        return true;
+    }
+    if (_map.kind === 'predsjednicki' || _map.kind === 'eu') {
+        resultsPreselect(_map.kind, year, m.county_id, muniId);
+        return true;
+    }
+    return false;
+}
+
+// Open the Predsjednički or EU page on one year, scoped to a county and
+// municipality. The year is cleared while the dropdowns are driven, so their
+// change handlers (which refetch at the current year) stay idle and only the
+// final setActiveYears loads results - no out-of-order responses.
+function resultsPreselect(category, year, countyId, muniId) {
+    const link = document.querySelector(`.sidebar-nav a[data-module="results-${category}"]`);
+    if (link) link.click();
+    const p = category === 'predsjednicki' ? 'pred' : 'eus';
+    const scope = category === 'predsjednicki' ? _pred : _eus;
+    const st = _resultsState[category] || (_resultsState[category] = {});
+    st.years = []; st.year = null;
+    scope.compareScopes = [];
+    (category === 'predsjednicki' ? renderPredCompareChips : renderEusCompareChips)();
+    const waitFor = (test, cb, attempts = 0) => {
+        if (test()) cb();
+        else if (attempts < 50) setTimeout(() => waitFor(test, cb, attempts + 1), 100);
+        else cb();
+    };
+    const hasOption = (sel, v) => sel && Array.from(sel.options).some(o => o.value === String(v));
+    const selC = () => document.getElementById(`${p}SelCounty`);
+    const selM = () => document.getElementById(`${p}SelMuni`);
+    const yearBtn = () => document.querySelector(`#module-results-${category} .results-year-btn[data-year="${year}"]`);
+    waitFor(() => hasOption(selC(), countyId) && yearBtn(), () => {
+        const c = selC();
+        if (hasOption(c, countyId)) {
+            c.value = String(countyId);
+            c.dispatchEvent(new Event('change'));
+        }
+        waitFor(() => hasOption(selM(), muniId), () => {
+            const mSel = selM();
+            if (hasOption(mSel, muniId)) {
+                mSel.value = String(muniId);
+                mSel.dispatchEvent(new Event('change'));
+            }
+            setActiveYears(category, [year]);
+        });
+    });
+}
 
 function setMapKind() {
     const spec = mapKindSpec();
@@ -2026,6 +2088,8 @@ function mapHover(e) {
         if (_map.mode === 'share' && party && m.shares) html += `<br>${escapeHtml(party.label)}: ${homePct(m.shares[party.key] || 0)}`;
         if (m.turnout != null) html += `<br>Izlaznost: ${homePct(m.turnout)}`;
     }
+    const opensElection = m && m.county_id && ['predsjednicki', 'eu', 'vijece'].includes(_map.kind);
+    html += `<div class="text-muted mt-1" style="font-size:.72rem;">Klikni za ${opensElection ? 'rezultate ovih izbora u mjestu' : 'stranicu mjesta'}</div>`;
     tip.innerHTML = html;
     const box = document.getElementById('mapSvgWrap').getBoundingClientRect();
     let x = e.clientX - box.left + 14, y = e.clientY - box.top + 14;
