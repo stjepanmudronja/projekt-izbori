@@ -2312,14 +2312,21 @@ function renderHome(d) {
 
     const pres = d.presidential || { elections: [], records: [] };
     const resultsLink = year => `<a href="#" class="home-results mt-auto small" data-cat="predsjednicki" data-year="${year}">Rezultati izbora <i class="bi bi-arrow-right"></i></a>`;
+    // One card per president (newest first), holding every election they won.
+    const presidents = [];
+    for (const e of pres.elections) {
+        let p = presidents.find(x => x.person_id === e.winner.person_id);
+        if (!p) presidents.push(p = { person_id: e.winner.person_id, name: e.winner.name, wins: [] });
+        p.wins.unshift(e);
+    }
+    const winLinks = p => p.wins.map(e => `<a href="#" class="home-results" data-cat="predsjednicki" data-year="${e.year}">${e.year}.</a>`).join(' · ');
     sections.push(homeSection('homePresidents', 'Predsjednici Republike Hrvatske',
-        'Udio glasova svakog predsjednika na svim izborima na kojima se kandidirao; istaknuta je točka izbora s kartice.',
-        pres.elections.map((e, i) => `<div class="home-card hc-wide">
-            <div class="hc-kicker">Izbori ${e.year}. · ${e.rounds > 1 ? 'odlučeno u 2. krugu' : 'pobjeda u 1. krugu'}</div>
-            <div class="hc-title">${personLinkHtml(e.winner.name, e.winner.person_id)}</div>
-            ${e.term > 1 ? `<span class="hc-badge">${e.term}. mandat</span>` : ''}
+        'Udio glasova svakog predsjednika na svim izborima na kojima se kandidirao; istaknute su točke njegovih pobjeda.',
+        presidents.map((p, i) => `<div class="home-card hc-wide">
+            <div class="hc-kicker">${p.wins.length > 1 ? `${p.wins.length} mandata` : '1 mandat'}</div>
+            <div class="hc-title">${personLinkHtml(p.name, p.person_id)}</div>
             <div class="hc-chart"><canvas id="homePresChart${i}"></canvas></div>
-            ${resultsLink(e.year)}
+            <div class="small mt-auto">Rezultati izbora: ${winLinks(p)}</div>
         </div>`)));
     sections.push(homeSection('homePresRecords', 'Rekordi predsjedničkih izbora', '',
         pres.records.map(r => `<div class="home-card">
@@ -2405,17 +2412,17 @@ function renderHome(d) {
         </section>`);
     }
     document.getElementById('homeSections').innerHTML = sections.join('');
-    pres.elections.forEach((e, i) => renderHomePresChart(
-        document.getElementById(`homePresChart${i}`), (pres.careers || {})[e.winner.person_id] || [], e));
+    presidents.forEach((p, i) => renderHomePresChart(
+        document.getElementById(`homePresChart${i}`), (pres.careers || {})[p.person_id] || [], p.wins));
 }
 
 // A president's career in miniature: the politician page's vote-share line
-// (points coloured by election type, a click opens that election), with the
-// card's own presidential win drawn larger.
+// (points coloured by election type, a click opens that election), with each
+// presidential win (its deciding round) drawn larger.
 const _homeCharts = [];
-function renderHomePresChart(canvas, career, e) {
+function renderHomePresChart(canvas, career, wins) {
     if (!canvas || !career.length) { if (canvas) canvas.parentElement.style.display = 'none'; return; }
-    const isThis = c => /predsjedni/i.test(c.type) && c.year === e.year && c.round === e.rounds;
+    const isThis = c => /predsjedni/i.test(c.type) && wins.some(e => c.year === e.year && c.round === e.rounds);
     const shares = career.map(c => c.share);
     const colors = career.map(c => getElectionColor(c.type).border);
     const targets = career.map(c => {
