@@ -2205,7 +2205,21 @@ def _home_presidential(sql):
                     'value': f"{top_votes[2]['votes']:,}".replace(',', '.'),
                     'name': top_votes[2]['name'], 'person_id': top_votes[2]['person_id'],
                     'text': f"{top_votes[1]}. krug izbora {top_votes[0]}."})
-    return {'elections': elections[::-1], 'records': records}
+    return {'elections': elections[::-1], 'records': records,
+            'careers': {pid: _home_career(pid) for pid in seen_winners}}
+
+
+def _home_career(person_id):
+    """A president's vote share in every election they stood in, oldest
+    first — the politician page's chart, in miniature, for the home cards.
+    Read through `person_detail`, so both charts plot the same points."""
+    results = sorted(person_detail(person_id).get_json()['results'],
+                     key=lambda r: (r['year'], r['date'] or '', r['round']))
+    return [{'type': r['election_type'], 'year': r['year'], 'date': r['date'], 'round': r['round'],
+             'district': r['district'], 'share': r['vote_share'] or 0, 'votes': r['candidate_votes'],
+             'valid': r['total_valid_ballots'] or 0, 'lokalni_kind': r['lokalni_kind'],
+             'county_id': r['county_id'], 'municipality_id': r['municipality_id']}
+            for r in results if (r.get('candidate_votes') or 0) > 0]
 
 
 def _place_profile(muni_id):
