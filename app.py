@@ -6,6 +6,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 
 from elections.importers.name_utils import normalize_person_name, place_key, strip_diacritics
+from elections.sabor_roles import SABOR_ROLES, ROLE_TITLES, ROLE_ORDER
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql:///projekt_izbori'
@@ -978,6 +979,12 @@ def person_detail(person_id):
 
     results.sort(key=lambda r: (-(r['year'] or 0), r['date'] or '', -(r['round'] or 0)))
     offices = person_offices(results)
+    roles = person_roles(person)
+    for r in results:
+        if r.get('_slug') in SABOR_ROLE_SLUGS:
+            held = [x for x in roles if r['year'] in x['sazivi']]
+            if held:
+                r['roles'] = held
     for r in results:
         r.pop('_election_id', None)
         r.pop('_slug', None)
@@ -989,7 +996,43 @@ def person_detail(person_id):
         'label': person_labels([person]).get(person.id, ''),
         'results': results,
         'offices': offices,
+        'roles': sorted(roles, key=lambda x: (x['start'] or str(x['sazivi'][0]), ROLE_ORDER.index(x['role']))),
     })
+
+
+# Key offices held during a Sabor saziv (elections/sabor_roles.py): Prime
+# Minister, Speaker, deputy speakers, Secretary. Matched to the unlabelled
+# Person of the name, so a namesake split off by split_persons never gets one.
+# They badge the person's Sabor result(s) of that saziv — the 1990 Sabor is
+# its three chambers — and list in the offices card.
+SABOR_ROLE_SLUGS = {'sabor', 'sabor_dpv', 'sabor_vo', 'sabor_vur'}
+_ROLES_BY_NAME = {}
+for _role, _name, _sazivi, _start, _end, _party in SABOR_ROLES:
+    _ROLES_BY_NAME.setdefault(normalize_person_name(_name), []).append({
+        'role': _role, 'title': ROLE_TITLES[_role], 'sazivi': list(_sazivi),
+        'start': _start, 'end': _end, 'party': _party,
+    })
+
+
+def person_roles(person):
+    if person.disambiguation:
+        return []
+    return sorted(_ROLES_BY_NAME.get(person.normalized_name, []),
+                  key=lambda x: ROLE_ORDER.index(x['role']))
+
+
+def saziv_roles_by_person(person_ids, year):
+    """{person id: [roles held in the saziv elected in `year`]}."""
+    if not person_ids:
+        return {}
+    names = set(_ROLES_BY_NAME)
+    out = {}
+    for prs in Person.query.filter(Person.id.in_(person_ids),
+                                   Person.normalized_name.in_(names)).all():
+        held = [x for x in person_roles(prs) if year in x['sazivi']]
+        if held:
+            out[prs.id] = held
+    return out
 
 
 # Offices a result can win, by election type slug.
@@ -2915,6 +2958,15 @@ def sabor_seats(year):
         # 2007 and 2011 are a single national roll).
         'district': m.district.name if m.district else '',
     } for m, prs in member_rows]
+
+    # Key offices of this saziv (PM, Speaker, deputies), for the badge by a
+    # name in either table.
+    role_ids = {c['person_id'] for c in ordered_candidates if c.get('person_id')} | \
+               {m['person_id'] for m in members}
+    year_roles = saziv_roles_by_person(role_ids, year)
+    for row in ordered_candidates + members:
+        if row.get('person_id') in year_roles:
+            row['roles'] = year_roles[row['person_id']]
 
     return jsonify({
         'year': year,

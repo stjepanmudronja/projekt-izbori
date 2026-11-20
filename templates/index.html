@@ -624,6 +624,18 @@
         .rank-badge.rank-runner-up { background: linear-gradient(135deg, #E5E5E5, #B0B0B0); color: #333; border: 1px solid #808080; }
         .rank-badge.rank-seat { background: linear-gradient(135deg, #28a745, #1e7e34); color: #fff; border: 1px solid #166528; }
         .rank-badge.rank-eu { background: linear-gradient(135deg, #0d6efd, #0a58ca); color: #fff; border: 1px solid #084298; }
+        /* Key Sabor-term offices (elections/sabor_roles.py) */
+        .rank-badge.role-pm { background: linear-gradient(135deg, #FFE55C, #DAA520); color: #4A3700; border: 1px solid #B8860B;
+            animation: roleGlow 2.4s ease-in-out infinite; }
+        @keyframes roleGlow {
+            0%, 100% { box-shadow: 0 0 3px 1px rgba(255, 200, 0, 0.45); }
+            50% { box-shadow: 0 0 10px 3px rgba(255, 200, 0, 0.85); }
+        }
+        .rank-badge.role-speaker { background: linear-gradient(135deg, #8e5bd8, #5a2ca0); color: #fff; border: 1px solid #45207d; }
+        .rank-badge.role-deputy { background: linear-gradient(135deg, #c9b3f2, #a07fe0); color: #2d1660; border: 1px solid #8a63d2; }
+        .rank-badge.role-secretary { background: linear-gradient(135deg, #8fa3b8, #627891); color: #fff; border: 1px solid #4c5f74; }
+        .role-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.35rem; vertical-align: middle; }
+        @media (prefers-reduced-motion: reduce) { .rank-badge.role-pm { animation: none; box-shadow: 0 0 6px 2px rgba(255, 200, 0, 0.6); } }
 
         /* Izlaznost analytics */
         .izl-card-strip-wrap { position: relative; }
@@ -2741,7 +2753,7 @@ function rerenderCompareModule(type) {
                 ${type === 'person' ? '<i class="bi bi-person-circle me-2"></i>' : '<i class="bi bi-people-fill me-2"></i>'}${item.name}
                 ${type === 'person' ? `<button class="btn btn-sm btn-link text-muted p-0 ms-2 align-baseline" title="Kopiraj poveznicu na ovog političara" onclick="copyPersonLink(${item.id}, ${escapeHtml(JSON.stringify(item.name))}, this)"><i class="bi bi-link-45deg"></i></button>` : ''}
             </h5>
-            ${type === 'person' ? officesSummaryHtml(item.data.offices) : ''}
+            ${type === 'person' ? officesSummaryHtml(item.data.offices, item.data.roles) : ''}
             ${renderFn(filtered)}
         </div>`;
     }).join('');
@@ -2753,9 +2765,27 @@ function mandateWord(n) {
 
 // "Na dužnosti · Načelnik, KLIS · od 2013. · 4 mandata": the offices a
 // politician won, read off their results (see person_offices in app.py).
-function officesSummaryHtml(offices) {
-    if (!offices || offices.length === 0) return '';
+function officesSummaryHtml(offices, roles) {
+    offices = offices || [];
+    roles = roles || [];
+    if (offices.length === 0 && roles.length === 0) return '';
     const total = offices.reduce((n, o) => n + o.years.length, 0);
+    // Offices the Sabor gave rather than the voters: listed by term with
+    // their dates, apart from the elected mandates counted above them.
+    const roleRows = roles.map(x => {
+        const s = SABOR_ROLE_STYLE[x.role] || SABOR_ROLE_STYLE.secretary;
+        const when = roleDatesText(x);
+        const current = x.start && !x.end;
+        const terms = x.sazivi.map(y => `${y}.`).join(', ');
+        return `<div class="mb-1">
+            ${current ? '<span class="badge bg-success me-1">Na dužnosti</span>' : ''}<span class="role-dot" style="background:${s.bg};box-shadow:0 0 6px ${s.glow};"></span><strong>${escapeHtml(x.title)}</strong>
+            <span class="text-muted"> · ${when || 'saziv ' + terms}${when ? ` · saziv ${terms}` : ''}</span>
+        </div>`;
+    }).join('');
+    const rolesBlock = roleRows ? `<div class="fw-semibold mt-2 mb-1" style="color:#0f3460;"><i class="bi bi-bank me-1"></i>Dužnosti u Saboru i Vladi</div>${roleRows}` : '';
+    if (offices.length === 0) {
+        return `<div class="card p-3 mb-3" style="background:#f8f9fb;">${rolesBlock}</div>`;
+    }
     const rows = offices.map(o => {
         const where = o.place ? `, ${placeLinkHtml(o.place_id, o.place)}` : '';
         const when = o.current
@@ -2770,6 +2800,7 @@ function officesSummaryHtml(offices) {
         <div class="fw-semibold mb-2" style="color:#0f3460;"><i class="bi bi-award me-1"></i>Dužnosti · izabran(a) ${total === 1 ? 'jednom' : `${total} puta`}</div>
         ${rows}
         <small class="text-muted fst-italic">Prema izbornim rezultatima; ostavke, zamjene i mirovanje mandata nisu uključeni.</small>
+        ${rolesBlock}
     </div>`;
 }
 
@@ -3350,7 +3381,7 @@ function renderMultiLineChart(panel, type) {
         filtered.forEach(r => {
             const key = `${r.election_type}|${r.date || r.year}|${r.round}|${r.district || ''}`;
             resultMap[key] = r.vote_share || 0;
-            if (r.rank || r.won_seat || r.eu_mep) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round, won_seat: r.won_seat, eu_mep: r.eu_mep, mandate_only: r.mandate_only };
+            if (r.rank || r.won_seat || r.eu_mep || r.roles) rankMap[key] = { rank: r.rank, total: r.total_candidates_in_round, won_seat: r.won_seat, eu_mep: r.eu_mep, mandate_only: r.mandate_only, mandate_reason: r.mandate_reason, roles: r.roles };
         });
 
         const data = labelKeys.map(k => resultMap[k] ?? null);
@@ -3358,9 +3389,12 @@ function renderMultiLineChart(panel, type) {
 
         // Per-point styling: gold for winner (rank=1), silver for runner-up
         // (rank=2), green for a Sabor seat, blue for a European Parliament seat.
-        const pointBg = ranks.map(r => !r ? color : (r.rank === 1 ? '#FFD700' : r.rank === 2 ? '#C0C0C0' : r.won_seat ? '#28a745' : r.eu_mep ? '#0d6efd' : color));
-        const pointBorder = ranks.map(r => !r ? '#fff' : (r.rank === 1 ? '#B8860B' : r.rank === 2 ? '#808080' : r.won_seat ? '#166528' : r.eu_mep ? '#084298' : '#fff'));
-        const pointRadii = ranks.map(r => !r ? 5 : (r.rank === 1 ? 9 : r.rank === 2 ? 7 : r.won_seat ? 7 : r.eu_mep ? 7 : 5));
+        // A key Sabor office (PM, Speaker, deputy, Secretary) outranks all of
+        // these: its point takes the office's colour and glows (roleGlowPlugin).
+        const topRole = r => r && r.roles && r.roles.length ? SABOR_ROLE_STYLE[r.roles[0].role] : null;
+        const pointBg = ranks.map(r => !r ? color : topRole(r) ? topRole(r).bg : (r.rank === 1 ? '#FFD700' : r.rank === 2 ? '#C0C0C0' : r.won_seat ? '#28a745' : r.eu_mep ? '#0d6efd' : color));
+        const pointBorder = ranks.map(r => !r ? '#fff' : topRole(r) ? topRole(r).border : (r.rank === 1 ? '#B8860B' : r.rank === 2 ? '#808080' : r.won_seat ? '#166528' : r.eu_mep ? '#084298' : '#fff'));
+        const pointRadii = ranks.map(r => !r ? 5 : topRole(r) ? (r.roles[0].role === 'pm' ? 10 : 9) : (r.rank === 1 ? 9 : r.rank === 2 ? 7 : r.won_seat ? 7 : r.eu_mep ? 7 : 5));
 
         return {
             label: item.name,
@@ -3397,6 +3431,7 @@ function renderMultiLineChart(panel, type) {
     moduleCharts[modKey] = new Chart(ctx, {
         type: 'line',
         data: { labels, datasets },
+        plugins: [roleGlowPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -3429,6 +3464,12 @@ function renderMultiLineChart(panel, type) {
                         afterLabel: function(ctx) {
                             const r = ctx.dataset._ranks && ctx.dataset._ranks[ctx.dataIndex];
                             if (!r) return '';
+                            if (r.roles && r.roles.length) {
+                                return r.roles.map(x => {
+                                    const when = roleDatesText(x);
+                                    return `${(SABOR_ROLE_STYLE[x.role] || {}).icon || ''} ${x.title}${when ? ' (' + when + ')' : ''}`;
+                                });
+                            }
                             if (r.rank === 1) return `🥇 Pobjednik (1. od ${r.total})`;
                             if (r.rank === 2) return `🥈 Drugoplasirani (2. od ${r.total})`;
                             if (r.won_seat && r.mandate_only) {
@@ -3570,7 +3611,68 @@ function listHolderHtml(r) {
         ${r.year < 2009 ? `<small class="text-muted fst-italic"><i class="bi bi-info-circle me-1"></i>${LIST_HOLDER_NOTE}</small>` : ''}`;
 }
 
+// Key offices of a Sabor term: badge class, emoji and chart-point colours.
+const SABOR_ROLE_STYLE = {
+    pm:        { cls: 'role-pm',        icon: '👑', bg: '#FFD700', border: '#B8860B', glow: 'rgba(255, 200, 0, 0.9)' },
+    speaker:   { cls: 'role-speaker',   icon: '🏛️', bg: '#6f42c1', border: '#45207d', glow: 'rgba(111, 66, 193, 0.7)' },
+    deputy:    { cls: 'role-deputy',    icon: '🔷', bg: '#a07fe0', border: '#6f42c1', glow: 'rgba(160, 127, 224, 0.6)' },
+    secretary: { cls: 'role-secretary', icon: '📋', bg: '#627891', border: '#4c5f74', glow: 'rgba(98, 120, 145, 0.6)' },
+};
+
+// Redraws a key-office point with a soft halo of its colour (Chart.js points
+// have no shadow option). Reads the per-point roles a dataset carries in _ranks.
+const roleGlowPlugin = {
+    id: 'roleGlow',
+    afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        chart.data.datasets.forEach((ds, di) => {
+            const meta = chart.getDatasetMeta(di);
+            if (meta.hidden || !ds._ranks) return;
+            ds._ranks.forEach((r, i) => {
+                if (!r || !r.roles || !r.roles.length) return;
+                const pt = meta.data[i];
+                if (!pt || pt.skip || ds.data[i] == null) return;
+                const s = SABOR_ROLE_STYLE[r.roles[0].role];
+                if (!s) return;
+                const radius = pt.options ? pt.options.radius : 9;
+                ctx.save();
+                ctx.shadowColor = s.glow;
+                ctx.shadowBlur = r.roles[0].role === 'pm' ? 18 : 12;
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = s.bg;
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = s.border;
+                ctx.stroke();
+                ctx.restore();
+            });
+        });
+    },
+};
+
+function roleDatesText(x) {
+    const fmt = d => { const [y, m, dd] = d.split('-'); return `${+dd}. ${+m}. ${y}.`; };
+    if (x.start && x.end) return `${fmt(x.start)} – ${fmt(x.end)}`;
+    if (x.start) return `od ${fmt(x.start)}`;
+    if (x.end) return `do ${fmt(x.end)}`;
+    return '';
+}
+
+function roleBadgesHtml(r) {
+    if (!r || !r.roles) return '';
+    return r.roles.map(x => {
+        const s = SABOR_ROLE_STYLE[x.role] || SABOR_ROLE_STYLE.secretary;
+        const when = roleDatesText(x);
+        return `<span class="badge rank-badge ${s.cls}" title="${escapeHtml(x.title)}${when ? ' · ' + when : ''}">${s.icon} ${escapeHtml(x.title)}</span>`;
+    }).join('');
+}
+
 function rankBadgeHtml(r) {
+    return roleBadgesHtml(r) + seatOrRankBadgeHtml(r);
+}
+
+function seatOrRankBadgeHtml(r) {
     if (!r) return '';
     if (r.eu_mep) {
         const grp = r.eu_group ? ` - ${r.eu_group}` : '';
@@ -6307,7 +6409,7 @@ function renderActualSaborResults(seatsData, opts) {
             // `candidate` stays null when the seat has no known holder (pre-2015
             // years publish no candidate names for districts I-XI), so the
             // table can show a placeholder instead of echoing the party name.
-            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || null, person_id: c.person_id, district: c.district || '' });
+            seatList.push({ party: p.name, color: partyColors[p.name], candidate: c.name || null, person_id: c.person_id, district: c.district || '', roles: c.roles });
             candIdx++;
         }
     });
@@ -6392,7 +6494,7 @@ function renderActualSaborResults(seatsData, opts) {
         // linking it would fire a politician search for a party name.
         const name = useRoster ? row.name : row.candidate;
         const nameHtml = name
-            ? personLinkHtml(name, row.person_id)
+            ? personLinkHtml(name, row.person_id) + roleBadgesHtml(row)
             : `<span class="text-muted fst-italic" title="Imena kandidata nisu objavljena za ovu izbornu godinu">nije objavljeno</span>`;
         const noteCell = `${row.minority ? '<span class="badge bg-secondary" style="font-size:0.7rem;">nacionalne manjine</span> ' : ''}${escapeHtml(row.note || '')}`;
         const lastCols = useRoster
