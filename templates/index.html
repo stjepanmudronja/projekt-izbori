@@ -411,6 +411,15 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .bar-label.bar-label-merged {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            white-space: normal;
+            font-size: 0.68rem;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
         .bar-track {
             flex: 1;
             height: 30px;
@@ -3946,11 +3955,17 @@ function buildBarChart(idx) {
         const pct = maxVotes > 0 ? (it.votes / maxVotes) * 100 : 0;
         const votePct = data.validBallots > 0 ? (it.votes / data.validBallots) * 100 : 0;
         const displayName = it.name.length > 40 ? it.name.substring(0, 37) + '...' : it.name;
+        const isMerged = it.origNames && it.origNames.length > 1;
 
         // Make the label a clickable jump to the politician page when this
         // bar represents a single (unmerged) person.
         const isClickablePerson = data.kind === 'person' && it.origNames && it.origNames.length === 1;
-        const labelHtml = isClickablePerson
+        // A merged bar lists every name in full, one per line, in a smaller font,
+        // instead of cutting "A + B + C" off at 40 characters.
+        const labelHtml = isMerged
+            ? `<div class="bar-label bar-label-merged">${it.origNames.map((n, k) =>
+                  `<span>${k > 0 ? '+ ' : ''}${n}</span>`).join('')}</div>`
+            : isClickablePerson
             ? `<div class="bar-label bar-label-link" data-person-name="${it.name.replace(/"/g, '&quot;')}"${it.personId ? ` data-person-id="${it.personId}"` : ''} title="Otvori stranicu političara: ${it.name.replace(/"/g, '&quot;')}">${displayName}</div>`
             : `<div class="bar-label">${displayName}</div>`;
 
