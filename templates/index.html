@@ -631,6 +631,8 @@
             0%, 100% { box-shadow: 0 0 3px 1px rgba(255, 200, 0, 0.45); }
             50% { box-shadow: 0 0 10px 3px rgba(255, 200, 0, 0.85); }
         }
+        .rank-badge.role-deputy-pm { background: linear-gradient(135deg, #FFF3B8, #EBCB6B); color: #5a4500; border: 1px solid #C9A227;
+            box-shadow: 0 0 4px 1px rgba(255, 200, 0, 0.35); }
         .rank-badge.role-speaker { background: linear-gradient(135deg, #8e5bd8, #5a2ca0); color: #fff; border: 1px solid #45207d; }
         .rank-badge.role-deputy { background: linear-gradient(135deg, #c9b3f2, #a07fe0); color: #2d1660; border: 1px solid #8a63d2; }
         .rank-badge.role-secretary { background: linear-gradient(135deg, #8fa3b8, #627891); color: #fff; border: 1px solid #4c5f74; }
@@ -3614,6 +3616,7 @@ function listHolderHtml(r) {
 // Key offices of a Sabor term: badge class, emoji and chart-point colours.
 const SABOR_ROLE_STYLE = {
     pm:        { cls: 'role-pm',        icon: '👑', bg: '#FFD700', border: '#B8860B', glow: 'rgba(255, 200, 0, 0.9)' },
+    deputy_pm: { cls: 'role-deputy-pm', icon: '⭐', bg: '#F2D675', border: '#C9A227', glow: 'rgba(255, 205, 60, 0.55)' },
     speaker:   { cls: 'role-speaker',   icon: '🏛️', bg: '#6f42c1', border: '#45207d', glow: 'rgba(111, 66, 193, 0.7)' },
     deputy:    { cls: 'role-deputy',    icon: '🔷', bg: '#a07fe0', border: '#6f42c1', glow: 'rgba(160, 127, 224, 0.6)' },
     secretary: { cls: 'role-secretary', icon: '📋', bg: '#627891', border: '#4c5f74', glow: 'rgba(98, 120, 145, 0.6)' },

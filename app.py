@@ -1,6 +1,7 @@
 import re
 import time
 from collections import defaultdict
+from datetime import date as _date
 
 from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
@@ -1008,7 +1009,17 @@ def person_detail(person_id):
 SABOR_ROLE_SLUGS = {'sabor', 'sabor_dpv', 'sabor_vo', 'sabor_vur'}
 _ROLES_BY_NAME = {}
 for _role, _name, _sazivi, _start, _end, _party in SABOR_ROLES:
-    _ROLES_BY_NAME.setdefault(normalize_person_name(_name), []).append({
+    _held = _ROLES_BY_NAME.setdefault(normalize_person_name(_name), [])
+    # A term carried into the next cabinet (Granić through four HDZ
+    # governments, Polančec from Sanader's into Kosor's) is one stretch in
+    # office: joined when the next starts within a week of the last ending.
+    _prev = next((x for x in reversed(_held) if x['role'] == _role), None)
+    if (_prev and _prev['end'] and _start
+            and 0 <= (_date.fromisoformat(_start) - _date.fromisoformat(_prev["end"])).days <= 7):
+        _prev['end'] = _end
+        _prev['sazivi'] = sorted(set(_prev['sazivi']) | set(_sazivi))
+        continue
+    _held.append({
         'role': _role, 'title': ROLE_TITLES[_role], 'sazivi': list(_sazivi),
         'start': _start, 'end': _end, 'party': _party,
     })

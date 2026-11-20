@@ -1,6 +1,7 @@
 """Key offices held during each Sabor saziv: the Prime Minister (predsjednik
-Vlade), the Speaker (predsjednik Sabora), the deputy speakers
-(potpredsjednici) and the Secretary (tajnik Sabora).
+Vlade) and deputy prime ministers (potpredsjednici Vlade), the Speaker
+(predsjednik Sabora), the deputy speakers (potpredsjednici Sabora) and the
+Secretary (tajnik Sabora).
 
 Pure data, no Django imports, so app.py can read it. None of this comes from
 an election result: the Sabor elects its presidency and confirms the
@@ -8,7 +9,7 @@ government after it is constituted, so these are curated like the rosters in
 `set_sabor_members`, with the source inline.
 
 Each entry is (role, name, sazivi, start, end, party):
-  role   'pm' | 'speaker' | 'deputy' | 'secretary'
+  role   'pm' | 'deputy_pm' | 'speaker' | 'deputy' | 'secretary'
   name   as in Person.normalized_name before diacritics are stripped (the app
          normalises it); a namesake row (Person.disambiguation set) never
          matches, only the unlabelled row
@@ -22,23 +23,28 @@ A role shows as a badge on the person's Sabor result(s) of that saziv and in
 their offices card. A holder with no Person row (never a candidate) simply
 does not show: Zlatko Mateša, Josip Sesar.
 
-Sources: en.wikipedia "List of prime ministers of Croatia", "Speaker of the
+A government's term is filed under every saziv it overlapped by 30 days or
+more, so a caretaker cabinet's few weeks into the next Sabor do not count.
+
+Sources: en.wikipedia "List of prime ministers of Croatia", "Deputy Prime
+Minister of Croatia", "Speaker of the
 Croatian Parliament" and "List of members of the Sabor, <years>" (presidency
 sections); 2024 deputies from the constituent session reports (16 May 2024)
 and sabor.hr. Deputy speakers before 2000 are not yet transcribed.
 """
 
-PM, SPEAKER, DEPUTY, SECRETARY = 'pm', 'speaker', 'deputy', 'secretary'
+PM, DEPUTY_PM, SPEAKER, DEPUTY, SECRETARY = 'pm', 'deputy_pm', 'speaker', 'deputy', 'secretary'
 
 ROLE_TITLES = {
     PM: 'Predsjednik Vlade',
+    DEPUTY_PM: 'Potpredsjednik Vlade',
     SPEAKER: 'Predsjednik Sabora',
     DEPUTY: 'Potpredsjednik Sabora',
     SECRETARY: 'Tajnik Sabora',
 }
 # Display order, most senior first: a person with several roles in one saziv
 # (Jandroković 2016: deputy, then speaker) is coloured by the first.
-ROLE_ORDER = [PM, SPEAKER, DEPUTY, SECRETARY]
+ROLE_ORDER = [PM, SPEAKER, DEPUTY_PM, DEPUTY, SECRETARY]
 
 SABOR_ROLES = [
     # --- Predsjednik Vlade -------------------------------------------------
@@ -57,6 +63,102 @@ SABOR_ROLES = [
     (PM, 'JADRANKA KOSOR', (2007,), '2009-07-06', '2011-12-23', 'HDZ'),
     (PM, 'ZORAN MILANOVIĆ', (2011,), '2011-12-23', '2016-01-22', 'SDP'),
     (PM, 'ANDREJ PLENKOVIĆ', (2016, 2020, 2024), '2016-10-19', None, 'HDZ'),
+
+    # --- Potpredsjednik Vlade, by government --------------------------------
+    # One row per term in a cabinet, so someone who served in two (Granić,
+    # Kosor's Polančec, Adlešič, Uzelac) has two. Holders marked "not in the
+    # data" never stood in an election imported here.
+    # Mesić
+    (DEPUTY_PM, 'BERNARDO JURLINA', (1990,), '1990-05-31', '1990-08-24', 'HDZ'),
+    (DEPUTY_PM, 'MATE BABIĆ', (1990,), '1990-05-31', '1990-08-24', 'HDZ'),  # not in the data
+    (DEPUTY_PM, 'MILAN RAMLJAK', (1990,), '1990-05-31', '1990-08-24', 'HDZ'),  # not in the data
+    # Manolić
+    (DEPUTY_PM, 'BERNARDO JURLINA', (1990,), '1990-08-24', '1991-03-04', 'HDZ'),
+    (DEPUTY_PM, 'MATE BABIĆ', (1990,), '1990-08-24', '1990-11-08', 'HDZ'),  # not in the data
+    (DEPUTY_PM, 'MILAN RAMLJAK', (1990,), '1990-08-24', '1991-07-17', 'HDZ'),  # not in the data
+    (DEPUTY_PM, 'FRANJO GREGURIĆ', (1990,), '1990-11-08', '1991-07-17', 'HDZ'),
+    # Gregurić
+    (DEPUTY_PM, 'MILAN RAMLJAK', (1990,), '1991-07-17', '1992-08-12', 'HDZ'),  # not in the data
+    (DEPUTY_PM, 'MATE GRANIĆ', (1990,), '1991-07-31', '1992-08-12', 'HDZ'),
+    (DEPUTY_PM, 'ZDRAVKO TOMAC', (1990,), '1991-07-31', '1992-06-26', 'SDP'),
+    (DEPUTY_PM, 'JURICA PAVELIĆ', (1990,), '1991-11-15', '1992-08-12', 'HDZ'),
+    # Šarinić
+    (DEPUTY_PM, 'MATE GRANIĆ', (1992,), '1992-08-12', '1993-04-03', 'HDZ'),
+    (DEPUTY_PM, 'VLADIMIR ŠEKS', (1992,), '1992-08-12', '1993-04-03', 'HDZ'),
+    (DEPUTY_PM, 'DARKO ČARGONJA', (1992,), '1992-08-12', '1992-12-29', 'HDZ'),
+    (DEPUTY_PM, 'IVAN MILAS', (1992,), '1992-08-27', '1993-04-03', 'HDZ'),
+    (DEPUTY_PM, 'MLADEN VEDRIŠ', (1992,), '1992-12-29', '1993-04-03', 'HDZ'),
+    # Valentić
+    (DEPUTY_PM, 'MATE GRANIĆ', (1992,), '1993-04-03', '1995-11-07', 'HDZ'),
+    (DEPUTY_PM, 'VLADIMIR ŠEKS', (1992,), '1993-04-03', '1994-09-20', 'HDZ'),
+    (DEPUTY_PM, 'BORISLAV ŠKEGRO', (1992,), '1993-04-03', '1995-11-07', 'HDZ'),
+    (DEPUTY_PM, 'IVICA KOSTOVIĆ', (1992,), '1993-10-12', '1995-11-07', 'HDZ'),
+    (DEPUTY_PM, 'JURE RADIĆ', (1992,), '1994-10-18', '1995-11-07', 'HDZ'),
+    (DEPUTY_PM, 'BOSILJKO MIŠETIĆ', (1992,), '1995-05-11', '1995-11-07', 'HDZ'),
+    # Mateša
+    (DEPUTY_PM, 'MATE GRANIĆ', (1995,), '1995-11-07', '2000-01-27', 'HDZ'),
+    (DEPUTY_PM, 'BORISLAV ŠKEGRO', (1995,), '1995-11-07', '2000-01-27', 'HDZ'),
+    (DEPUTY_PM, 'IVICA KOSTOVIĆ', (1995,), '1995-11-07', '1998-10-14', 'HDZ'),
+    (DEPUTY_PM, 'JURE RADIĆ', (1995,), '1995-11-07', '2000-01-27', 'HDZ'),
+    (DEPUTY_PM, 'LJERKA MINTAS-HODAK', (1995,), '1995-11-07', '2000-01-27', 'HDZ'),  # not in the data
+    (DEPUTY_PM, 'MILAN RAMLJAK', (1995,), '1998-05-14', '1999-04-13', 'HDZ'),  # not in the data
+    # Račan I
+    (DEPUTY_PM, 'GORAN GRANIĆ', (2000,), '2000-01-27', '2002-03-21', 'HSLS'),
+    (DEPUTY_PM, 'ŽELJKA ANTUNOVIĆ', (2000,), '2000-01-27', '2003-12-23', 'SDP'),
+    (DEPUTY_PM, 'SLAVKO LINIĆ', (2000,), '2000-01-27', '2003-12-23', 'SDP'),
+    (DEPUTY_PM, 'DRAŽEN BUDIŠA', (2000,), '2002-03-21', '2002-07-30', 'HSLS'),
+    # Račan II
+    (DEPUTY_PM, 'GORAN GRANIĆ', (2000,), '2002-07-30', '2003-12-23', 'HNS'),
+    (DEPUTY_PM, 'ANTE SIMONIĆ', (2000,), '2002-07-30', '2003-12-23', 'HSS'),  # not in the data
+    # Sanader I
+    (DEPUTY_PM, 'JADRANKA KOSOR', (2003, 2007), '2003-12-23', '2009-07-06', 'HDZ'),
+    (DEPUTY_PM, 'ANDRIJA HEBRANG', (2003,), '2003-12-23', '2005-02-15', 'HDZ'),
+    (DEPUTY_PM, 'DAMIR POLANČEC', (2003, 2007), '2005-02-17', '2009-07-06', 'HDZ'),
+    # Sanader II
+    (DEPUTY_PM, 'ĐURĐA ADLEŠIĆ', (2007,), '2008-01-12', '2009-07-06', 'HSLS'),
+    (DEPUTY_PM, 'SLOBODAN UZELAC', (2007,), '2008-01-12', '2009-07-06', 'SDSS'),
+    # Kosor
+    (DEPUTY_PM, 'DAMIR POLANČEC', (2007,), '2009-07-06', '2009-10-30', 'HDZ'),
+    (DEPUTY_PM, 'ĐURĐA ADLEŠIĆ', (2007,), '2009-07-06', '2010-10-12', 'HSLS'),
+    (DEPUTY_PM, 'SLOBODAN UZELAC', (2007,), '2009-07-06', '2011-12-23', 'SDSS'),
+    (DEPUTY_PM, 'BOŽIDAR PANKRETIĆ', (2007,), '2009-07-06', '2011-12-23', 'HSS'),
+    (DEPUTY_PM, 'IVAN ŠUKER', (2007,), '2009-11-19', '2010-12-29', 'HDZ'),
+    (DEPUTY_PM, 'DARKO MILINOVIĆ', (2007,), '2009-11-19', '2011-12-23', 'HDZ'),
+    (DEPUTY_PM, 'DOMAGOJ IVAN MILOŠEVIĆ', (2007,), '2010-12-29', '2011-12-23', 'HDZ'),
+    (DEPUTY_PM, 'PETAR ČOBANKOVIĆ', (2007,), '2010-12-29', '2011-12-23', 'HDZ'),
+    (DEPUTY_PM, 'GORDAN JANDROKOVIĆ', (2007,), '2010-12-29', '2011-12-23', 'HDZ'),
+    # Milanović
+    (DEPUTY_PM, 'RADIMIR ČAČIĆ', (2011,), '2011-12-23', '2012-11-14', 'HNS'),
+    (DEPUTY_PM, 'NEVEN MIMICA', (2011,), '2011-12-23', '2013-07-01', 'SDP'),
+    (DEPUTY_PM, 'BRANKO GRČIĆ', (2011,), '2011-12-23', '2016-01-22', 'SDP'),
+    (DEPUTY_PM, 'MILANKA OPAČIĆ', (2011,), '2011-12-23', '2016-01-22', 'SDP'),
+    (DEPUTY_PM, 'VESNA PUSIĆ', (2011,), '2012-11-16', '2016-01-22', 'HNS'),
+    (DEPUTY_PM, 'RANKO OSTOJIĆ', (2011,), '2013-07-15', '2016-01-22', 'SDP'),
+    # Orešković
+    (DEPUTY_PM, 'TOMISLAV KARAMARKO', (2015,), '2016-01-22', '2016-06-15', 'HDZ'),
+    (DEPUTY_PM, 'BOŽO PETROV', (2015,), '2016-01-22', '2016-10-19', 'Most'),
+    # Plenković I
+    (DEPUTY_PM, 'IVAN KOVAČIĆ', (2016,), '2016-10-19', '2017-04-28', 'Most'),
+    (DEPUTY_PM, 'DAVOR IVO STIER', (2016,), '2016-10-19', '2017-06-19', 'HDZ'),
+    (DEPUTY_PM, 'DAMIR KRSTIČEVIĆ', (2016,), '2016-10-19', '2020-05-08', 'HDZ'),
+    (DEPUTY_PM, 'MARTINA DALIĆ', (2016,), '2016-10-19', '2018-05-14', 'HDZ'),
+    (DEPUTY_PM, 'PREDRAG ŠTROMAR', (2016,), '2017-06-09', '2020-07-23', 'HNS'),
+    (DEPUTY_PM, 'MARIJA PEJČINOVIĆ BURIĆ', (2016,), '2017-06-19', '2019-07-19', 'HDZ'),
+    (DEPUTY_PM, 'TOMISLAV TOLUŠIĆ', (2016,), '2018-05-25', '2019-07-17', 'HDZ'),
+    (DEPUTY_PM, 'ZDRAVKO MARIĆ', (2016, 2020), '2019-07-19', '2022-07-05', 'nezavisni'),
+    (DEPUTY_PM, 'DAVOR BOŽINOVIĆ', (2016, 2020, 2024), '2019-07-19', None, 'HDZ'),
+    # Plenković II
+    (DEPUTY_PM, 'TOMO MEDVED', (2020, 2024), '2020-07-23', None, 'HDZ'),
+    (DEPUTY_PM, 'BORIS MILOŠEVIĆ', (2020,), '2020-07-23', '2022-04-29', 'SDSS'),
+    (DEPUTY_PM, 'ANJA ŠIMPRAGA', (2020,), '2022-04-29', '2024-05-17', 'SDSS'),
+    (DEPUTY_PM, 'OLEG BUTKOVIĆ', (2020, 2024), '2022-07-15', None, 'HDZ'),
+    (DEPUTY_PM, 'BRANKO BAČIĆ', (2020, 2024), '2023-01-17', None, 'HDZ'),
+    (DEPUTY_PM, 'IVAN ANUŠIĆ', (2020, 2024), '2023-11-16', None, 'HDZ'),
+    # Plenković III
+    (DEPUTY_PM, 'JOSIP DABRO', (2024,), '2024-05-17', '2025-01-18', 'DP'),
+    (DEPUTY_PM, 'MARKO PRIMORAC', (2024,), '2024-05-17', '2026-01-29', 'nezavisni'),
+    (DEPUTY_PM, 'DAVID VLAJČIĆ', (2024,), '2025-02-11', None, 'DP'),  # not in the data
+    (DEPUTY_PM, 'TOMISLAV ĆORIĆ', (2024,), '2026-01-29', None, 'HDZ'),
 
     # --- Predsjednik Sabora ------------------------------------------------
     (SPEAKER, 'ŽARKO DOMLJAN', (1990,), '1990-05-30', '1992-09-07', 'HDZ'),
