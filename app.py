@@ -1008,28 +1008,55 @@ def person_detail(person_id):
 # its three chambers — and list in the offices card.
 SABOR_ROLE_SLUGS = {'sabor', 'sabor_dpv', 'sabor_vo', 'sabor_vur'}
 _ROLES_BY_NAME = {}
-for _role, _name, _sazivi, _start, _end, _party in SABOR_ROLES:
+for _entry in SABOR_ROLES:
+    _role, _name, _sazivi, _start, _end, _party = _entry[:6]
+    _title = _entry[6] if len(_entry) > 6 else ROLE_TITLES[_role]
     _held = _ROLES_BY_NAME.setdefault(normalize_person_name(_name), [])
     # A term carried into the next cabinet (Granić through four HDZ
     # governments, Polančec from Sanader's into Kosor's) is one stretch in
-    # office: joined when the next starts within a week of the last ending.
-    _prev = next((x for x in reversed(_held) if x['role'] == _role), None)
+    # office: joined when the same office starts again within a week of the
+    # last ending.
+    _prev = next((x for x in reversed(_held) if x['role'] == _role and x['title'] == _title), None)
     if (_prev and _prev['end'] and _start
             and 0 <= (_date.fromisoformat(_start) - _date.fromisoformat(_prev["end"])).days <= 7):
         _prev['end'] = _end
         _prev['sazivi'] = sorted(set(_prev['sazivi']) | set(_sazivi))
         continue
     _held.append({
-        'role': _role, 'title': ROLE_TITLES[_role], 'sazivi': list(_sazivi),
+        'role': _role, 'title': _title, 'sazivi': list(_sazivi),
         'start': _start, 'end': _end, 'party': _party,
     })
 
+# A role names a national figure, so it goes only to a Person with a
+# national record (Sabor or one of its chambers, EU, presidential): where the
+# only Person of that name stood in local elections, it is far likelier a
+# namesake than the minister (Ivica Kirin, Predrag Šustar…), and is left out.
+NATIONAL_SLUGS = SABOR_ROLE_SLUGS | {'sabor_zupanijski', 'eu_parliament', 'presidential'}
+_national_cache = {}
+
+
+def _has_national_record(person_id):
+    if person_id not in _national_cache:
+        cand = (db.session.query(Candidacy.id)
+                .join(ElectoralList, ElectoralList.id == Candidacy.electoral_list_id)
+                .join(ElectionRound, ElectionRound.id == ElectoralList.election_round_id)
+                .join(Election, Election.id == ElectionRound.election_id)
+                .join(ElectionType, ElectionType.id == Election.election_type_id)
+                .filter(Candidacy.person_id == person_id, ElectionType.slug.in_(NATIONAL_SLUGS))
+                .first())
+        member = (db.session.query(ParliamentMember.id)
+                  .filter(ParliamentMember.person_id == person_id).first()) if not cand else None
+        _national_cache[person_id] = bool(cand or member)
+    return _national_cache[person_id]
+
 
 def person_roles(person):
-    if person.disambiguation:
+    if person.disambiguation or person.normalized_name not in _ROLES_BY_NAME:
         return []
-    return sorted(_ROLES_BY_NAME.get(person.normalized_name, []),
-                  key=lambda x: ROLE_ORDER.index(x['role']))
+    if not _has_national_record(person.id):
+        return []
+    return sorted(_ROLES_BY_NAME[person.normalized_name],
+                  key=lambda x: (ROLE_ORDER.index(x['role']), x['start'] or ''))
 
 
 def saziv_roles_by_person(person_ids, year):
