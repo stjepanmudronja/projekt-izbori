@@ -93,6 +93,13 @@
         .home-card .hc-rank { font-size: .8rem; font-weight: 700; color: #2b6cb0; }
         .home-card .bar-label-link, .home-card .place-link { color: inherit; }
         .home-card.hc-wide { flex-basis: 19rem; }
+        .ps-chip { border: 1px solid #dee2e6; background: #fff; color: #495057; border-radius: 999px;
+                   padding: .2rem .65rem; font-size: .8rem; display: inline-flex; align-items: center; gap: .35rem; }
+        .ps-chip i { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; opacity: .35; }
+        .ps-chip.on { border-color: #adb5bd; color: #212529; font-weight: 600; background: #f8f9fa; }
+        .ps-chip.on i { opacity: 1; }
+        .ps-chip.ceased { font-style: italic; }
+        .ps-chart { position: relative; height: 26rem; }
         .home-card .hc-chart { position: relative; height: 8.5rem; margin: .2rem -.35rem 0; }
         .home-bars { display: flex; align-items: flex-end; gap: .6rem; height: 7rem; margin-top: .4rem; }
         .home-bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
@@ -840,6 +847,9 @@
             <li><a href="#" data-module="analytics-turnout">
                 <i class="bi bi-graph-up"></i> Izlaznost
             </a></li>
+            <li><a href="#" data-module="analytics-parties">
+                <i class="bi bi-bar-chart-line"></i> Snaga stranaka
+            </a></li>
             <li><a href="#" data-module="analytics-map">
                 <i class="bi bi-map"></i> Karta općina
             </a></li>
@@ -1491,6 +1501,22 @@
             </div>
         </div>
 
+        <!-- Party strength over time: each party's share in every election of a kind -->
+        <div id="module-analytics-parties" class="module-panel">
+            <div class="card search-card p-3 mb-3">
+                <label class="form-label fw-semibold d-block">Izbori</label>
+                <div class="btn-group flex-wrap" role="group" id="psKindGroup"></div>
+                <label class="form-label fw-semibold d-block mt-3 mb-1">Stranke
+                    <small class="text-muted fw-normal ms-1">(klikni za prikaz ili skrivanje; poredano po najboljem rezultatu)</small></label>
+                <div class="d-flex flex-wrap gap-2" id="psChips"></div>
+            </div>
+            <div class="spinner-wrapper" id="psSpinner"><div class="spinner-border text-primary"></div></div>
+            <div class="card p-3">
+                <div class="ps-chart"><canvas id="psChart"></canvas></div>
+                <div class="small text-muted mt-2" id="psNote"></div>
+            </div>
+        </div>
+
         <!-- Municipality map: every općina/grad coloured by an election's result -->
         <div id="module-analytics-map" class="module-panel">
             <div class="card search-card p-3 mb-3">
@@ -1583,6 +1609,7 @@ const moduleTitles = {
     'sabor-analysis': '<i class="bi bi-people-fill me-2"></i>Rezultati i koalicije (Sabor)',
     'analytics-turnout': '<i class="bi bi-graph-up me-2"></i>Izlaznost',
     'analytics-map': '<i class="bi bi-map me-2"></i>Karta općina',
+    'analytics-parties': '<i class="bi bi-bar-chart-line me-2"></i>Snaga stranaka kroz vrijeme',
     parties: '<i class="bi bi-flag me-2"></i>Stranke',
 };
 
@@ -1604,6 +1631,7 @@ const MODULE_SLUGS = {
     'sabor-analysis': 'rezultati-koalicije-sabor',
     'analytics-turnout': 'izlaznost',
     'analytics-map': 'karta',
+    'analytics-parties': 'snaga-stranaka',
 };
 const SLUG_TO_MODULE = Object.fromEntries(Object.entries(MODULE_SLUGS).map(([k, v]) => [v, k]));
 
@@ -1636,6 +1664,7 @@ function activateModule(mod, opts) {
     if (mod === 'place') initPlaceModule();
     if (mod === 'analytics-turnout') initIzlaznost();
     if (mod === 'analytics-map') initMapModule();
+    if (mod === 'analytics-parties') initPartyStrength();
     if (mod === 'parties') initPartiesModule();
     if (mod === 'sabor-analysis') initSaborAnalysis();
     if (mod === 'results-lokalni') initLokalniModule();
@@ -1854,6 +1883,7 @@ function renderPartyDetail(d) {
         </div>` : `<div class="alert alert-light">Stranka nije pronađena ni na jednoj izbornoj listi u bazi.
             Male i lokalne stranke često nastupaju pod drugim nazivom ili samo u koaliciji.</div>`}
         <div class="party-source">${PARTY_SOURCE_HTML}</div>`;
+    box.style.display = '';
     document.getElementById('partyBack').addEventListener('click', () => closeParty({ push: true }));
     renderPartyChart(d);
 }
@@ -2416,6 +2446,133 @@ function renderHome(d) {
     presidents.forEach((p, i) => renderHomePresChart(
         document.getElementById(`homePresChart${i}`), (pres.careers || {})[p.person_id] || [], p.wins));
 }
+
+// ---- Snaga stranaka: each party's share across elections (/api/analytics/party-strength) ----
+const PS_KIND_STYLE = { sabor: 'circle', eu: 'rectRot', vijeca: 'triangle', skupstine: 'rect' };
+const _ps = { ready: false, kind: 'sabor', data: {}, on: new Set(), chart: null, colors: {} };
+
+async function initPartyStrength() {
+    if (_ps.ready) return;
+    _ps.ready = true;
+    await loadPartyStrength('sabor');
+}
+
+async function loadPartyStrength(kind) {
+    const spinner = document.getElementById('psSpinner');
+    spinner.classList.add('show');
+    try {
+        if (!_ps.data[kind]) _ps.data[kind] = await fetch(`/api/analytics/party-strength?kind=${kind}`).then(r => r.json());
+    } finally {
+        spinner.classList.remove('show');
+    }
+    const d = _ps.data[kind];
+    if (d.error) return;
+    _ps.kind = kind;
+    // The strongest six, or whatever is still shown that this kind has.
+    const regs = new Set(d.parties.map(p => p.registry_number));
+    const kept = [..._ps.on].filter(r => regs.has(r));
+    _ps.on = new Set(kept.length ? kept : d.parties.slice(0, 6).map(p => p.registry_number));
+    let next = 0;
+    d.parties.forEach(p => {
+        if (!_ps.colors[p.registry_number])
+            _ps.colors[p.registry_number] = MAP_PARTY_COLORS[psLabel(p).toUpperCase()] || MAP_PALETTE[next++ % MAP_PALETTE.length];
+    });
+    document.getElementById('psKindGroup').innerHTML = [...d.kinds, { key: 'sve', label: 'Svi zajedno' }].map(k =>
+        `<button type="button" class="btn btn-outline-primary${k.key === kind ? ' active' : ''}" data-ps-kind="${k.key}">${k.label}</button>`).join('');
+    renderPartyStrength();
+}
+
+const psLabel = p => p.short_name || p.name;
+
+function renderPartyStrength() {
+    const d = _ps.data[_ps.kind];
+    document.getElementById('psChips').innerHTML = d.parties.slice(0, 25).map(p =>
+        `<button type="button" class="ps-chip${_ps.on.has(p.registry_number) ? ' on' : ''}${p.active ? '' : ' ceased'}"
+            data-ps-reg="${p.registry_number}" title="${escapeHtml(p.name)}${p.active ? '' : ' (prestala postojati)'} · najbolje ${formatPct(p.peak, 2)}">
+            <i style="background:${_ps.colors[p.registry_number]}"></i>${escapeHtml(psLabel(p))}</button>`).join('');
+    const kindLabel = Object.fromEntries(d.kinds.map(k => [k.key, k.label]));
+    const all = _ps.kind === 'sve';
+    const shown = d.parties.filter(p => _ps.on.has(p.registry_number));
+    const years = d.elections.map(e => e.year);
+    const datasets = shown.map(p => {
+        const c = _ps.colors[p.registry_number];
+        return {
+            label: psLabel(p), reg: p.registry_number, party: p,
+            // An election in between that the party led no list in breaks the line.
+            data: all ? p.points.map(pt => ({ x: pt.year, y: pt.share, pt }))
+                : [...new Set(years)].filter(y => y >= p.points[0].year && y <= p.points[p.points.length - 1].year)
+                    .map(y => { const pt = p.points.find(q => q.year === y); return { x: y, y: pt ? pt.share : null, pt }; }),
+            // Across election types a line would zigzag between ballots; points only.
+            borderColor: c, backgroundColor: c, borderWidth: 2.5, showLine: !all,
+            cubicInterpolationMode: 'monotone', pointRadius: 5, pointHoverRadius: 8,
+            pointStyle: ctx => (ctx.raw && ctx.raw.pt && PS_KIND_STYLE[ctx.raw.pt.kind]) || 'circle',
+            pointBorderColor: '#fff', pointBorderWidth: 1.5,
+        };
+    });
+    if (_ps.chart) _ps.chart.destroy();
+    _ps.chart = new Chart(document.getElementById('psChart').getContext('2d'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'nearest', intersect: true },
+            onClick: (evt, items) => {
+                if (!items.length) return;
+                const reg = datasets[items[0].datasetIndex].reg;
+                activateModule('parties', { pushState: false, focusInput: false });
+                openParty(reg, { push: true });
+            },
+            onHover: (evt, items) => { if (evt.native) evt.native.target.style.cursor = items.length ? 'pointer' : 'default'; },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(26, 26, 46, 0.95)', padding: 10, cornerRadius: 6,
+                    callbacks: {
+                        title: items => {
+                            const pt = items[0].raw.pt;
+                            return `${kindLabel[pt.kind]} ${pt.year}.`;
+                        },
+                        label: ctx => {
+                            const pt = ctx.raw.pt;
+                            return `${ctx.dataset.label}: ${formatPct(pt.share, 2)} (${pt.votes.toLocaleString('hr-HR')} glasova)`;
+                        },
+                        afterLabel: ctx => {
+                            const name = ctx.raw.pt.top_list || '';
+                            return name && name.toUpperCase() !== (ctx.dataset.party.name || '').toUpperCase()
+                                ? `Lista: ${name.replace(/\s*\n\s*/g, ', ').slice(0, 90)}` : '';
+                        },
+                        footer: () => 'Klikni za stranicu stranke.',
+                    }
+                },
+            },
+            scales: {
+                x: { type: 'linear', min: Math.min(...years) - 0.5, max: Math.max(...years) + 0.5,
+                     afterBuildTicks: axis => { axis.ticks = [...new Set(years)].map(v => ({ value: v })); },
+                     ticks: { callback: v => `${v}.`, autoSkip: true, maxRotation: 0, font: { size: 11 } },
+                     grid: { color: 'rgba(0,0,0,0.05)' } },
+                y: { beginAtZero: true, ticks: { callback: v => v + ' %' }, grid: { color: 'rgba(0,0,0,0.05)' },
+                     title: { display: true, text: 'Udio glasova', color: '#6c757d', font: { weight: 'bold' } } },
+            },
+            animation: { duration: 500 },
+        },
+    });
+    document.getElementById('psNote').innerHTML =
+        (all ? 'Oblik točke: ● Sabor · ◆ Europski parlament · ▲ gradska i općinska vijeća · ■ županijske skupštine. ' : '')
+        + 'Udio = glasovi lista koje je stranka predvodila (prva navedena u koaliciji) od svih glasova za liste na tim izborima; '
+        + 'stranka koja je bila samo partner u koaliciji tada nema točku. Vijeća i skupštine zbrajaju sve općine i gradove u državi. '
+        + 'Sabor 1992. i 1995. računa samo državnu listu, 2000. samo I.–X. izbornu jedinicu; manjinske jedinice nisu uključene.';
+}
+
+document.addEventListener('click', e => {
+    const k = e.target.closest && e.target.closest('[data-ps-kind]');
+    if (k) { loadPartyStrength(k.dataset.psKind); return; }
+    const c = e.target.closest && e.target.closest('[data-ps-reg]');
+    if (c) {
+        const reg = Number(c.dataset.psReg);
+        if (_ps.on.has(reg)) _ps.on.delete(reg); else _ps.on.add(reg);
+        renderPartyStrength();
+    }
+});
 
 // A president's career in miniature: the politician page's vote-share line
 // (points coloured by election type, a click opens that election), with each

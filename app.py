@@ -229,7 +229,7 @@ def index():
 SPA_ROUTES = {
     'politicar', 'prema-lokaciji', 'usporedba', 'stranke',
     'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
-    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto',
+    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto', 'snaga-stranaka',
 }
 
 
@@ -2121,6 +2121,93 @@ def party_page(registry_number):
         })
     history.sort(key=lambda h: (-h['year'], h['election_type']))
     return jsonify({**_party_summary(p, links, lists), 'seat': p.seat, 'oib': p.oib, 'history': history})
+
+
+# Party strength over time: which elections each kind covers. A party's
+# share is the votes of the lists it led (first-named, so a coalition counts
+# for its leader) over all party-list votes of that election's round 1, as on
+# its Stranke page; local councils add up every municipality in the country.
+PARTY_STRENGTH_KINDS = {
+    'sabor': {'label': 'Sabor', 'slugs': ('sabor',)},
+    'eu': {'label': 'Europski parlament', 'slugs': ('eu_parliament',)},
+    'vijeca': {'label': 'Gradska i općinska vijeća', 'slugs': ('vijeca',)},
+    'skupstine': {'label': 'Županijske skupštine', 'slugs': ('local_county_assembly',)},
+}
+
+
+# A party the register files under two numbers, one per registration, is one
+# line on the strength chart (successor's number). Evidence: the 1992 Sabor
+# list "Socijaldemokratska partija Hrvatske - Stranka demokratskih promjena -
+# SDP" matches register no. 70 (that name, ceased) while today's SDP is no. 88;
+# HRAST stood in 2011 as Hrvatski rast (no. 218) and re-registered in 2012 as
+# HRAST - Pokret za uspješnu Hrvatsku (no. 246).
+PARTY_SUCCESSORS = {70: 88, 218: 246}
+
+
+@app.route('/api/analytics/party-strength')
+def party_strength():
+    """Every registered party's share in every election of the chosen kinds
+    (`kind` = one of PARTY_STRENGTH_KINDS, or `sve` for all of them), ready
+    for one line per party. Parties come sorted by their best share; the
+    frontend shows the strongest few and lets the rest be switched on."""
+    kind = request.args.get('kind', 'sabor')
+    kinds = list(PARTY_STRENGTH_KINDS) if kind == 'sve' else [kind]
+    if any(k not in PARTY_STRENGTH_KINDS for k in kinds):
+        return jsonify({'error': 'Nepoznata vrsta izbora.'}), 400
+    key = ('strength', kind)
+    if key in _PARTY_CACHE:
+        return jsonify(_PARTY_CACHE[key])
+    slug_kind = {s: k for k in kinds for s in PARTY_STRENGTH_KINDS[k]['slugs']}
+    links = _party_links()
+    lists, totals = _party_list_votes()
+
+    elections = {}                               # (kind, year) -> round-1 round ids
+    for info in lists.values():
+        k = slug_kind.get(info['slug'])
+        if k and info['round'] == 1:
+            elections.setdefault((k, info['year']), set()).add(info['round_id'])
+    total = {e: sum(totals[r] for r in rids) for e, rids in elections.items()}
+
+    parties = {p.id: p for p in RegisteredParty.query.all()}
+    by_reg = {p.registry_number: p.id for p in parties.values()}
+    votes, top = defaultdict(lambda: defaultdict(int)), defaultdict(dict)
+    for pid, plist in links.items():
+        reg = PARTY_SUCCESSORS.get(parties[pid].registry_number)
+        owner = by_reg.get(reg, pid)
+        for list_id, role in plist:
+            info = lists.get(list_id)
+            if role != 'leader' or not info or info['round'] != 1:
+                continue
+            k = slug_kind.get(info['slug'])
+            if not k:
+                continue
+            e = (k, info['year'])
+            votes[owner][e] += info['votes']
+            if info['votes'] > top[owner].get(e, ('', -1))[1]:
+                top[owner][e] = (info['name'], info['votes'])
+    series = []
+    for owner, ev in votes.items():
+        points = [{'kind': k, 'year': y, 'votes': v, 'share': round(v / total[(k, y)] * 100, 2),
+                   'top_list': top[owner][(k, y)][0]}
+                  for (k, y), v in sorted(ev.items(), key=lambda kv: (kv[0][1], kv[0][0]))
+                  if v and total.get((k, y))]
+        if not points:
+            continue
+        p = parties[owner]
+        series.append({
+            'registry_number': p.registry_number, 'name': p.name, 'short_name': p.short_name or '',
+            'active': p.status != 'PRESTANAK', 'peak': max(pt['share'] for pt in points),
+            'points': points,
+        })
+    series.sort(key=lambda s: -s['peak'])
+    payload = {
+        'kind': kind,
+        'kinds': [{'key': k, 'label': v['label']} for k, v in PARTY_STRENGTH_KINDS.items()],
+        'elections': [{'kind': k, 'year': y, 'votes': total[(k, y)]} for k, y in sorted(total, key=lambda e: (e[1], e[0]))],
+        'parties': series[:40],
+    }
+    _PARTY_CACHE[key] = payload
+    return jsonify(payload)
 
 
 def _home_presidential(sql):
