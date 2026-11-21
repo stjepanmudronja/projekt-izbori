@@ -4,7 +4,7 @@
 import re
 from collections import defaultdict
 from flask import jsonify, request
-from webapp.core import app, db
+from webapp.core import app, db, static_cache
 from webapp.models import (
     Election,
     ElectionRound,
@@ -33,6 +33,13 @@ _INDEPENDENT_PREFIXES = ('NEZAVISN', 'NEOVISN', 'KANDIDACIJSKA LISTA GRUPE', 'LI
 
 
 _NOT_ABBREVIATIONS = {'STRANKA', 'LISTA', 'NL'}
+# One party under two names on the ballot, joined so the map colours it the
+# same and the swing view can compare it across years (key -> canonical key).
+# Only real renames: "Narodna stranka - Reformisti" is not HNS.
+_MAP_KEY_ALIASES = {
+    'DOMOVINSKI POKRET MIROSLAVA ŠKORE': 'DP',            # Sabor 2020; "DP" from 2021
+    'HRVATSKI LABURISTI-STRANKA RADA': 'HRVATSKI LABURISTI',  # Sabor 2011
+}
 _MAP_HEAD_ABBR = {}
 
 
@@ -66,6 +73,9 @@ def _map_party(list_name):
         return abbr, abbr, first
     if head.upper().startswith(_INDEPENDENT_PREFIXES):
         return 'NEZAVISNI', 'Nezavisne liste', 'Nezavisne liste'
+    if head.upper() in _MAP_KEY_ALIASES:
+        key = _MAP_KEY_ALIASES[head.upper()]
+        return key, key, first
     return head.upper(), head, first
 
 
@@ -121,10 +131,13 @@ def map_data():
     return jsonify(payload)
 
 
-def _map_payload(kind, year, rnd=1):
-    """The map's figures for one election (see map_data), cached; None when
-    there is no such election."""
-    cache_key = (kind, year, rnd)
+def _map_votes(kind, year, rnd=1):
+    """One election's votes per municipality and party key (`_map_party`),
+    with the party labels, the national totals and turnout per municipality;
+    shared by the map and the swing view, cached. None when there is no such
+    election. Sabor's minority districts (121+) are left out and Zagreb's
+    Sabor units count as Grad Zagreb."""
+    cache_key = ('votes', kind, year, rnd)
     if cache_key in _MAP_CACHE:
         return _MAP_CACHE[cache_key]
     round_ids = [r for r, _, n in _map_rounds(kind, year) if n == rnd]
@@ -166,6 +179,25 @@ def _map_payload(kind, year, rnd=1):
         if mid in real and reg:
             r, c = turnout.get(mid, (0, 0))
             turnout[mid] = (r + int(reg), c + int(cast or 0))
+    out = {'round_ids': round_ids, 'real': real, 'muni_of': muni_of, 'votes': votes,
+           'labels': labels, 'fulls': fulls, 'national': national, 'turnout': turnout}
+    _MAP_CACHE[cache_key] = out
+    return out
+
+
+def _map_payload(kind, year, rnd=1):
+    """The map's figures for one election (see map_data), cached; None when
+    there is no such election."""
+    cache_key = (kind, year, rnd)
+    if cache_key in _MAP_CACHE:
+        return _MAP_CACHE[cache_key]
+    mv = _map_votes(kind, year, rnd)
+    if mv is None:
+        return None
+    round_ids, real, muni_of = mv['round_ids'], mv['real'], mv['muni_of']
+    votes, national, turnout = mv['votes'], mv['national'], mv['turnout']
+    labels, fulls = dict(mv['labels']), mv['fulls']   # a copy: the winner loop adds to labels
+    sql = lambda q, **kw: db.session.execute(db.text(q), kw).fetchall()
 
     # Sabor: the district a town votes in, for opening it on the Sabor page.
     # Mobile and special stations put a handful of a town's votes into other
@@ -222,3 +254,71 @@ def _map_payload(kind, year, rnd=1):
                'munis': munis}
     _MAP_CACHE[cache_key] = payload
     return payload
+
+
+@app.route('/api/map/swing')
+@static_cache(maxsize=300)
+def map_swing():
+    """How one party's share (or turnout) changed per municipality between
+    two elections: `kind`, `year`, `round` the later one, `base_kind`,
+    `base_year`, `base_round` the earlier (any two, also of different
+    kinds: a party is matched by its `_map_party` key, so HDZ is HDZ on
+    every ballot), `party` a key or `__turnout`. Shares are of the
+    municipality's list votes in each election; a party with no list in a
+    town that voted counts 0 % there. Only towns with results in both
+    elections get a change. Without `party`, the largest party present in
+    both is shown."""
+    a = request.args
+    kind, year, rnd = a.get('kind'), a.get('year', type=int), a.get('round', 1, type=int)
+    bkind, byear, brnd = a.get('base_kind'), a.get('base_year', type=int), a.get('base_round', 1, type=int)
+    if kind not in MAP_KINDS or bkind not in MAP_KINDS or not year or not byear:
+        return jsonify({'error': 'Nepoznati izbori.'}), 400
+    new, old = _map_votes(kind, year, rnd), _map_votes(bkind, byear, brnd)
+    if new is None or old is None:
+        return jsonify({'error': 'Nema tih izbora.'}), 404
+
+    def share(mv, key):
+        total = sum(mv['national'].values()) or 1
+        return round(mv['national'].get(key, 0) / total * 100, 2)
+    # Parties on both ballots, with at least 0.5 % nationally in one of them.
+    both = [k for k in set(new['national']) & set(old['national'])
+            if max(share(new, k), share(old, k)) >= 0.5]
+    both.sort(key=lambda k: -(new['national'][k] + old['national'][k]))
+    parties = [{'key': k, 'label': new['labels'].get(k) or old['labels'].get(k) or k,
+                'share': share(new, k), 'base_share': share(old, k)} for k in both]
+    party = a.get('party') or (parties[0]['key'] if parties else '__turnout')
+    if party != '__turnout' and party not in both:
+        return jsonify({'error': 'Ta stranka nije na oba glasanja.'}), 404
+
+    def values(mv):
+        out = {}
+        if party == '__turnout':
+            for mid, (reg, cast) in mv['turnout'].items():
+                if reg:
+                    out[mid] = round(cast / reg * 100, 1)
+        else:
+            for mid, pv in mv['votes'].items():
+                total = sum(pv.values())
+                if total:
+                    out[mid] = round(pv.get(party, 0) / total * 100, 1)
+        return out
+    now, before = values(new), values(old)
+    real = new['real']
+    munis = {mid: {'name': real[mid].name, 'county_id': real[mid].county_id,
+                   'value': now[mid], 'base': before[mid], 'change': round(now[mid] - before[mid], 1)}
+             for mid in set(now) & set(before) if mid in real}
+    if party == '__turnout':
+        def national_turnout(mv):
+            reg = sum(r for r, _c in mv['turnout'].values())
+            return round(sum(c for _r, c in mv['turnout'].values()) / reg * 100, 2) if reg else None
+        nat_now, nat_before = national_turnout(new), national_turnout(old)
+    else:
+        nat_now, nat_before = share(new, party), share(old, party)
+    return jsonify({
+        'party': party, 'parties': parties,
+        'national': {'value': nat_now, 'base': nat_before,
+                     'change': round(nat_now - nat_before, 2) if nat_now is not None and nat_before is not None else None},
+        'gained': sum(1 for m in munis.values() if m['change'] > 0),
+        'lost': sum(1 for m in munis.values() if m['change'] < 0),
+        'munis': munis,
+    })

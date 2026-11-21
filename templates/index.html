@@ -762,11 +762,20 @@
                             <button type="button" class="btn btn-outline-primary active" data-mode="winner">Pobjednik</button>
                             <button type="button" class="btn btn-outline-primary" data-mode="share">Udio</button>
                             <button type="button" class="btn btn-outline-primary" data-mode="turnout">Izlaznost</button>
+                            <button type="button" class="btn btn-outline-primary" data-mode="swing" title="Promjena udjela stranke između dvaju izbora">Promjena</button>
                         </div>
                     </div>
                     <div class="col-lg-4" id="mapPartyWrap" style="display:none;">
                         <label class="form-label fw-semibold" for="mapParty">Stranka / kandidat</label>
                         <select class="form-select" id="mapParty"></select>
+                    </div>
+                    <div class="col-lg-4" id="mapBaseWrap" style="display:none;">
+                        <label class="form-label fw-semibold" for="mapBase">Usporedi s izborima</label>
+                        <select class="form-select" id="mapBase"></select>
+                    </div>
+                    <div class="col-lg-4" id="mapSwingPartyWrap" style="display:none;">
+                        <label class="form-label fw-semibold" for="mapSwingParty">Promjena za</label>
+                        <select class="form-select" id="mapSwingParty"></select>
                     </div>
                     <div class="col-lg-9">
                         <label class="form-label fw-semibold" for="mapYear">Godina: <span id="mapYearLabel"></span></label>

@@ -771,3 +771,9 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
     .main-content { margin-left: 220px; }
     .content-area { padding: 1rem; }
 }
+
+/* Karta općina, "Promjena" (swing): the biggest gains and losses under the legend */
+.map-swing-list { font-size: .8rem; margin-top: .6rem; }
+.map-swing-list .hd { font-weight: 600; margin-top: .4rem; }
+.map-swing-list .row-item { display: flex; justify-content: space-between; gap: .5rem; }
+.map-swing-list .row-item span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }

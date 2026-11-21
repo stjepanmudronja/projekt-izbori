@@ -195,6 +195,35 @@ class PartyStrength(unittest.TestCase):
                 self.assertTrue(get(f'/api/analytics/party-strength?kind={kind}')['parties'])
 
 
+class MapSwing(unittest.TestCase):
+    """Karta općina, "Promjena": one party's change between two elections."""
+
+    def swing(self, **kw):
+        q = '&'.join(f'{k}={v}' for k, v in kw.items())
+        return get(f'/api/map/swing?{q}')
+
+    def test_national_change(self):
+        d = self.swing(kind='sabor', year=2024, base_kind='sabor', base_year=2020, party='HDZ')
+        self.assertEqual((d['national']['base'], d['national']['value']), (36.8, 33.52))
+        self.assertEqual(d['gained'] + d['lost'] + sum(1 for m in d['munis'].values() if m['change'] == 0),
+                         len(d['munis']))
+
+    def test_renamed_party_is_one_party(self):
+        # 2020's "Domovinski pokret Miroslava Škore" is 2024's DP (_MAP_KEY_ALIASES).
+        d = self.swing(kind='sabor', year=2024, base_kind='sabor', base_year=2020, party='DP')
+        self.assertEqual((d['national']['base'], d['national']['value']), (10.95, 9.71))
+
+    def test_same_candidate_across_runoffs(self):
+        d = self.swing(kind='predsjednicki', year=2024, round=2, base_kind='predsjednicki',
+                       base_year=2019, base_round=2, party='ZORAN MILANOVIĆ')
+        self.assertEqual((d['national']['base'], d['national']['value']), (53.75, 75.26))
+
+    def test_bad_input(self):
+        self.assertEqual(client.get('/api/map/swing?kind=sabor&year=2024&base_kind=sabor&base_year=2020&party=XX').status_code, 404)
+        self.assertEqual(client.get('/api/map/swing?kind=sabor&year=2099&base_kind=sabor&base_year=2020').status_code, 404)
+        self.assertEqual(client.get('/api/map/swing?kind=nema&year=2024&base_kind=sabor&base_year=2020').status_code, 400)
+
+
 class People(unittest.TestCase):
     """Person rows: curated splits hold, no party codes left in names."""
 
