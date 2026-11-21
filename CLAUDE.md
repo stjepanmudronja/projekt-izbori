@@ -75,13 +75,16 @@ python manage.py migrate
 
 # Flask analytics app
 python app.py  # runs on port 5001
+
+# Regression checks against the live database (read-only, ~25 s)
+python -m unittest discover -s tests -t . -v
 ```
 
 ## Development Setup & Tooling
 
-**There is no test suite, no linter, and no dependency manifest** — don't go looking for them. `elections/tests.py` is the untouched 3-line Django stub, so there is no "run a single test" command; `python manage.py test elections` runs zero tests. Verification in this project is done by querying the DB after an import and cross-checking against published results (see the invariant checks described under sabor.py, and the D'Hondt seat totals per year).
+**Regression checks** live in `tests/test_data.py` (stdlib `unittest`, nothing to install): `python -m unittest discover -s tests -t . -v`, ~25 s, or one group with `python -m unittest tests.test_data.SaborSeats -v`. They are **read-only checks against the live `projekt_izbori` database**, not unit tests with fixtures — Django's own test runner (`manage.py test`) would build an empty test database, so it is not used, and `elections/tests.py` stays the empty stub. Through Flask's test client (no server needed) and plain SQL they assert figures already verified against the published results: Sabor house size and seat distribution per year (151/152/153, 2000's 140 of 151, 2011's 80/47/8/6/6/2/1/1), roster sizes, the 1990-1997 chambers' stated seats, exact electorate and vote totals (2003's 4,087,553 registered, 1995's 4,033,072 / 2,609,429, the 1992 national list's 2,631,535, …), every presidential winner, Snaga stranaka against the published shares, Person hygiene (no unlabelled duplicates, no party code fused into a name, curated splits still split, every Početna public figure resolving) and that every page route and sidebar module has its panel and URL. **Run them after any import, merge/split command or change to a results endpoint**; when a figure legitimately changes (a corrected transcription), update the expected value in the same commit and say why. No linter.
 
-Dependencies are installed directly into `./venv` with no `requirements.txt` to reproduce them. Current versions: Django 6.0.3, Flask 3.1.3, Flask-SQLAlchemy 3.1.1, SQLAlchemy 2.0.48, pandas 3.0.1, openpyxl 3.1.5, psycopg2-binary 2.9.11.
+Dependencies are pinned in **`requirements.txt`** (`pip install -r requirements.txt` into a Python 3.12 virtualenv; a fresh install was checked to import everything): Django 6.0.3, Flask 3.1.3, Flask-SQLAlchemy 3.1.1, SQLAlchemy 2.0.48, pandas 3.0.1, openpyxl 3.1.5, psycopg2-binary 2.9.11 and their dependencies. Regenerate with `pip freeze` when a package is added, leaving out what nothing imports (esprima and unicodedata2 sit in `./venv` unused).
 
 `settings.py` configures PostgreSQL with only `NAME: projekt_izbori` — no host/user/password, so it connects over the local socket as the current OS user. There is no `.env` for the DB.
 
