@@ -1,0 +1,773 @@
+body {
+    background: #f0f2f5;
+    min-height: 100vh;
+    margin: 0;
+}
+
+/* Sidebar */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    overflow-y: auto;
+}
+.sidebar-brand {
+    padding: 1.5rem 1.25rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+a.sidebar-brand { display: block; color: inherit; text-decoration: none; }
+
+/* ---- Stranke ---- */
+.party-table tbody tr { cursor: pointer; }
+.party-table td { vertical-align: middle; font-size: .88rem; }
+.party-status { font-size: .72rem; font-weight: 600; border-radius: 999px; padding: .1rem .55rem; white-space: nowrap; }
+.party-status.active { background: #e6f4ea; color: #1e7e34; }
+.party-status.ceased { background: #f1f3f5; color: #6c757d; }
+.party-source { font-size: .78rem; color: #6c757d; margin: -.5rem 0 1.5rem; line-height: 1.5; }
+.party-source a { color: inherit; text-decoration: underline; }
+
+/* ---- Municipality map ---- */
+.map-svg-wrap { position: relative; }
+.map-svg-wrap svg { width: 100%; height: auto; max-height: 78vh; display: block; }
+.map-svg-wrap path { stroke: #fff; stroke-width: .35; cursor: pointer; transition: opacity .15s; }
+.map-svg-wrap path:hover { stroke: #1a1a2e; stroke-width: 1.2; }
+.map-svg-wrap path.no-data { cursor: default; }
+.map-tooltip { position: absolute; pointer-events: none; display: none; z-index: 5; background: rgba(26,26,46,.95);
+               color: #fff; border-radius: 8px; padding: .5rem .7rem; font-size: .8rem; max-width: 18rem; }
+.map-year-ticks { display: flex; justify-content: space-between; font-size: .7rem; color: #6c757d; margin-top: -.25rem; }
+.map-legend-row { display: flex; align-items: center; gap: .45rem; font-size: .82rem; margin-bottom: .25rem; }
+.map-legend-row i { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.1); }
+.map-legend-row span:last-child { margin-left: auto; color: #6c757d; font-variant-numeric: tabular-nums; }
+.map-gradient { height: 12px; border-radius: 4px; margin: .35rem 0 .15rem; }
+a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
+
+/* ---- Home page ---- */
+.home-hero {
+    background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+    color: #fff; border-radius: 14px; padding: 1.75rem 2rem;
+}
+.home-hero p { color: rgba(255,255,255,.8); max-width: 46rem; }
+.home-stats { display: flex; flex-wrap: wrap; gap: .75rem; }
+.home-stat { background: rgba(255,255,255,.12); border-radius: 10px; padding: .55rem .9rem; min-width: 8.5rem; }
+.home-stat b { display: block; font-size: 1.35rem; line-height: 1.2; }
+.home-stat span { font-size: .75rem; color: rgba(255,255,255,.75); }
+.home-section { margin-bottom: 2rem; }
+.home-section-head { display: flex; align-items: flex-end; gap: 1rem; margin-bottom: .6rem; }
+.home-section-head h5 { margin: 0; font-weight: 700; }
+.home-section-head small { color: #6c757d; }
+.home-arrows { margin-left: auto; display: flex; gap: .35rem; flex-shrink: 0; }
+.home-arrows button { width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #dee2e6;
+                      background: #fff; color: #495057; line-height: 1; padding: 0; }
+.home-arrows button:hover { background: #f1f3f5; }
+.home-track { display: flex; gap: .85rem; overflow-x: auto; scroll-snap-type: x mandatory;
+              scroll-behavior: smooth; padding: .15rem .1rem .6rem; scrollbar-width: thin; }
+.home-card { flex: 0 0 15.5rem; scroll-snap-align: start; background: #fff; border: 1px solid #e9ecef;
+             border-radius: 12px; padding: .9rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+             display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; }
+.home-card .hc-kicker { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #6c757d; }
+.home-card .hc-title { font-weight: 700; font-size: .98rem; line-height: 1.25; }
+.home-card .hc-big { font-size: 1.6rem; font-weight: 800; color: #1a365d; line-height: 1.1; }
+.home-card .hc-row { display: flex; justify-content: space-between; gap: .5rem; }
+.home-card .hc-row span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-card .hc-muted { color: #6c757d; font-size: .78rem; }
+.home-card .hc-badge { align-self: flex-start; font-size: .72rem; font-weight: 600; border-radius: 999px;
+                       padding: .1rem .55rem; background: #ebf4ff; color: #2b6cb0; }
+.home-card .hc-badge.tie { background: #fff4e5; color: #b45309; }
+.home-card .hc-rank { font-size: .8rem; font-weight: 700; color: #2b6cb0; }
+.home-card .bar-label-link, .home-card .place-link { color: inherit; }
+.home-card.hc-wide { flex-basis: 19rem; }
+.ps-chip { border: 1px solid #dee2e6; background: #fff; color: #495057; border-radius: 999px;
+           padding: .2rem .65rem; font-size: .8rem; display: inline-flex; align-items: center; gap: .35rem; }
+.ps-chip i { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; opacity: .35; }
+.ps-chip.on { border-color: #adb5bd; color: #212529; font-weight: 600; background: #f8f9fa; }
+.ps-chip.on i { opacity: 1; }
+.ps-chip.ceased { font-style: italic; }
+.ps-chart { position: relative; height: 26rem; }
+.home-card .hc-chart { position: relative; height: 8.5rem; margin: .2rem -.35rem 0; }
+.home-bars { display: flex; align-items: flex-end; gap: .6rem; height: 7rem; margin-top: .4rem; }
+.home-bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+                 height: 100%; font-size: .72rem; color: #6c757d; }
+.home-bars i { display: block; width: 100%; background: #2b6cb0; border-radius: 4px 4px 0 0; margin: .15rem 0; }
+.home-bars b { color: #1a365d; font-size: .8rem; }
+.sidebar-brand h5 {
+    margin: 0;
+    font-weight: 700;
+}
+.sidebar-brand small {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.75rem;
+}
+.sidebar-section {
+    padding: 1rem 0.75rem 0.5rem;
+}
+.sidebar-nav.sidebar-home {
+    padding: 1rem 0.75rem 0;
+}
+.sidebar-section-title {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.4);
+    padding: 0 0.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+.sidebar-nav {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.sidebar-nav li a {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    color: rgba(255,255,255,0.7);
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: all 0.15s;
+    cursor: pointer;
+}
+.sidebar-nav li a:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+.sidebar-nav li a.active {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    font-weight: 600;
+}
+.sidebar-nav li a i {
+    font-size: 1.1rem;
+    width: 1.5rem;
+    text-align: center;
+}
+
+/* Main content */
+.main-content {
+    margin-left: 260px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+.main-content > .content-area { flex: 1 0 auto; }
+/* Pinned to the bottom of the window, so the notice and source are
+   seen on every page without scrolling to the end of a long one. */
+.site-footer {
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 900;   /* under dropdowns (1000) and modals */
+    padding: .4rem 2rem;
+    border-top: 1px solid #e0e0e0;
+    background: rgba(255, 255, 255, .97);
+    color: #6c757d;
+    font-size: .75rem;
+    line-height: 1.4;
+}
+.site-footer-note { color: #8a6d1d; }
+.site-footer a { color: inherit; text-decoration: underline; }
+.top-bar {
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+#pdfExportBtn { margin-left: auto; white-space: nowrap; }
+/* Temporary title block and source line laid into a page while it is
+   captured for the PDF (exportPagePDF). */
+.pdf-export-head { padding: 0 0 .75rem; margin-bottom: 1rem; border-bottom: 2px solid #1a365d; }
+.pdf-export-head h3 { margin: 0; font-weight: 700; color: #1a365d; }
+.pdf-export-head div { color: #6c757d; font-size: .85rem; }
+.pdf-export-foot { margin-top: 1rem; padding-top: .5rem; border-top: 1px solid #dee2e6;
+                   color: #6c757d; font-size: .75rem; }
+.top-bar h4 {
+    margin: 0;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+.content-area {
+    padding: 1.5rem 2rem;
+}
+
+/* Search */
+.search-card {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+}
+.dropdown-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 0.5rem 0.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+.dropdown-results.show { display: block; }
+.dropdown-item-custom {
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.15s;
+}
+.dropdown-item-custom:hover { background: #e9ecef; }
+.dropdown-item-custom:last-child { border-bottom: none; }
+
+/* Result cards */
+.result-card {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    transition: transform 0.2s;
+}
+.result-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+.badge-election {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+.vote-number {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f3460;
+}
+.spinner-wrapper {
+    display: none;
+    text-align: center;
+    padding: 2rem;
+}
+.spinner-wrapper.show { display: block; }
+.chart-card {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    background: white;
+}
+.chart-card canvas { max-height: 320px; }
+
+/* Map */
+/* Chart, then the station's map below it, both full width */
+.chart-map-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.chart-map-row .chart-map-chart {
+    min-width: 0;
+    height: 360px !important;
+    margin-bottom: 0 !important;
+}
+.chart-map-row .chart-map-map {
+    width: 100% !important;
+    height: 380px !important;
+}
+
+/* Croatia SVG map */
+#croatiaMapWrap svg {
+    width: 100%;
+    height: auto;
+}
+#croatiaMapWrap svg path {
+    fill: #ececec;
+    stroke: #b0b0b0;
+    stroke-width: 0.8;
+    stroke-linejoin: round;
+    cursor: pointer;
+    transition: fill 0.2s;
+}
+#croatiaMapWrap svg path:hover {
+    fill: #d4d4d4;
+}
+#croatiaMapWrap svg path.selected {
+    fill: #e8942e;
+}
+#croatiaMapWrap svg path.selected:hover {
+    fill: #d6841e;
+}
+
+/* Electoral district SVG map */
+.district-map-wrap svg {
+    width: 100%;
+    height: auto;
+}
+.district-map-wrap svg path {
+    stroke: #ffffff;
+    stroke-width: 1.2;
+    stroke-linejoin: round;
+    cursor: pointer;
+    transition: opacity 0.2s, filter 0.2s;
+}
+.district-map-wrap svg .district-group:hover path {
+    opacity: 0.8;
+    filter: brightness(1.15);
+}
+.district-map-wrap svg .district-group.selected path {
+    stroke: #000;
+    stroke-width: 2.5;
+    filter: brightness(1.1);
+}
+.district-map-label {
+    font-size: 0.8rem;
+    text-align: center;
+    margin-top: 4px;
+    font-weight: 600;
+    color: #555;
+    min-height: 1.4em;
+}
+
+/* Station two-column layout */
+.station-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+.station-main {
+    flex: 1;
+    min-width: 0;
+}
+.station-sidebar {
+    flex-shrink: 0;
+    width: 300px;
+    position: sticky;
+    top: 1.5rem;
+}
+.map-card {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    overflow: hidden;
+    background: white;
+    width: 100%;
+    height: 250px;
+}
+.map-card .map-container {
+    height: 100%;
+    width: 100%;
+}
+
+/* Draggable bar chart */
+.bar-chart-area {
+    position: relative;
+    padding: 0.25rem 0;
+}
+.bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    cursor: grab;
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    transition: background 0.15s, box-shadow 0.15s, opacity 0.2s;
+    user-select: none;
+}
+.bar-row:hover {
+    background: rgba(0,0,0,0.03);
+}
+.bar-row.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+.bar-row.drag-over {
+    background: rgba(13, 110, 253, 0.08);
+    box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.3);
+}
+.bar-row.combined {
+    animation: barCombine 0.4s ease-out;
+}
+@keyframes barCombine {
+    0% { background: rgba(13, 110, 253, 0.15); }
+    100% { background: transparent; }
+}
+.bar-label {
+    width: 260px;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: right;
+    padding-right: 0.75rem;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bar-label.bar-label-merged {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    white-space: normal;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.bar-track {
+    flex: 1;
+    height: 30px;
+    background: #f0f2f5;
+    border-radius: 6px;
+    overflow: visible;
+    position: relative;
+}
+.bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.4s ease-out;
+    display: flex;
+    align-items: center;
+    padding-left: 0.5rem;
+    min-width: 2px;
+    position: relative;
+}
+.bar-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    position: absolute;
+    left: 0.5rem;
+}
+.bar-reset-btn {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.35rem;
+    cursor: pointer;
+}
+.bar-drag-hint {
+    font-size: 0.7rem;
+    color: #999;
+    margin-top: 0.25rem;
+}
+
+/* Compare section */
+.compare-card {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+.compare-card-header {
+    background: linear-gradient(135deg, #1a1a2e, #0f3460);
+    color: white;
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.compare-card-header h6 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.compare-card-body {
+    padding: 1rem;
+    background: white;
+}
+.compare-election-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0.5rem;
+    margin-top: 0.75rem;
+}
+.compare-election-title:first-child {
+    margin-top: 0;
+}
+.compare-grid {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+.compare-grid .compare-card {
+    flex: 1;
+    min-width: 0;
+}
+/* Used by the analitika pages (pred / eu / lokalni / sabor) to render
+   up to 3 compared scopes side-by-side, wrapping on narrow viewports. */
+.scope-compare-grid {
+    flex-wrap: wrap;
+}
+.scope-compare-grid > .compare-card {
+    flex: 1 1 280px;
+    max-width: 100%;
+}
+.scope-compare-grid .result-card,
+.scope-compare-grid .card {
+    margin-bottom: 0.75rem !important;
+}
+.scope-compare-grid .bar-label {
+    max-width: 110px;
+}
+
+/* Sidebar sub-items */
+.sidebar-subnav {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.25s ease-out;
+}
+.sidebar-subnav.open {
+    max-height: 100px;
+}
+.sidebar-subnav li a {
+    padding-left: 2.5rem !important;
+    font-size: 0.8rem !important;
+    color: rgba(255,255,255,0.5) !important;
+}
+.sidebar-subnav li a:hover {
+    color: white !important;
+    background: rgba(255,255,255,0.08) !important;
+}
+.sidebar-subnav li a.active {
+    color: white !important;
+    background: rgba(255,255,255,0.12) !important;
+}
+
+/* Compare tags */
+.compare-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 2rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: white;
+    cursor: default;
+}
+.compare-tag .tag-remove {
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 0.7rem;
+}
+.compare-tag .tag-remove:hover { opacity: 1; }
+
+/* National accordion */
+.national-accordion .nat-category {
+    border-bottom: 1px solid #e9ecef;
+}
+.national-accordion .nat-category:last-child { border-bottom: none; }
+.national-accordion .nat-cat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #1a1a2e;
+    transition: background 0.15s;
+}
+.national-accordion .nat-cat-header:hover { background: #f8f9fa; }
+.national-accordion .nat-cat-header i.toggle-icon { transition: transform 0.2s; }
+.national-accordion .nat-cat-header.open i.toggle-icon { transform: rotate(45deg); }
+.national-accordion .nat-years {
+    display: none;
+    padding: 0 0.5rem 0.5rem 2.2rem;
+}
+.national-accordion .nat-years.open { display: block; }
+.national-accordion .nat-year-btn {
+    display: block;
+    padding: 0.4rem 0.75rem;
+    margin-bottom: 0.15rem;
+    border: none;
+    background: none;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 0.35rem;
+    color: #444;
+    width: 100%;
+    text-align: left;
+}
+.national-accordion .nat-year-btn:hover { background: #e9ecef; }
+.national-accordion .nat-year-btn.active { font-weight: 700; color: #0f3460; background: rgba(15,52,96,0.08); }
+
+/* Module panels */
+.module-panel { display: none; }
+.module-panel.active { display: block; }
+
+/* Clickable election-type/year badge group on result cards */
+.result-badges-link { cursor: pointer; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; transition: background 0.12s; }
+.result-badges-link:hover { background: rgba(15, 52, 96, 0.07); }
+.result-badges-link:focus-visible { outline: 2px solid rgba(15, 52, 96, 0.4); outline-offset: 2px; }
+
+/* Clickable candidate names in bar charts (predsjednicki, etc.) */
+.bar-label-link { cursor: pointer; transition: color 0.12s; }
+.bar-label-link:hover { color: #0f3460; text-decoration: underline; }
+
+/* Winner / runner-up badge on politician result cards */
+.rank-badge { font-size: 0.7rem; padding: 0.25em 0.55em; margin-left: 0.25rem; font-weight: 600; }
+.rank-badge.rank-winner { background: linear-gradient(135deg, #FFD700, #DAA520); color: #4A3700; border: 1px solid #B8860B; }
+.rank-badge.rank-runner-up { background: linear-gradient(135deg, #E5E5E5, #B0B0B0); color: #333; border: 1px solid #808080; }
+.rank-badge.rank-seat { background: linear-gradient(135deg, #28a745, #1e7e34); color: #fff; border: 1px solid #166528; }
+.rank-badge.rank-eu { background: linear-gradient(135deg, #0d6efd, #0a58ca); color: #fff; border: 1px solid #084298; }
+/* Key Sabor-term offices (elections/sabor_roles.py) */
+.rank-badge.role-pm { background: linear-gradient(135deg, #FFE55C, #DAA520); color: #4A3700; border: 1px solid #B8860B;
+    animation: roleGlow 2.4s ease-in-out infinite; }
+@keyframes roleGlow {
+    0%, 100% { box-shadow: 0 0 3px 1px rgba(255, 200, 0, 0.45); }
+    50% { box-shadow: 0 0 10px 3px rgba(255, 200, 0, 0.85); }
+}
+.rank-badge.role-deputy-pm { background: linear-gradient(135deg, #FFF3B8, #EBCB6B); color: #5a4500; border: 1px solid #C9A227;
+    box-shadow: 0 0 4px 1px rgba(255, 200, 0, 0.35); }
+.rank-badge.role-minister { background: linear-gradient(135deg, #3cb6ae, #1d8a83); color: #fff; border: 1px solid #16706a;
+    max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.rank-badge.role-speaker { background: linear-gradient(135deg, #8e5bd8, #5a2ca0); color: #fff; border: 1px solid #45207d; }
+.rank-badge.role-deputy { background: linear-gradient(135deg, #c9b3f2, #a07fe0); color: #2d1660; border: 1px solid #8a63d2; }
+.rank-badge.role-secretary { background: linear-gradient(135deg, #8fa3b8, #627891); color: #fff; border: 1px solid #4c5f74; }
+.role-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.35rem; vertical-align: middle; }
+@media (prefers-reduced-motion: reduce) { .rank-badge.role-pm { animation: none; box-shadow: 0 0 6px 2px rgba(255, 200, 0, 0.6); } }
+
+/* Izlaznost analytics */
+.izl-card-strip-wrap { position: relative; }
+.izl-card-strip {
+    display: flex; gap: 0.6rem;
+    overflow-x: auto; scroll-behavior: smooth;
+    padding: 0.25rem 2.6rem 0.5rem;
+    scrollbar-width: thin;
+}
+.izl-card-strip::-webkit-scrollbar { height: 6px; }
+.izl-card-strip::-webkit-scrollbar-thumb { background: #c4cad3; border-radius: 3px; }
+.izl-strip-btn {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; border-radius: 50%;
+    background: white; border: 1px solid #d0d7de;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 5;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+.izl-strip-btn:hover { background: #f6f8fa; }
+.izl-strip-btn.left { left: 0; }
+.izl-strip-btn.right { right: 0; }
+.izl-card {
+    flex: 0 0 auto; min-width: 200px;
+    border: 2px solid #e1e4e8; border-radius: 10px;
+    padding: 0.75rem 0.9rem; cursor: pointer;
+    background: white; transition: all 0.15s;
+    user-select: none;
+}
+.izl-card:hover { border-color: #b0b8c2; }
+.izl-card.checked { border-color: #0f3460; background: #eaf0f9; }
+.izl-card .izl-card-cat { font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #6c757d; }
+.izl-card .izl-card-year { font-size: 1.4rem; font-weight: 700; color: #0f3460; }
+.izl-card .izl-card-round { font-size: 0.8rem; color: #495057; }
+.izl-card.round-2 { border-style: dashed; }
+
+.izl-breadcrumb {
+    display: flex; gap: 0.4rem; align-items: center;
+    font-size: 0.92rem; flex-wrap: wrap;
+}
+.izl-breadcrumb a { color: #0f3460; text-decoration: none; cursor: pointer; }
+.izl-breadcrumb a:hover { text-decoration: underline; }
+.izl-breadcrumb .sep { color: #adb5bd; }
+.izl-breadcrumb .current { color: #495057; font-weight: 600; }
+
+.izl-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 1rem;
+}
+.izl-panel {
+    background: white; border-radius: 10px;
+    border: 1px solid #e1e4e8; padding: 1rem;
+}
+.izl-panel h6 {
+    font-weight: 700; margin: 0 0 0.25rem; color: #0f3460;
+}
+.izl-panel .izl-panel-meta {
+    font-size: 0.78rem; color: #6c757d; margin-bottom: 0.6rem;
+}
+.izl-bar-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem; align-items: center;
+    padding: 0.45rem 0; cursor: pointer;
+    border-bottom: 1px solid #f1f3f5;
+}
+.izl-bar-row:last-child { border-bottom: 0; }
+.izl-bar-row.no-drill { cursor: default; }
+.izl-bar-row .izl-name {
+    font-size: 0.86rem; color: #212529;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.izl-bar-row .izl-bar-track {
+    position: relative; height: 14px; background: #f1f3f5;
+    border-radius: 7px; overflow: hidden; margin-top: 4px;
+}
+.izl-bar-row .izl-bar-fill {
+    height: 100%; background: linear-gradient(90deg, #0f3460, #1c5fa8);
+    border-radius: 7px;
+}
+.izl-bar-row .izl-bar-meta {
+    display: flex; justify-content: space-between;
+    font-size: 0.74rem; color: #6c757d; margin-top: 2px;
+}
+.izl-bar-row .izl-pct {
+    font-weight: 700; color: #0f3460; font-size: 0.95rem;
+    min-width: 56px; text-align: right;
+}
+.izl-summary-row {
+    display: flex; gap: 1.25rem; flex-wrap: wrap;
+    font-size: 0.85rem; padding: 0.6rem 0.75rem;
+    background: #f6f8fa; border-radius: 8px; margin-bottom: 0.6rem;
+}
+.izl-summary-row b { color: #0f3460; }
+.izl-empty { color: #6c757d; font-size: 0.85rem; padding: 1rem; text-align: center; }
+.izl-compare-chip {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.6rem; border-radius: 999px;
+    background: #eef2f7; font-size: 0.78rem; color: #0f3460;
+    border: 1px solid #d6dee8;
+}
+.izl-compare-chip .chip-swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+}
+.izl-compare-chip .chip-x {
+    cursor: pointer; opacity: 0.6; line-height: 1;
+    border: 0; background: transparent; padding: 0; font-size: 0.95rem;
+}
+.izl-compare-chip .chip-x:hover { opacity: 1; }
+#izlCroatiaMapWrap svg, #predCroatiaMapWrap svg, #eusCroatiaMapWrap svg, #lokCroatiaMapWrap svg, #saborCroatiaMapWrap svg { width: 100%; height: auto; display: block; }
+#izlCroatiaMapWrap svg path, #predCroatiaMapWrap svg path, #eusCroatiaMapWrap svg path, #lokCroatiaMapWrap svg path, #saborCroatiaMapWrap svg path {
+    fill: #ececec;
+    stroke: #b0b0b0;
+    stroke-width: 0.8;
+    stroke-linejoin: round;
+    cursor: pointer;
+    transition: fill 0.15s;
+}
+#izlCroatiaMapWrap svg path:hover, #predCroatiaMapWrap svg path:hover, #eusCroatiaMapWrap svg path:hover, #lokCroatiaMapWrap svg path:hover, #saborCroatiaMapWrap svg path:hover { fill: #d4d4d4; }
+#izlCroatiaMapWrap svg path.selected, #predCroatiaMapWrap svg path.selected, #eusCroatiaMapWrap svg path.selected, #lokCroatiaMapWrap svg path.selected, #saborCroatiaMapWrap svg path.selected { fill: #e8942e; }
+#izlCroatiaMapWrap svg path.selected:hover, #predCroatiaMapWrap svg path.selected:hover, #eusCroatiaMapWrap svg path.selected:hover, #lokCroatiaMapWrap svg path.selected:hover, #saborCroatiaMapWrap svg path.selected:hover { fill: #d6841e; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .sidebar { width: 220px; }
+    .main-content { margin-left: 220px; }
+    .content-area { padding: 1rem; }
+}

@@ -241,8 +241,9 @@ class Pages(unittest.TestCase):
 
     def test_sidebar_modules_have_panels_and_routes(self):
         html = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
+        core_js = (ROOT / 'static' / 'js' / 'core.js').read_text(encoding='utf-8')
         nav = html[html.index('<nav'):html.index('</nav>')]
-        slugs = dict(re.findall(r"'([\w-]+)':\s*'([\w-]*)',", html[html.index('const MODULE_SLUGS'):]
+        slugs = dict(re.findall(r"'([\w-]+)':\s*'([\w-]*)',", core_js[core_js.index('const MODULE_SLUGS'):]
                                 .split('};', 1)[0]))
         from app import SPA_ROUTES
         for mod in re.findall(r'data-module="([\w-]+)"', nav):
@@ -251,6 +252,51 @@ class Pages(unittest.TestCase):
                 if slugs.get(mod):
                     self.assertIn(slugs[mod], SPA_ROUTES)
 
+
+class FrontendFiles(unittest.TestCase):
+    """The site script is split into static/js/*.js files that share one
+    global scope and load in the order templates/index.html lists them."""
+
+    @classmethod
+    def setUpClass(cls):
+        html = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
+        cls.order = re.findall(r"asset\('js/([\w-]+\.js)'\)", html)
+        cls.html = html
+
+    def test_every_listed_asset_exists(self):
+        self.assertIn("asset('css/app.css')", self.html)
+        self.assertTrue((ROOT / 'static' / 'css' / 'app.css').exists())
+        self.assertEqual(self.order[-1], 'boot.js')        # starts the app: must be last
+        for f in self.order:
+            with self.subTest(file=f):
+                self.assertTrue((ROOT / 'static' / 'js' / f).exists())
+        listed = set(self.order)
+        on_disk = {p.name for p in (ROOT / 'static' / 'js').glob('*.js')}
+        self.assertEqual(on_disk - listed, set(), 'a script on disk that the page never loads')
+
+    def test_no_load_time_reference_to_a_later_file(self):
+        """Code that runs while a file loads (top-level statements) may not
+        pass or call a function declared in a file loaded after it: in one
+        script that worked by hoisting, across files it is a ReferenceError
+        (location.js once passed loadLocationResults, from results.js)."""
+        declared = {}
+        for i, f in enumerate(self.order):
+            text = (ROOT / 'static' / 'js' / f).read_text(encoding='utf-8')
+            for m in re.finditer(r'^(?:async )?function\s+([A-Za-z_$][\w$]*)|^(?:const|let|var)\s+([A-Za-z_$][\w$]*)',
+                                 text, re.M):
+                declared.setdefault(m.group(1) or m.group(2), i)
+        problems = []
+        for i, f in enumerate(self.order):
+            lines = (ROOT / 'static' / 'js' / f).read_text(encoding='utf-8').split('\n')
+            for n, line in enumerate(lines, 1):
+                if line.startswith((' ', '\t', '//', '}')):
+                    continue
+                names = re.findall(r'[(,]\s*([A-Za-z_$][\w$]*)\s*[),]', line) + re.findall(r'^([A-Za-z_$][\w$]*)\(', line)
+                for name in names:
+                    j = declared.get(name)
+                    if j is not None and j > i:
+                        problems.append(f'{f}:{n} uses {name} from {self.order[j]}')
+        self.assertEqual(problems, [])
 
 if __name__ == '__main__':
     unittest.main()
