@@ -2364,6 +2364,24 @@ function renderHome(d) {
             <div class="hc-chart"><canvas id="homePresChart${i}"></canvas></div>
             <div class="small mt-auto">Rezultati izbora: ${winLinks(p)}</div>
         </div>`)));
+    // Famous outside politics: the same career chart, nothing highlighted.
+    const figures = d.public_figures || [];
+    const ranIn = f => {
+        const seen = [];
+        f.career.forEach(c => {
+            const t = `${c.type.replace(' izbori', '').replace('Parlamentarni', 'Sabor')} ${c.year}.`;
+            if (!seen.includes(t)) seen.push(t);
+        });
+        return seen.join(' · ');
+    };
+    sections.push(homeSection('homeFigures', 'Poznata lica na izbornim listama',
+        'Glazbenici, sportaši, glumci i poduzetnici koji su se kandidirali: njihov udio glasova na svim izborima.',
+        figures.map((f, i) => `<div class="home-card hc-wide">
+            <div class="hc-kicker">${escapeHtml(f.known_as)}</div>
+            <div class="hc-title">${personLinkHtml(f.name, f.person_id)}</div>
+            <div class="hc-chart"><canvas id="homeFigureChart${i}"></canvas></div>
+            <div class="hc-muted mt-auto">${escapeHtml(ranIn(f))}</div>
+        </div>`)));
     sections.push(homeSection('homePresRecords', 'Rekordi predsjedničkih izbora', '',
         pres.records.map(r => `<div class="home-card">
             <div class="hc-kicker">${escapeHtml(r.kind)}</div>
@@ -2450,6 +2468,7 @@ function renderHome(d) {
     document.getElementById('homeSections').innerHTML = sections.join('');
     presidents.forEach((p, i) => renderHomePresChart(
         document.getElementById(`homePresChart${i}`), (pres.careers || {})[p.person_id] || [], p.wins));
+    figures.forEach((f, i) => renderHomePresChart(document.getElementById(`homeFigureChart${i}`), f.career, []));
 }
 
 // ---- Snaga stranaka: each party's share across elections (/api/analytics/party-strength) ----
@@ -2668,8 +2687,10 @@ function renderHomePresChart(canvas, career, wins) {
                 },
             },
             scales: {
-                y: { beginAtZero: true, max: Math.min(Math.ceil(Math.max(...shares) * 1.1 / 25) * 25, 100),
-                     grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { stepSize: 25, font: { size: 9 }, callback: v => v + ' %' } },
+                // A round top that fits: a 0.7 % candidate is not a flat line at the bottom.
+                y: { beginAtZero: true, max: [1, 2, 5, 10, 25, 50, 75, 100].find(v => v >= Math.max(...shares) * 1.15) || 100,
+                     grid: { color: 'rgba(0,0,0,0.05)' },
+                     ticks: { maxTicksLimit: 5, font: { size: 9 }, callback: v => formatPct(v, v % 1 ? 1 : 0) } },
                 x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
             },
             animation: { duration: 600 }

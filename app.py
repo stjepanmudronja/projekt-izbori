@@ -1714,6 +1714,7 @@ def _home_highlights():
                      key=lambda t: -t['pct'])
 
     presidential = _home_presidential(sql)
+    public_figures = _home_public_figures()
 
     counts = sql("""select (select count(*) from elections_person),
                            (select count(*) from elections_election),
@@ -1733,6 +1734,7 @@ def _home_highlights():
         'preferences': {'sabor': top_preferences('sabor'), 'eu': top_preferences('eu_parliament')},
         'turnout': {'year': local_year, 'top': turnout[:10]},
         'presidential': presidential,
+        'public_figures': public_figures,
     }
 
 
@@ -2358,6 +2360,42 @@ def _home_presidential(sql):
                     'text': f"{top_votes[1]}. krug izbora {top_votes[0]}."})
     return {'elections': elections[::-1], 'records': records,
             'careers': {pid: _home_career(pid) for pid in seen_winners}}
+
+
+# Well-known people from outside politics who stood in an election, for the
+# home page: (stored name, what they are known for, name to show). Each was
+# checked against their candidacies; a namesake on the same row is split off
+# in `split_persons` first (Sandra Perković's 1997 Ližnjan ward). Matched to
+# the unlabelled Person of the name. Not here: namesakes of the famous (the
+# 2020 diaspora "Marko Perković", the 2015 "Zvonimir Boban", Knin's "Dario
+# Šimić") and Zlatko Vitez, until his 1997 HDZ ward candidacy is confirmed.
+HOME_PUBLIC_FIGURES = [
+    ('MIROSLAV ŠKORO', 'glazbenik', None),
+    ('MIROSLAV BLAŽEVIĆ', 'nogometni trener', None),
+    ('BORIS MIKŠIĆ', 'poduzetnik', None),
+    ('MILAN KEKIN', 'glazbenik (Hladno pivo); na listi kao Milan Kekin', 'MILE KEKIN'),
+    ('SINIŠA VUCO', 'pjevač', None),
+    ('BORIS DVORNIK', 'glumac', None),
+    ('ŽELJKO PERVAN', 'glumac i komičar', None),
+    ('HLOVERKA NOVAK SRZIĆ', 'televizijska voditeljica', None),
+    ('SANDRA PERKOVIĆ', 'bacačica diska', None),
+]
+
+
+def _home_public_figures():
+    """HOME_PUBLIC_FIGURES with each one's career series, the most recently
+    standing first. A name no longer in the data is skipped."""
+    out = []
+    for stored, known_as, shown in HOME_PUBLIC_FIGURES:
+        person = Person.query.filter_by(normalized_name=normalize_person_name(stored), disambiguation='').first()
+        if not person:
+            continue
+        career = _home_career(person.id)
+        if career:
+            out.append({'person_id': person.id, 'name': shown or f'{person.first_name} {person.last_name}',
+                        'known_as': known_as, 'career': career})
+    out.sort(key=lambda f: -max(c['year'] for c in f['career']))
+    return out
 
 
 def _home_career(person_id):
