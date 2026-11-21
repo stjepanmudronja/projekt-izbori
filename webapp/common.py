@@ -4,6 +4,8 @@ which election types are which, and who won a Sabor seat in a round.
 
 from collections import defaultdict
 from types import SimpleNamespace
+from sqlalchemy import any_, bindparam
+from sqlalchemy.dialects.postgresql import ARRAY
 from webapp.core import db
 from webapp.models import (
     Candidacy,
@@ -330,3 +332,14 @@ def sabor_seat_winner_candidacy_ids(er_id):
 
     _SABOR_SEAT_WINNERS_CACHE[er_id] = winner_ids
     return winner_ids
+
+
+def any_of(column, ids):
+    """`column = ANY(:ids)`, the id list sent as one PostgreSQL array.
+
+    Use it instead of `column.in_(ids)` for long lists (a county's or a big
+    town's polling stations): `IN (…)` with thousands of parameters makes
+    PostgreSQL walk ListResult / CandidateResult by candidacy and check each
+    row against the list (9.6 s for the 2,032 diaspora stations), while an
+    array lets it read the rows by station (2.3 s)."""
+    return column == any_(bindparam(None, list(ids), type_=ARRAY(db.Integer)))

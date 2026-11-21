@@ -7,13 +7,14 @@ import time
 from collections import defaultdict
 from flask import jsonify, request
 from elections.importers.name_utils import place_key, strip_diacritics
-from webapp.core import app, db
+from webapp.core import app, db, static_cache
 from webapp.models import (
     Candidacy,
     CandidateResult,
     County,
     Election,
     ElectionRound,
+    ElectionType,
     ElectoralList,
     ListHolder,
     ListResult,
@@ -23,6 +24,7 @@ from webapp.models import (
     TurnoutData,
 )
 from webapp.common import (
+    any_of,
     LOKALNI_KIND_MAP,
     NUMBER_ONLY_ELECTIONS,
     round_date_iso,
@@ -555,6 +557,7 @@ def _place_profile(muni_id):
 
 
 @app.route('/api/location-results')
+@static_cache(maxsize=500)
 def location_results():
     """Aggregated results for a location filter.
     Params: county_id, municipality_id, station_id (optional), street (optional)
@@ -639,68 +642,78 @@ def location_results():
         .all()
     )
 
+    # Every round's lists, candidates and list leaders in one grouped query
+    # each, top five per round picked here: a query per round re-read the
+    # same stations' results ~60 times (Grad Zagreb took ~25 s, now ~2 s).
+    er_ids = [td.er_id for td in turnout_rows]
+    rounds = {er.id: er for er in ElectionRound.query.filter(ElectionRound.id.in_(er_ids))} if er_ids else {}
+
+    def top5(rows, key):
+        by_round = defaultdict(list)
+        for r in rows:
+            by_round[r[0]].append(r)
+        return {er_id: sorted(rs, key=key)[:5] for er_id, rs in by_round.items()}
+
+    list_rows = (
+        db.session.query(
+            ElectoralList.election_round_id, ElectoralList.name,
+            db.func.sum(ListResult.votes).label('total_votes'),
+        )
+        .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
+        .filter(any_of(ListResult.polling_station_id, station_ids),
+                any_of(ElectoralList.election_round_id, er_ids))
+        .group_by(ElectoralList.election_round_id, ElectoralList.name)
+        .all()
+    ) if er_ids else []
+    # Ties (equal votes) in name order; the database used to return them in no set order.
+    top_lists = top5(list_rows, key=lambda r: (-(r.total_votes or 0), r.name or ''))
+
+    cand_rows = (
+        db.session.query(
+            ElectoralList.election_round_id, Person.first_name, Person.last_name,
+            db.func.sum(CandidateResult.votes).label('total_votes'),
+            ElectoralList.name.label('list_name'), Person.id,
+        )
+        .join(Candidacy, CandidateResult.candidacy_id == Candidacy.id)
+        .join(Person, Candidacy.person_id == Person.id)
+        .join(ElectoralList, Candidacy.electoral_list_id == ElectoralList.id)
+        .filter(any_of(CandidateResult.polling_station_id, station_ids),
+                any_of(ElectoralList.election_round_id, er_ids))
+        .group_by(ElectoralList.election_round_id, Person.id, Person.first_name,
+                  Person.last_name, ElectoralList.name)
+        .all()
+    ) if er_ids else []
+    top_candidates = top5(cand_rows, key=lambda r: (-(r.total_votes or 0), r.first_name or '', r.last_name or ''))
+
+    # 2001-2009 councils: each list's nositelj in this place (see
+    # ListHolder), where the place has exactly one for that list. A
+    # county view adds up many towns' councils, where no one leads; its
+    # own assembly is the one body it can name a leader for.
+    holders = defaultdict(dict)                  # round id -> list name -> [leaders]
+    if er_ids:
+        for er_id, name, first, last, pid, slug in (
+                db.session.query(ElectoralList.election_round_id, ElectoralList.name,
+                                 Person.first_name, Person.last_name, Person.id, ElectionType.slug)
+                .join(ListHolder, ListHolder.electoral_list_id == ElectoralList.id)
+                .join(Person, Person.id == ListHolder.person_id)
+                .join(ElectionRound, ElectionRound.id == ElectoralList.election_round_id)
+                .join(Election, Election.id == ElectionRound.election_id)
+                .join(ElectionType, ElectionType.id == Election.election_type_id)
+                .filter(any_of(ElectoralList.election_round_id, er_ids),
+                        ListHolder.municipality_id.in_(
+                            db.session.query(PollingStation.municipality_id)
+                            .filter(any_of(PollingStation.id, station_ids))))):
+            if station_id or municipality_id or slug == 'local_county_assembly':
+                holders[er_id].setdefault(name, []).append({'name': f'{first} {last}', 'person_id': pid})
+
     shown = set()
     elections = []
     for td in turnout_rows:
-        er = ElectionRound.query.get(td.er_id)
+        er = rounds[td.er_id]
         shown.add((er.election.election_type.slug, er.election.year))
         election = er.election
         etype = election.election_type
-
-        # All lists (no limit)
-        all_lists = (
-            db.session.query(
-                ElectoralList.name,
-                db.func.sum(ListResult.votes).label('total_votes'),
-            )
-            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
-            .filter(
-                ListResult.polling_station_id.in_(station_ids),
-                ElectoralList.election_round_id == er.id,
-            )
-            .group_by(ElectoralList.name)
-            .order_by(db.func.sum(ListResult.votes).desc())
-            .limit(5)
-            .all()
-        )
-
-        # All candidates (no limit)
-        all_candidates = (
-            db.session.query(
-                Person.first_name,
-                Person.last_name,
-                db.func.sum(CandidateResult.votes).label('total_votes'),
-                ElectoralList.name.label('list_name'),
-                Person.id,
-            )
-            .join(Candidacy, CandidateResult.candidacy_id == Candidacy.id)
-            .join(Person, Candidacy.person_id == Person.id)
-            .join(ElectoralList, Candidacy.electoral_list_id == ElectoralList.id)
-            .filter(
-                CandidateResult.polling_station_id.in_(station_ids),
-                ElectoralList.election_round_id == er.id,
-            )
-            .group_by(Person.id, Person.first_name, Person.last_name, ElectoralList.name)
-            .order_by(db.func.sum(CandidateResult.votes).desc())
-            .limit(5)
-            .all()
-        )
-
-        # 2001-2009 councils: each list's nositelj in this place (see
-        # ListHolder), where the place has exactly one for that list. A
-        # county view adds up many towns' councils, where no one leads; its
-        # own assembly is the one body it can name a leader for.
-        holders = {}
-        one_body = bool(station_id or municipality_id) or etype.slug == 'local_county_assembly'
-        for name, first, last, pid in [] if not one_body else (
-                db.session.query(ElectoralList.name, Person.first_name, Person.last_name, Person.id)
-                .join(ListHolder, ListHolder.electoral_list_id == ElectoralList.id)
-                .join(Person, Person.id == ListHolder.person_id)
-                .filter(ElectoralList.election_round_id == er.id,
-                        ListHolder.municipality_id.in_(
-                            db.session.query(PollingStation.municipality_id)
-                            .filter(PollingStation.id.in_(station_ids))))):
-            holders.setdefault(name, []).append({'name': f'{first} {last}', 'person_id': pid})
+        round_holders = holders.get(er.id, {})
 
         elections.append({
             'election': election.name or f'{etype.name} {election.year}',
@@ -716,18 +729,18 @@ def location_results():
             'county_id': nav_county,
             'municipality_id': nav_muni,
             'top_lists': [
-                {'name': name, 'votes': votes,
-                 'holder': holders[name][0] if len(holders.get(name, [])) == 1 else None}
-                for name, votes in all_lists
+                {'name': r.name, 'votes': r.total_votes,
+                 'holder': round_holders[r.name][0] if len(round_holders.get(r.name, [])) == 1 else None}
+                for r in top_lists.get(er.id, [])
             ],
             'top_candidates': [
                 {
-                    'name': f'{first} {last}',
-                    'votes': votes,
-                    'list_name': list_name,
-                    'person_id': pid,
+                    'name': f'{r.first_name} {r.last_name}',
+                    'votes': r.total_votes,
+                    'list_name': r.list_name,
+                    'person_id': r.id,
                 }
-                for first, last, votes, list_name, pid in all_candidates
+                for r in top_candidates.get(er.id, [])
             ],
         })
 

@@ -6,6 +6,7 @@ where they always were.
 """
 import functools
 import os
+from collections import OrderedDict
 from pathlib import Path
 
 from flask import Flask, request, url_for
@@ -53,22 +54,32 @@ def _asset_urls():
     return {'asset': asset}
 
 
-def static_cache(view):
-    """Remember a view's successful JSON response per URL arguments until
-    the server restarts. For endpoints that read only their path arguments
-    and the database, whose results change only on an import (restart the
-    server after one, as for every other cache here)."""
-    cache = {}
+def static_cache(view=None, *, maxsize=None):
+    """Remember a view's successful JSON response until the server restarts,
+    keyed by its path arguments and its query string. For endpoints whose
+    result depends only on those and the database, which changes only on an
+    import (restart the server after one, as for every other cache here).
 
-    @functools.wraps(view)
-    def wrapper(*args, **kwargs):
-        key = (args, tuple(sorted(kwargs.items())))
-        if key not in cache:
-            res = app.make_response(view(*args, **kwargs))
-            if res.status_code != 200:
-                return res
-            cache[key] = (res.get_data(), res.mimetype)
-        data, mimetype = cache[key]
-        return app.response_class(data, mimetype=mimetype)
-    wrapper.cache = cache
-    return wrapper
+    `@static_cache` or `@static_cache(maxsize=N)`: with a size, the oldest
+    entries go first once N are held — for views with a key per place, of
+    which there are thousands."""
+    def decorate(view):
+        cache = OrderedDict()
+
+        @functools.wraps(view)
+        def wrapper(*args, **kwargs):
+            key = (args, tuple(sorted(kwargs.items())), tuple(sorted(request.args.items(multi=True))))
+            if key in cache:
+                cache.move_to_end(key)
+            else:
+                res = app.make_response(view(*args, **kwargs))
+                if res.status_code != 200:
+                    return res
+                cache[key] = (res.get_data(), res.mimetype)
+                if maxsize and len(cache) > maxsize:
+                    cache.popitem(last=False)
+            data, mimetype = cache[key]
+            return app.response_class(data, mimetype=mimetype)
+        wrapper.cache = cache
+        return wrapper
+    return decorate(view) if view else decorate
