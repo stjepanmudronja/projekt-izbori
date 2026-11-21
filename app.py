@@ -2368,7 +2368,7 @@ def _home_presidential(sql):
 # in `split_persons` first (Sandra Perković's 1997 Ližnjan ward). Matched to
 # the unlabelled Person of the name. Not here: namesakes of the famous (the
 # 2020 diaspora "Marko Perković", the 2015 "Zvonimir Boban", Knin's "Dario
-# Šimić") and Zlatko Vitez, until his 1997 HDZ ward candidacy is confirmed.
+# Šimić"). Zlatko Vitez was considered and left out by the data's owner.
 HOME_PUBLIC_FIGURES = [
     ('MIROSLAV ŠKORO', 'glazbenik', None),
     ('MIROSLAV BLAŽEVIĆ', 'nogometni trener', None),
