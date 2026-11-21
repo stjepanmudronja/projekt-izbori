@@ -110,6 +110,9 @@
         .sidebar-section {
             padding: 1rem 0.75rem 0.5rem;
         }
+        .sidebar-nav.sidebar-home {
+            padding: 1rem 0.75rem 0;
+        }
         .sidebar-section-title {
             font-size: 0.65rem;
             text-transform: uppercase;
@@ -782,14 +785,41 @@
         <small>Hrvatski izborni podaci</small>
     </a>
 
+    <ul class="sidebar-nav sidebar-home">
+        <li><a href="#" data-module="home" class="active">
+            <i class="bi bi-stars"></i> Početna
+        </a></li>
+    </ul>
+
     <div class="sidebar-section">
-        <div class="sidebar-section-title">Pretraživanje</div>
+        <div class="sidebar-section-title">Izbori</div>
         <ul class="sidebar-nav">
-            <li><a href="#" data-module="home" class="active">
-                <i class="bi bi-stars"></i> Početna
+            <li><a href="#" data-module="results-predsjednicki">
+                <i class="bi bi-person-badge"></i> Predsjednički
             </a></li>
+            <li><a href="#" data-module="sabor-analysis">
+                <i class="bi bi-people-fill"></i> Sabor
+            </a></li>
+            <li><a href="#" data-module="results-eu">
+                <i class="bi bi-globe-europe-africa"></i> Europski parlament
+            </a></li>
+            <li><a href="#" data-module="results-lokalni">
+                <i class="bi bi-building"></i> Lokalni
+            </a></li>
+        </ul>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Istraži</div>
+        <ul class="sidebar-nav">
             <li><a href="#" data-module="person">
-                <i class="bi bi-person"></i> Političar
+                <i class="bi bi-person"></i> Političari
+            </a></li>
+            <li><a href="#" data-module="parties">
+                <i class="bi bi-flag"></i> Stranke
+            </a></li>
+            <li><a href="#" data-module="place">
+                <i class="bi bi-house-door"></i> Općine i gradovi
             </a></li>
             <li>
                 <a href="#" data-module="station">
@@ -801,38 +831,12 @@
                     </a></li>
                 </ul>
             </li>
-            <li><a href="#" data-module="place">
-                <i class="bi bi-house-door"></i> Općine i gradovi
-            </a></li>
-            <li><a href="#" data-module="parties">
-                <i class="bi bi-flag"></i> Stranke
-            </a></li>
         </ul>
     </div>
 
     <div class="sidebar-section">
         <div class="sidebar-section-title">Analitika</div>
         <ul class="sidebar-nav">
-            <li>
-                <a href="#" data-module="results-predsjednicki">
-                    <i class="bi bi-person-badge"></i> Predsjednički izbori
-                </a>
-            </li>
-            <li>
-                <a href="#" data-module="results-eu">
-                    <i class="bi bi-globe-europe-africa"></i> EU parlamentarni izbori
-                </a>
-            </li>
-            <li>
-                <a href="#" data-module="results-lokalni">
-                    <i class="bi bi-building"></i> Lokalni izbori
-                </a>
-            </li>
-            <li>
-                <a href="#" data-module="sabor-analysis">
-                    <i class="bi bi-people-fill"></i> Rezultati i koalicije (Sabor)
-                </a>
-            </li>
             <li><a href="#" data-module="analytics-turnout">
                 <i class="bi bi-graph-up"></i> Izlaznost
             </a></li>
