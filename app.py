@@ -1,6 +1,9 @@
+import functools
 import re
+import threading
 import time
 from collections import defaultdict
+from types import SimpleNamespace
 from datetime import date as _date
 
 from flask import Flask, render_template, jsonify, request
@@ -461,6 +464,27 @@ def sabor_total_seats(year):
     return 140 + diaspora_seats(year) + minority_seats(year)
 
 
+def static_cache(view):
+    """Remember a view's successful JSON response per URL arguments until
+    the server restarts. For endpoints that read only their path arguments
+    and the database, whose results change only on an import (restart the
+    server after one, as for every other cache here)."""
+    cache = {}
+
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        key = (args, tuple(sorted(kwargs.items())))
+        if key not in cache:
+            res = app.make_response(view(*args, **kwargs))
+            if res.status_code != 200:
+                return res
+            cache[key] = (res.get_data(), res.mimetype)
+        data, mimetype = cache[key]
+        return app.response_class(data, mimetype=mimetype)
+    wrapper.cache = cache
+    return wrapper
+
+
 # Cache of Sabor seat winners per election round (data is static after import).
 _SABOR_SEAT_WINNERS_CACHE = {}
 
@@ -515,43 +539,45 @@ def sabor_seat_winner_candidacy_ids(er_id):
         _SABOR_SEAT_WINNERS_CACHE[er_id] = winner_ids
         return winner_ids
 
-    districts = (
-        db.session.query(ElectoralDistrict)
-        .join(ElectoralList, ElectoralList.district_id == ElectoralDistrict.id)
+    # Two grouped queries for the round instead of one per district and per
+    # winning list: every list's votes, allocate, then the preferential votes
+    # of the lists that won seats.
+    # The round's lists first, then their votes by list id: summed in one
+    # join instead, PostgreSQL misjudges the row count and scans all 5.6 M
+    # ListResult rows (0.4 s a round against 0.04 s).
+    lists_meta = (
+        db.session.query(ElectoralList.id, ElectoralList.name, ElectoralList.district_id, ElectoralDistrict.number)
+        .join(ElectoralDistrict, ElectoralDistrict.id == ElectoralList.district_id)
         .filter(ElectoralList.election_round_id == er_id)
-        .distinct()
         .all()
     )
+    totals = dict(
+        db.session.query(ListResult.electoral_list_id, db.func.sum(ListResult.votes))
+        .filter(ListResult.electoral_list_id.in_([m.id for m in lists_meta]))
+        .group_by(ListResult.electoral_list_id)
+        .all()
+    ) if lists_meta else {}
+    # Lists with no result rows are left out, as the per-district join did.
+    list_rows = [SimpleNamespace(id=m.id, name=m.name, district_id=m.district_id, number=m.number,
+                                 total_votes=totals[m.id])
+                 for m in lists_meta if m.id in totals]
+    won_lists = []                               # (list id, seats, list votes)
+    by_district = defaultdict(list)
+    for r in list_rows:
+        by_district[(r.district_id, r.number)].append(r)
 
-    for dist in districts:
-        if dist.number in MINORITY_SEATS:
-            n_seats = MINORITY_SEATS[dist.number]
-        elif dist.number == 11:
+    for (_dist_id, number), rows in by_district.items():
+        if number in MINORITY_SEATS:
+            n_seats = MINORITY_SEATS[number]
+        elif number == 11:
             n_seats = diaspora_seats(year)
-        elif dist.number == 12:
+        elif number == 12:
             n_seats = 8
         else:
             n_seats = 14
 
-        list_rows = (
-            db.session.query(
-                ElectoralList.id,
-                ElectoralList.name,
-                db.func.sum(ListResult.votes).label('total_votes'),
-            )
-            .join(ElectoralList, ListResult.electoral_list_id == ElectoralList.id)
-            .filter(
-                ElectoralList.election_round_id == er_id,
-                ElectoralList.district_id == dist.id,
-            )
-            .group_by(ElectoralList.id, ElectoralList.name)
-            .all()
-        )
-        if not list_rows:
-            continue
-
-        list_votes = [(r.name, r.total_votes) for r in list_rows]
-        list_id_map = {r.name: r.id for r in list_rows}
+        list_votes = [(r.name, r.total_votes) for r in rows]
+        list_id_map = {r.name: r.id for r in rows}
         total_district_votes = sum(v for _, v in list_votes)
 
         is_standard = n_seats == 14
@@ -576,43 +602,48 @@ def sabor_seat_winner_candidacy_ids(er_id):
 
         for list_name, seats_won in dist_seats.items():
             list_id = list_id_map.get(list_name)
-            if not list_id or seats_won == 0:
+            if list_id and seats_won:
+                won_lists.append((list_id, seats_won, list_votes_by_name.get(list_name, 0)))
+
+    # Candidates' preferential votes, for the lists that won seats only;
+    # candidacies first, then their votes by id (the same planner trap).
+    cand_by_list = defaultdict(list)
+    if won_lists:
+        cands = (db.session.query(Candidacy.id, Candidacy.electoral_list_id, Candidacy.position_on_list)
+                 .filter(Candidacy.electoral_list_id.in_([l for l, _s, _v in won_lists])).all())
+        personal = dict(
+            db.session.query(CandidateResult.candidacy_id, db.func.sum(CandidateResult.votes))
+            .filter(CandidateResult.candidacy_id.in_([c.id for c in cands]))
+            .group_by(CandidateResult.candidacy_id)
+            .all()
+        ) if cands else {}
+        for c in cands:
+            cand_by_list[c.electoral_list_id].append(SimpleNamespace(
+                id=c.id, position_on_list=c.position_on_list, personal_votes=personal.get(c.id, 0)))
+
+    for list_id, seats_won, list_total_votes in won_lists:
+        cand_rows = cand_by_list.get(list_id, [])
+        pref_floor = list_total_votes * PREF_THRESHOLD_PCT / 100.0
+
+        promoted = sorted(
+            [c for c in cand_rows if int(c.personal_votes or 0) >= pref_floor],
+            key=lambda c: -int(c.personal_votes or 0),
+        )
+        chosen = []
+        seen = set()
+        for c in promoted:
+            if len(chosen) >= seats_won:
+                break
+            chosen.append(c.id)
+            seen.add(c.id)
+        for c in sorted(cand_rows, key=lambda c: (c.position_on_list or 0)):
+            if len(chosen) >= seats_won:
+                break
+            if c.id in seen:
                 continue
-
-            cand_rows = (
-                db.session.query(
-                    Candidacy.id,
-                    Candidacy.position_on_list,
-                    db.func.coalesce(db.func.sum(CandidateResult.votes), 0).label('personal_votes'),
-                )
-                .outerjoin(CandidateResult, CandidateResult.candidacy_id == Candidacy.id)
-                .filter(Candidacy.electoral_list_id == list_id)
-                .group_by(Candidacy.id, Candidacy.position_on_list)
-                .all()
-            )
-
-            list_total_votes = list_votes_by_name.get(list_name, 0)
-            pref_floor = list_total_votes * PREF_THRESHOLD_PCT / 100.0
-
-            promoted = sorted(
-                [c for c in cand_rows if int(c.personal_votes or 0) >= pref_floor],
-                key=lambda c: -int(c.personal_votes or 0),
-            )
-            chosen = []
-            seen = set()
-            for c in promoted:
-                if len(chosen) >= seats_won:
-                    break
-                chosen.append(c.id)
-                seen.add(c.id)
-            for c in sorted(cand_rows, key=lambda c: (c.position_on_list or 0)):
-                if len(chosen) >= seats_won:
-                    break
-                if c.id in seen:
-                    continue
-                chosen.append(c.id)
-                seen.add(c.id)
-            winner_ids.update(chosen)
+            chosen.append(c.id)
+            seen.add(c.id)
+        winner_ids.update(chosen)
 
     _SABOR_SEAT_WINNERS_CACHE[er_id] = winner_ids
     return winner_ids
@@ -1563,14 +1594,38 @@ HOME_OFFICE = {'local_mayor': 'Načelnik', 'local_city_mayor': 'Gradonačelnik',
                'local_county_prefect': 'Župan'}
 
 
+HOME_CACHE_SECONDS = 6 * 3600
+_HOME_LOCK = threading.Lock()                 # one rebuild at a time
+
+
+def _rebuild_home():
+    """Recompute the home payload unless another thread is already at it;
+    a caller that finds it busy waits for that result instead."""
+    if not _HOME_LOCK.acquire(blocking=False):
+        with _HOME_LOCK:                      # wait for the running rebuild
+            return
+    try:
+        with app.app_context():
+            _HOME_CACHE['payload'] = (time.time(), _home_highlights())
+    finally:
+        _HOME_LOCK.release()
+
+
 @app.route('/api/home')
 def home_highlights():
+    """Cached; once the copy is older than HOME_CACHE_SECONDS it is still
+    served while a background thread rebuilds it, so no visitor waits ~7 s.
+    Only the very first request after a start (before the warm-up thread is
+    done) waits, and then for that thread rather than a second computation."""
     hit = _HOME_CACHE.get('payload')
-    if hit and time.time() - hit[0] < 6 * 3600:
+    if hit:
+        if time.time() - hit[0] >= HOME_CACHE_SECONDS and not _HOME_LOCK.locked():
+            threading.Thread(target=_rebuild_home, daemon=True).start()
         return jsonify(hit[1])
-    payload = _home_highlights()
-    _HOME_CACHE['payload'] = (time.time(), payload)
-    return jsonify(payload)
+    _rebuild_home()
+    if 'payload' not in _HOME_CACHE:          # the other thread's rebuild failed
+        _HOME_CACHE['payload'] = (time.time(), _home_highlights())
+    return jsonify(_HOME_CACHE['payload'][1])
 
 
 def _home_highlights():
@@ -2088,6 +2143,7 @@ def parties_list():
 
 
 @app.route('/api/stranke/<int:registry_number>')
+@static_cache
 def party_page(registry_number):
     """One registered party: its register entry and, per election it stood in,
     the votes and share of the lists it led, the lists it joined as a partner,
@@ -2963,6 +3019,7 @@ def national_results(category, year):
 
 
 @app.route('/api/national/sabor-seats/<int:year>')
+@static_cache
 def sabor_seats(year):
     """Calculate Sabor seat distribution using D'Hondt method."""
     etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
@@ -3220,6 +3277,7 @@ def sabor_seats(year):
 
 
 @app.route('/api/national/zupanijski-dom/<int:year>')
+@static_cache
 def zupanijski_dom_results(year):
     """Per-county results for the Sabor's upper house.
 
@@ -3442,6 +3500,7 @@ def _mixed_race(d, cands, winners, group_of, label=None, extra=None):
 
 
 @app.route('/api/national/sabor-1995')
+@static_cache
 def sabor_1995_results():
     """The 1995 Zastupnički dom, which four contests elected at once.
 
@@ -3553,6 +3612,7 @@ def sabor_1995_results():
 
 
 @app.route('/api/national/sabor-1992')
+@static_cache
 def sabor_1992_results():
     """The 1992 Zastupnički dom: 138 members, none of them allocated here.
 
@@ -3696,6 +3756,7 @@ def sabor_dpv_results(year):
 
 
 @app.route('/api/national/sabor-1990/<chamber>/<int:year>')
+@static_cache
 def sabor_1990_results(chamber, year):
     """A 1990 chamber — the Društveno-političko vijeće (80 units), the
     Vijeće općina (115) or the Vijeće udruženog rada (160) — elected in
@@ -3832,6 +3893,7 @@ def sabor_1990_results(chamber, year):
 
 
 @app.route('/api/national/sabor-raw/<int:year>')
+@static_cache
 def sabor_raw(year):
     """Return raw vote data per list per district for client-side D'Hondt."""
     etype = ElectionType.query.filter_by(name='Parlamentarni izbori').first()
@@ -4860,18 +4922,30 @@ def analytics_turnout():
 
 
 def _warm_home_cache():
-    """Compute the home page's highlights in the background (~4 s), so the
-    first visitor to the landing page does not wait for them."""
+    """At server start, in the background: the home page's highlights (~7 s),
+    then the caches the first visitors would otherwise fill — every Sabor
+    round's seat winners (politician pages) and the party register links
+    (Stranke, Snaga stranaka)."""
+    try:
+        _rebuild_home()
+    except Exception as exc:                  # the endpoint retries on demand
+        app.logger.warning('home highlights not precomputed: %s', exc)
     with app.app_context():
         try:
-            _HOME_CACHE['payload'] = (time.time(), _home_highlights())
-        except Exception as exc:              # the endpoint retries on demand
-            app.logger.warning('home highlights not precomputed: %s', exc)
+            rounds = (db.session.query(ElectionRound.id)
+                      .join(Election, ElectionRound.election_id == Election.id)
+                      .join(ElectionType, Election.election_type_id == ElectionType.id)
+                      .filter(ElectionType.slug.in_(['sabor', *SABOR_1990_SLUGS])).all())
+            for (er_id,) in rounds:
+                sabor_seat_winner_candidacy_ids(er_id)
+            _party_links()
+            _party_list_votes()
+        except Exception as exc:
+            app.logger.warning('caches not precomputed: %s', exc)
 
 
 if __name__ == '__main__':
     import os
-    import threading
     # Under the debug reloader only the child process serves requests.
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         threading.Thread(target=_warm_home_cache, daemon=True).start()
