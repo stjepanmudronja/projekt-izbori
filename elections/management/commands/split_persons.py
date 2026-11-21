@@ -301,6 +301,10 @@ KNOWN_DISTINCT = [
     ('IGOR JURIŠIĆ', 'ORaH, 2015.', [('sabor', 2015, 10)],
      'sabor 2015: ORaH #7 in X. IJ — confirmed not the načelnik of Vrbje '
      '(2009-2025)'),
+    ('SANDRA PERKOVIĆ', 'Ližnjan, 1997.', [('local_council_ward', 1997)],
+     'local_council_ward 1997: independent ("NK Sandra Perković") in Ližnjan '
+     'ward II — confirmed not the Sandra Perković on the Bandić 365 lists in '
+     'II. IJ, 2015 and 2016'),
 ]
 
 # Names `--suggest` flags on a weak signal (a long gap, two residences) but
