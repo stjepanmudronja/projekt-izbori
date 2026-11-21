@@ -1509,6 +1509,11 @@
                 <label class="form-label fw-semibold d-block mt-3 mb-1">Stranke
                     <small class="text-muted fw-normal ms-1">(klikni za prikaz ili skrivanje; poredano po najboljem rezultatu)</small></label>
                 <div class="d-flex flex-wrap gap-2" id="psChips"></div>
+                <div class="form-check form-switch mt-3 mb-0">
+                    <input class="form-check-input" type="checkbox" id="psPartners" checked>
+                    <label class="form-check-label small" for="psPartners">Prikaži koalicije u kojima je stranka bila partner
+                        <span class="text-muted">(šuplja točka na udjelu cijele koalicije)</span></label>
+                </div>
             </div>
             <div class="spinner-wrapper" id="psSpinner"><div class="spinner-border text-primary"></div></div>
             <div class="card p-3">
@@ -2449,7 +2454,7 @@ function renderHome(d) {
 
 // ---- Snaga stranaka: each party's share across elections (/api/analytics/party-strength) ----
 const PS_KIND_STYLE = { sabor: 'circle', eu: 'rectRot', vijeca: 'triangle', skupstine: 'rect' };
-const _ps = { ready: false, kind: 'sabor', data: {}, on: new Set(), chart: null, colors: {} };
+const _ps = { ready: false, kind: 'sabor', data: {}, on: new Set(), chart: null, colors: {}, partners: true };
 
 async function initPartyStrength() {
     if (_ps.ready) return;
@@ -2494,7 +2499,7 @@ function renderPartyStrength() {
     const all = _ps.kind === 'sve';
     const shown = d.parties.filter(p => _ps.on.has(p.registry_number));
     const years = d.elections.map(e => e.year);
-    const datasets = shown.map(p => {
+    const datasets = shown.filter(p => p.points.length).map(p => {
         const c = _ps.colors[p.registry_number];
         return {
             label: psLabel(p), reg: p.registry_number, party: p,
@@ -2508,6 +2513,21 @@ function renderPartyStrength() {
             pointStyle: ctx => (ctx.raw && ctx.raw.pt && PS_KIND_STYLE[ctx.raw.pt.kind]) || 'circle',
             pointBorderColor: '#fff', pointBorderWidth: 1.5,
         };
+    });
+    // Elections where the party led no list but joined a coalition: a hollow
+    // point at the coalition's share, never joined to the party's own line.
+    // It sits on the leader's own point, so it is drawn as a ring around it,
+    // each further partner's a little wider.
+    if (_ps.partners) shown.filter(p => p.partner_points.length).forEach((p, i) => {
+        const c = _ps.colors[p.registry_number];
+        datasets.push({
+            label: psLabel(p), reg: p.registry_number, party: p, partner: true,
+            data: p.partner_points.map(pt => ({ x: pt.year, y: pt.share, pt })),
+            showLine: false, borderColor: c, backgroundColor: 'transparent', pointBackgroundColor: 'transparent',
+            pointBorderColor: c, pointBorderWidth: 2.5, pointRadius: 9 + 4 * i, pointHoverRadius: 11 + 4 * i,
+            order: -1,
+            pointStyle: ctx => (ctx.raw && ctx.raw.pt && PS_KIND_STYLE[ctx.raw.pt.kind]) || 'circle',
+        });
     });
     if (_ps.chart) _ps.chart.destroy();
     _ps.chart = new Chart(document.getElementById('psChart').getContext('2d'), {
@@ -2534,6 +2554,8 @@ function renderPartyStrength() {
                         },
                         label: ctx => {
                             const pt = ctx.raw.pt;
+                            if (ctx.dataset.partner)
+                                return `${ctx.dataset.label}: partner u koaliciji koju predvodi ${pt.leader} - koalicija ${formatPct(pt.share, 2)}`;
                             return `${ctx.dataset.label}: ${formatPct(pt.share, 2)} (${pt.votes.toLocaleString('hr-HR')} glasova)`;
                         },
                         afterLabel: ctx => {
@@ -2558,11 +2580,18 @@ function renderPartyStrength() {
     });
     document.getElementById('psNote').innerHTML =
         (all ? 'Oblik točke: ● Sabor · ◆ Europski parlament · ▲ gradska i općinska vijeća · ■ županijske skupštine. ' : '')
-        + 'Udio = glasovi lista koje je stranka predvodila (prva navedena u koaliciji) od svih glasova za liste na tim izborima; '
-        + 'stranka koja je bila samo partner u koaliciji tada nema točku. Vijeća i skupštine zbrajaju sve općine i gradove u državi. '
+        + 'Udio = glasovi lista koje je stranka predvodila (prva navedena u koaliciji) od svih glasova za liste na tim izborima. '
+        + 'Na izborima za Sabor i Europski parlament ista koalicija ima jednog predvodnika u svim jedinicama (onog koji je predvodi s najviše glasova), '
+        + 'u lokalnim izborima predvodnik je prva navedena stranka u svakoj općini. Šuplja točka: stranka tada nije predvodila nijednu listu, '
+        + 'nego je bila partner, pa je prikazan udio koalicije (lokalno: svih lista u kojima je bila partner). Vijeća i skupštine zbrajaju sve općine i gradove u državi. '
         + 'Sabor 1992. i 1995. računa samo državnu listu, 2000. samo I.–X. izbornu jedinicu; manjinske jedinice nisu uključene.';
 }
 
+document.addEventListener('change', e => {
+    if (e.target.id !== 'psPartners') return;
+    _ps.partners = e.target.checked;
+    renderPartyStrength();
+});
 document.addEventListener('click', e => {
     const k = e.target.closest && e.target.closest('[data-ps-kind]');
     if (k) { loadPartyStrength(k.dataset.psKind); return; }

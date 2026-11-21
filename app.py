@@ -1991,8 +1991,17 @@ def _party_links():
         head, abbr = _split_party(part)
         tries = [part]
         if abbr:
-            tries += [part[:part.rfind(' - ')], abbr]
-        tries.append(head)
+            tries.append(part[:part.rfind(' - ')])
+            # A two-part abbreviation ("AUTOHTONA - HRVATSKA SELJAČKA STRANKA
+            # - A - HSS" is A-HSS, not HSS): try it before its last letters.
+            # Its last letters alone would name another party, so stop there.
+            segs = part.split(' - ')
+            if len(segs) > 2 and len(segs[-2].strip()) <= 3:
+                tries += [' - '.join(segs[:-2]), ' - '.join(segs[-2:])]
+            else:
+                tries += [abbr, head]
+        else:
+            tries.append(head)
         for t in tries:
             ids = {i for i in by_key.get(_norm_party(t), ()) if alive[i][0] <= year <= alive[i][1]}
             if len(ids) == 1:
@@ -2142,6 +2151,9 @@ PARTY_STRENGTH_KINDS = {
 # HRAST stood in 2011 as Hrvatski rast (no. 218) and re-registered in 2012 as
 # HRAST - Pokret za uspješnu Hrvatsku (no. 246).
 PARTY_SUCCESSORS = {70: 88, 218: 246}
+# Kinds decided on one national ballot, where a coalition is one agreement in
+# every district (see party_strength).
+PARTY_STRENGTH_NATIONAL = ('sabor', 'eu')
 
 
 @app.route('/api/analytics/party-strength')
@@ -2170,34 +2182,86 @@ def party_strength():
 
     parties = {p.id: p for p in RegisteredParty.query.all()}
     by_reg = {p.registry_number: p.id for p in parties.values()}
-    votes, top = defaultdict(lambda: defaultdict(int)), defaultdict(dict)
+    owner = {pid: by_reg.get(PARTY_SUCCESSORS.get(p.registry_number), pid) for pid, p in parties.items()}
+    label = lambda pid: parties[pid].short_name or parties[pid].name
+
+    # Each round-1 list of these kinds: its parties, leader first.
+    members = defaultdict(list)                  # list id -> [(party, is leader)]
     for pid, plist in links.items():
-        reg = PARTY_SUCCESSORS.get(parties[pid].registry_number)
-        owner = by_reg.get(reg, pid)
         for list_id, role in plist:
             info = lists.get(list_id)
-            if role != 'leader' or not info or info['round'] != 1:
-                continue
-            k = slug_kind.get(info['slug'])
-            if not k:
-                continue
-            e = (k, info['year'])
-            votes[owner][e] += info['votes']
-            if info['votes'] > top[owner].get(e, ('', -1))[1]:
-                top[owner][e] = (info['name'], info['votes'])
+            if info and info['round'] == 1 and info['slug'] in slug_kind:
+                members[list_id].append((owner[pid], role == 'leader'))
+    leader_of = {}
+    for list_id, ms in members.items():
+        lead = [pid for pid, is_lead in ms if is_lead]
+        if lead:
+            leader_of[list_id] = lead[0]
+    # A national ballot's coalition is one agreement however each district
+    # printed it: 2000's SDP-HSLS list reads "HSLS, SDP" in some districts.
+    # One set of parties in one election gets one leader, the one heading
+    # most of its votes. Local coalitions are agreed town by town, so there
+    # whoever is named first leads.
+    coalition_votes = defaultdict(lambda: defaultdict(int))
+    for list_id, lead in leader_of.items():
+        info = lists[list_id]
+        if slug_kind[info['slug']] in PARTY_STRENGTH_NATIONAL and len(members[list_id]) > 1:
+            ckey = (info['slug'], info['year'], frozenset(pid for pid, _ in members[list_id]))
+            coalition_votes[ckey][lead] += info['votes']
+    for list_id in leader_of:
+        info = lists[list_id]
+        ckey = (info['slug'], info['year'], frozenset(pid for pid, _ in members[list_id]))
+        if ckey in coalition_votes:
+            leader_of[list_id] = max(coalition_votes[ckey].items(), key=lambda kv: kv[1])[0]
+
+    led, led_top = defaultdict(lambda: defaultdict(int)), defaultdict(dict)
+    joined_by = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))   # party, election, leader -> votes
+    joined_lists = defaultdict(lambda: defaultdict(dict))                    # party, election, leader -> biggest list
+    for list_id, lead in leader_of.items():
+        info = lists[list_id]
+        e = (slug_kind[info['slug']], info['year'])
+        for pid in {pid for pid, _ in members[list_id]}:
+            if pid == lead:
+                led[pid][e] += info['votes']
+                if info['votes'] > led_top[pid].get(e, ('', -1, None))[1]:
+                    led_top[pid][e] = (info['name'], info['votes'], lead)
+            else:
+                joined_by[pid][e][lead] += info['votes']
+                if info['votes'] > joined_lists[pid][e].get(lead, ('', -1))[1]:
+                    joined_lists[pid][e][lead] = (info['name'], info['votes'])
+    # A partner's votes: on a national ballot the one coalition it joined (the
+    # biggest, should a misread list name put it in two); locally, every list
+    # it joined anywhere in the country.
+    joined, joined_top = defaultdict(dict), defaultdict(dict)
+    for pid, by_e in joined_by.items():
+        for e, by_lead in by_e.items():
+            lead = max(by_lead, key=by_lead.get)
+            joined[pid][e] = by_lead[lead] if e[0] in PARTY_STRENGTH_NATIONAL else sum(by_lead.values())
+            joined_top[pid][e] = (joined_lists[pid][e][lead][0], 0, lead)
+
+    def point(pid, e, v, top):
+        k, y = e
+        name, _, lead = top[pid][e]
+        pt = {'kind': k, 'year': y, 'votes': v, 'share': round(v / total[e] * 100, 2), 'top_list': name}
+        if lead != pid:
+            pt['leader'] = label(lead)
+        return pt
+
+    order = lambda e: (e[1], e[0])
     series = []
-    for owner, ev in votes.items():
-        points = [{'kind': k, 'year': y, 'votes': v, 'share': round(v / total[(k, y)] * 100, 2),
-                   'top_list': top[owner][(k, y)][0]}
-                  for (k, y), v in sorted(ev.items(), key=lambda kv: (kv[0][1], kv[0][0]))
-                  if v and total.get((k, y))]
-        if not points:
+    for pid in set(led) | set(joined):
+        points = [point(pid, e, v, led_top) for e, v in sorted(led[pid].items(), key=lambda kv: order(kv[0]))
+                  if v and total.get(e)]
+        # Partner only where the party led nothing that election, or it would vanish.
+        partner = [point(pid, e, v, joined_top) for e, v in sorted(joined[pid].items(), key=lambda kv: order(kv[0]))
+                   if v and total.get(e) and not led[pid].get(e)]
+        if not points and not partner:
             continue
-        p = parties[owner]
+        p = parties[pid]
         series.append({
             'registry_number': p.registry_number, 'name': p.name, 'short_name': p.short_name or '',
-            'active': p.status != 'PRESTANAK', 'peak': max(pt['share'] for pt in points),
-            'points': points,
+            'active': p.status != 'PRESTANAK', 'peak': max((pt['share'] for pt in points), default=0),
+            'points': points, 'partner_points': partner,
         })
     series.sort(key=lambda s: -s['peak'])
     payload = {
