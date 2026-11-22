@@ -560,17 +560,41 @@ def _place_profile(muni_id):
 @static_cache(maxsize=500)
 def location_results():
     """Aggregated results for a location filter.
-    Params: county_id, municipality_id, station_id (optional), street (optional)
+    Params: county_id, municipality_id, station_id (optional), street (optional);
+    or an area of several places, `municipality_ids` and/or `county_ids`
+    (comma-separated), whose polling stations are added up - a county and a
+    town inside it count once.
     """
     county_id = request.args.get('county_id', type=int)
     municipality_id = request.args.get('municipality_id', type=int)
     station_id = request.args.get('station_id', type=int)
     street = request.args.get('street', '').strip()
+    ids = lambda name: [int(x) for x in request.args.get(name, '').split(',') if x.strip().isdigit()]
+    area_munis, area_counties = ids('municipality_ids'), ids('county_ids')
 
     # Build list of station IDs matching the filter
     query = PollingStation.query
 
-    if station_id:
+    area_names, area_parts = [], []
+    if area_munis or area_counties:
+        # "Moje područje": the union of the towns named and every town of the counties named.
+        munis = set()
+        for mid in area_munis:
+            m = Municipality.query.get(mid)
+            if m:
+                munis |= set(town_muni_ids(mid))
+                area_names.append(m.name)
+                area_parts.append({'type': 'm', 'id': mid, 'name': m.name})
+        for cid in area_counties:
+            c = County.query.get(cid)
+            if c:
+                munis |= {m.id for m in Municipality.query.filter_by(county_id=cid)}
+                area_names.append(c.name)
+                area_parts.append({'type': 'c', 'id': cid, 'name': c.name})
+        if not munis:
+            return jsonify({'error': 'Ta mjesta ne postoje.'}), 404
+        query = query.filter(PollingStation.municipality_id.in_(munis))
+    elif station_id:
         # Specific station — find siblings at same location/address
         station = PollingStation.query.get_or_404(station_id)
         query = query.filter(PollingStation.id.in_(station_place_ids(station)))
@@ -596,9 +620,17 @@ def location_results():
     nav_muni = (PollingStation.query.get(station_id).municipality_id if station_id
                 else municipality_id)
     nav_county = (Municipality.query.get(nav_muni).county_id if nav_muni else county_id)
+    if area_names:
+        # An area: a chart point can open one town, or one county, only if that is all it is.
+        nav_muni = area_munis[0] if len(area_munis) == 1 and not area_counties else None
+        counties = ({Municipality.query.get(m).county_id for m in area_munis if Municipality.query.get(m)}
+                    | set(area_counties))
+        nav_county = counties.pop() if len(counties) == 1 else None
 
     # Build label
-    if station_id:
+    if area_names:
+        label = 'Moje područje: ' + ', '.join(area_names)
+    elif station_id:
         station = PollingStation.query.get(station_id)
         label = f'{station.location}, {station.address}'
     elif street and municipality_id:
@@ -703,7 +735,7 @@ def location_results():
                         ListHolder.municipality_id.in_(
                             db.session.query(PollingStation.municipality_id)
                             .filter(any_of(PollingStation.id, station_ids))))):
-            if station_id or municipality_id or slug == 'local_county_assembly':
+            if station_id or (municipality_id and not area_names) or slug == 'local_county_assembly':
                 holders[er_id].setdefault(name, []).append({'name': f'{first} {last}', 'person_id': pid})
 
     shown = set()
@@ -746,6 +778,7 @@ def location_results():
 
     return jsonify({
         'label': label,
+        'area': area_parts,
         'elections': elections,
         # For one place: the number-only elections it has no result for.
         'number_only_missing': [name for slug, year, name in NUMBER_ONLY_ELECTIONS

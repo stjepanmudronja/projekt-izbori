@@ -185,7 +185,7 @@
 
         <div id="module-station" class="module-panel">
             <div class="card search-card p-4 mb-4">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati svih izbora za jedno mjesto: odaberi <b>županiju</b> i <b>grad ili općinu</b>, a po želji i <b>biračko mjesto</b> ili <b>ulicu</b> (ili klikni županiju na karti). Za svake izbore prikazuju se izlaznost te najjače liste i kandidati, uz graf pobjednika kroz vrijeme. Kvačicama biraš vrste izbora; biračka mjesta usporedi u <b>Usporedi s</b>.</p>
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati svih izbora za jedno mjesto: odaberi <b>županiju</b> i <b>grad ili općinu</b>, a po želji i <b>biračko mjesto</b> ili <b>ulicu</b> (ili klikni županiju na karti). Za svake izbore prikazuju se izlaznost te najjače liste i kandidati, uz graf pobjednika kroz vrijeme. Kvačicama biraš vrste izbora; biračka mjesta usporedi u <b>Usporedi s</b>. Za <b>svoje područje</b> dodaj više županija i gradova („Dodaj u moje područje”) i vidi njihov zbroj na svim izborima.</p>
                 <div class="d-flex gap-4 align-items-start">
                     <!-- Croatia SVG map -->
                     <div class="croatia-map-container" style="flex-shrink:0; width:280px;">
@@ -223,6 +223,22 @@
                                 <button id="btnShowResults" class="btn btn-dark btn-lg" disabled>
                                     <i class="bi bi-bar-chart me-2"></i>Prikaži podatke
                                 </button>
+                                <button id="btnAddArea" class="btn btn-outline-dark btn-lg ms-2" disabled title="Dodaj odabranu županiju ili grad/općinu u svoje područje i zbroji im rezultate">
+                                    <i class="bi bi-plus-circle me-2"></i>Dodaj u moje područje
+                                </button>
+                            </div>
+                            <div class="col-12" id="areaBox" style="display:none;">
+                                <div class="area-box">
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <span class="fw-semibold me-1">Moje područje:</span>
+                                        <span id="areaChips" class="d-flex flex-wrap gap-2"></span>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                        <button id="btnShowArea" class="btn btn-dark btn-sm"><i class="bi bi-calculator me-1"></i>Prikaži zbroj</button>
+                                        <button id="btnCopyArea" class="btn btn-outline-primary btn-sm"><i class="bi bi-link-45deg me-1"></i>Kopiraj poveznicu</button>
+                                        <button id="btnClearArea" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg me-1"></i>Očisti</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-12">
                                 <div class="d-flex flex-wrap gap-3 mt-1 election-filters" data-module="station">
@@ -934,6 +950,7 @@
 <script src="{{ asset('js/person.js') }}"></script>
 <script src="{{ asset('js/location.js') }}"></script>
 <script src="{{ asset('js/results.js') }}"></script>
+<script src="{{ asset('js/location-area.js') }}"></script>
 <script src="{{ asset('js/national-results.js') }}"></script>
 <script src="{{ asset('js/eu.js') }}"></script>
 <script src="{{ asset('js/sabor.js') }}"></script>

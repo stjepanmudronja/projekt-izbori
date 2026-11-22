@@ -62,6 +62,28 @@ document.querySelectorAll('.election-filters').forEach(container => {
     });
 });
 
+// Show one place's (or one area's) results: header, winner chart and cards.
+// `town` ({id, name}) adds the link to the town's page.
+function renderLocationData(data, town) {
+    const detailSection = document.getElementById('locationDetailSection');
+    const detailName = document.getElementById('locationDetailName');
+    const detailResults = document.getElementById('locationDetailResults');
+    detailSection.style.display = 'block';
+
+    // Store raw data for filtering
+    _rawData.station = data.elections;
+
+    detailName.innerHTML = `<i class="bi bi-geo-alt-fill me-2"></i>${escapeHtml(data.label || '')}`;
+    // A town's whole history is on its own page.
+    if (town) {
+        detailName.innerHTML += ` <span class="small fw-normal ms-2"><i class="bi bi-house-door me-1"></i>${placeLinkHtml(town.id, town.name)}: načelnici, vijeće i svi izbori</span>`;
+    }
+    renderNumberOnlyNote(data);
+    const filtered = filterResults(data.elections, 'station');
+    renderStationWinnerChart(filtered);
+    renderStationResults(detailResults, filtered);
+}
+
 async function loadLocationResults() {
     const params = new URLSearchParams();
     if (selStation.value) {
@@ -77,8 +99,6 @@ async function loadLocationResults() {
 
     const spinner = document.getElementById('locationSpinner');
     const detailSection = document.getElementById('locationDetailSection');
-    const detailName = document.getElementById('locationDetailName');
-    const detailResults = document.getElementById('locationDetailResults');
 
     detailSection.style.display = 'none';
     spinner.classList.add('show');
@@ -87,22 +107,8 @@ async function loadLocationResults() {
     const data = await res.json();
 
     spinner.classList.remove('show');
-    detailSection.style.display = 'block';
-
-    // Store raw data for filtering
-    _rawData.station = data.elections;
-
-    detailName.innerHTML = `<i class="bi bi-geo-alt-fill me-2"></i>${data.label}`;
-    // A town's whole history is on its own page.
     const muniId = parseInt(selMunicipality.value, 10);
-    if (muniId) {
-        const muniName = selMunicipality.options[selMunicipality.selectedIndex].textContent;
-        detailName.innerHTML += ` <span class="small fw-normal ms-2"><i class="bi bi-house-door me-1"></i>${placeLinkHtml(muniId, muniName)}: načelnici, vijeće i svi izbori</span>`;
-    }
-    renderNumberOnlyNote(data);
-    const filtered = filterResults(data.elections, 'station');
-    renderStationWinnerChart(filtered);
-    renderStationResults(detailResults, filtered);
+    renderLocationData(data, muniId ? { id: muniId, name: selMunicipality.options[selMunicipality.selectedIndex].textContent } : null);
 
     // Show map if specific station selected
     if (selStation.value) {

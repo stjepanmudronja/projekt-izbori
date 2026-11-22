@@ -179,6 +179,40 @@ class Interactions(BrowserTestCase):
         self.assertNoErrors(p)
 
 
+class MyArea(BrowserTestCase):
+    """Prema lokaciji, "Moje područje": several places added up."""
+
+    def pick(self, p, county_prefix, town=None):
+        p.js("""([prefix]) => { const c = [...selCounty.options].find(o => o.text.startsWith(prefix));
+                                selCounty.value = c.value; selCounty.dispatchEvent(new Event('change')); }""", [county_prefix])
+        if town:
+            p.wait(f"[...selMunicipality.options].some(o => o.text === '{town}')")
+            p.js("""([t]) => { const m = [...selMunicipality.options].find(o => o.text === t);
+                               selMunicipality.value = m.value; selMunicipality.dispatchEvent(new Event('change')); }""", [town])
+        p.js("document.getElementById('btnAddArea').click()")
+
+    def test_build_and_show_an_area(self):
+        p = self.open('/prema-lokaciji')
+        p.wait("selCounty.options.length > 1")
+        for town in ('SPLIT', 'KLIS', 'SOLIN'):
+            self.pick(p, 'SPLITSKO', town)
+        p.js("document.getElementById('btnAddArea').click()")          # the same town twice is ignored
+        self.assertEqual(p.js("_area.items.map(x => x.name)"), ['SPLIT', 'KLIS', 'SOLIN'])
+        p.js("document.getElementById('btnShowArea').click()")
+        p.wait("document.getElementById('locationDetailName').innerText.includes('Moje područje: SPLIT, KLIS, SOLIN')"
+               " && document.getElementById('locationDetailResults').innerText.length > 500", timeout=60000)
+        # removing a chip
+        p.js("document.querySelector('[data-area-remove=\"1\"]').click()")
+        self.assertEqual(p.js("_area.items.map(x => x.name)"), ['SPLIT', 'SOLIN'])
+        self.assertNoErrors(p)
+
+    def test_area_link(self):
+        p = self.open('/prema-lokaciji#podrucje=m:439;c:17')
+        p.wait("document.getElementById('locationDetailName').innerText.includes('Moje područje: KLIS')", timeout=60000)
+        self.assertEqual(p.js("_area.items.map(x => x.type + x.id)"), ['m439', 'c17'])
+        self.assertNoErrors(p)
+
+
 class Simulators(BrowserTestCase):
     def test_sabor_prediction_with_real_results_gives_real_seats(self):
         p = self.open('/rezultati-koalicije-sabor')
