@@ -293,7 +293,7 @@
         <!-- National results module -->
         <div id="module-results-predsjednicki" class="module-panel" data-category="predsjednicki">
             <div class="card search-card p-4 mb-4">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati predsjedničkih izbora od 1992. Odaberi <b>godinu</b> (do tri za usporedbu) i po želji <b>županiju, grad ili biračko mjesto</b>, ili klikni županiju na karti; više područja dodaj na usporedbu. Prikazuju se oba kruga, a stupac kandidata možeš povući na drugi i zbrojiti im glasove. Za 1992. i 1997. postoje samo državni zbrojevi.</p>
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati predsjedničkih izbora od 1992. Odaberi <b>godinu</b> (do tri za usporedbu) i po želji <b>županiju, grad ili biračko mjesto</b>, ili klikni županiju na karti; više područja dodaj na usporedbu. Prikazuju se oba kruga, a stupac kandidata možeš povući na drugi i zbrojiti im glasove. Za 1992. i 1997. postoje samo državni zbrojevi. U <b>Simuliraj drugi krug</b> odlučuješ kome idu glasovi ispalih kandidata i vidiš tko bi pobijedio.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="predCroatiaMapWrap"></div>
@@ -343,6 +343,38 @@
                 </div>
             </div>
             <div class="results-area" style="display:none;"></div>
+
+            <!-- Runoff simulator: where round-1 voters of the eliminated candidates go -->
+            <div class="card result-card mb-3" id="rsCard">
+                <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#rsCollapse">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-shuffle me-2"></i>Simuliraj drugi krug</h5>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="collapse" id="rsCollapse">
+                    <div class="card-body p-4">
+                        <p class="text-muted mb-3" style="font-size:0.88rem;">Odluči kome idu glasovi kandidata koji su ispali u prvom krugu i koliko ih ostaje kod kuće, pa vidi tko bi pobijedio u drugom krugu. Glasovi u tablici su iz prvog kruga; usporedi svoju simulaciju sa stvarnim rezultatom drugog kruga.</p>
+                        <div class="row g-3 align-items-end mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold" for="rsYear">Izbori</label>
+                                <select class="form-select" id="rsYear"></select>
+                            </div>
+                            <div class="col-md-8 d-flex gap-2 justify-content-md-end flex-wrap">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="rsResetBtn"><i class="bi bi-arrow-counterclockwise me-1"></i>Vrati na pola-pola</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="rsCopyBtn"><i class="bi bi-link-45deg me-1"></i>Kopiraj poveznicu</button>
+                            </div>
+                        </div>
+                        <div id="rsResult" class="mb-3"></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle rs-table mb-1">
+                                <thead><tr><th>Kandidat (1. krug)</th><th class="text-end">Glasovi</th>
+                                    <th style="min-width:16rem;">Kome idu glasovi</th><th class="text-end" style="width:7rem;">Ne izlazi</th></tr></thead>
+                                <tbody id="rsRows"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-muted mt-2" style="font-size:0.75rem;" id="rsNote"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="module-results-eu" class="module-panel" data-category="eu">
@@ -914,6 +946,7 @@
 <script src="{{ asset('js/chart-scroll.js') }}"></script>
 <script src="{{ asset('js/links.js') }}"></script>
 <script src="{{ asset('js/sabor-prediction.js') }}"></script>
+<script src="{{ asset('js/presidential-runoff.js') }}"></script>
 <script src="{{ asset('js/boot.js') }}"></script>
 
 </body>
