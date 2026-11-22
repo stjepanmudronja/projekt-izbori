@@ -117,6 +117,7 @@
         <!-- Person module -->
         <div id="module-person" class="module-panel">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Pretraži sve kandidate na izborima od 1990. do danas. Stranica političara prikazuje sve njegove kandidature i rezultate, graf udjela glasova kroz vrijeme, osvojene dužnosti (načelnik, zastupnik, župan…) te uloge u Saboru i Vladi. Dodaj više političara za <b>usporedbu</b> na istom grafu; poveznicu na stranicu možeš podijeliti.</p>
                 <div class="position-relative">
                     <div class="input-group input-group-lg">
                         <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
@@ -158,6 +159,7 @@
         <!-- Station / Prema lokaciji module -->
         <div id="module-place" class="module-panel">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Izborna povijest jednog grada ili općine: tko je sada na dužnosti, svi načelnici i gradonačelnici redom, vodeće liste u vijeću te izlaznost i pobjednici na svim izborima u mjestu. Odaberi županiju i mjesto, ili klikni naziv mjesta bilo gdje na stranici.</p>
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Županija</label>
@@ -183,6 +185,7 @@
 
         <div id="module-station" class="module-panel">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati svih izbora za jedno mjesto: odaberi <b>županiju</b> i <b>grad ili općinu</b>, a po želji i <b>biračko mjesto</b> ili <b>ulicu</b> (ili klikni županiju na karti). Za svake izbore prikazuju se izlaznost te najjače liste i kandidati, uz graf pobjednika kroz vrijeme. Kvačicama biraš vrste izbora; biračka mjesta usporedi u <b>Usporedi s</b>.</p>
                 <div class="d-flex gap-4 align-items-start">
                     <!-- Croatia SVG map -->
                     <div class="croatia-map-container" style="flex-shrink:0; width:280px;">
@@ -259,6 +262,7 @@
         <!-- Compare module -->
         <div id="module-compare" class="module-panel">
             <div id="compareSearchWrap" class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Usporedi do tri biračka mjesta jedno uz drugo: pronađi mjesto po nazivu i dodaj ga na usporedbu. Za svako se prikazuju rezultati svih izbora održanih na tom mjestu.</p>
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <small class="text-muted">Dodaj do 3 biračka mjesta za usporedbu</small>
                     <button class="btn btn-sm btn-outline-danger" id="clearCompareBtn" style="display:none;" onclick="clearAllComparisons()">
@@ -289,6 +293,7 @@
         <!-- National results module -->
         <div id="module-results-predsjednicki" class="module-panel" data-category="predsjednicki">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati predsjedničkih izbora od 1992. Odaberi <b>godinu</b> (do tri za usporedbu) i po želji <b>županiju, grad ili biračko mjesto</b>, ili klikni županiju na karti; više područja dodaj na usporedbu. Prikazuju se oba kruga, a stupac kandidata možeš povući na drugi i zbrojiti im glasove. Za 1992. i 1997. postoje samo državni zbrojevi.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="predCroatiaMapWrap"></div>
@@ -342,6 +347,7 @@
 
         <div id="module-results-eu" class="module-panel" data-category="eu">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Rezultati izbora za Europski parlament (2013., 2014., 2019. i 2024.): glasovi lista za cijelu Hrvatsku ili za županiju, grad i biračko mjesto, raspodjela mandata te preferencijski glasovi kandidata. Odaberi do tri godine i više područja za usporedbu; stupce lista možeš povući jedan na drugi.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="eusCroatiaMapWrap"></div>
@@ -395,6 +401,7 @@
 
         <div id="module-results-lokalni" class="module-panel" data-category="lokalni">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Lokalni izbori od 1993.: gradska i općinska vijeća, županijske skupštine, načelnici, gradonačelnici i župani. Odaberi županiju i mjesto, <b>vrstu izbora</b> i <b>godinu</b> (do tri za usporedbu); za izvršne dužnosti prikazuju se i drugi krugovi, a za 1993. i 1997. izborne jedinice. Od 2001. do 2009. uz liste stoje i njihovi nositelji.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="lokCroatiaMapWrap"></div>
@@ -480,6 +487,7 @@
 
         <div id="module-sabor-analysis" class="module-panel">
             <div class="card search-card p-4 mb-4">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Izbori za Hrvatski sabor od 1990. <b>Konačni rezultati</b> prikazuju raspodjelu mandata (D'Hondt) u polukrugu s popisom zastupnika, a u <b>Složi svoju koaliciju</b> spajaš stranke i mijenjaš prag. Odaberi godinu, izbornu jedinicu i mjesto. Sive godine (1990., 1992., 1993., 1995. i 1997.) imaju drugačiji izborni sustav ili dom Sabora i prikazuju se zasebno.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="saborCroatiaMapWrap"></div>
@@ -607,6 +615,7 @@
         <!-- Izlaznost (turnout) analytics -->
         <div id="module-analytics-turnout" class="module-panel">
             <div class="card search-card p-4 mb-3">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Izlaznost birača na svim izborima kroz vrijeme, za cijelu Hrvatsku, županiju, grad ili biračko mjesto (ili klikni županiju na karti). Kvačicama biraš vrste izbora, a više biračkih mjesta možeš usporediti na istom grafu. Klik na točku grafa otvara rezultate tih izbora.</p>
                 <div class="row g-4 align-items-start">
                     <!-- Croatia SVG map -->
                     <div class="col-md-3">
@@ -683,6 +692,7 @@
         <!-- Stranke: the official party register, linked to the election lists -->
         <div id="module-parties" class="module-panel">
             <div class="card search-card p-3 mb-3" id="partyControls">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Službeni Registar političkih stranaka, aktivnih i prestalih, povezan s izbornim listama. Traži po nazivu, kratici ili sjedištu; stranica stranke prikazuje podatke iz registra, graf udjela glasova lista koje je predvodila i sve izbore na kojima je nastupila, samostalno ili u koaliciji.</p>
                 <div class="row g-3 align-items-end">
                     <div class="col-lg-5">
                         <label class="form-label fw-semibold" for="partySearch">Traži stranku</label>
@@ -730,6 +740,7 @@
         <!-- Party strength over time: each party's share in every election of a kind -->
         <div id="module-analytics-parties" class="module-panel">
             <div class="card search-card p-3 mb-3">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Udio glasova svake stranke na svim izborima jedne vrste (Sabor, Europski parlament, gradska i općinska vijeća, županijske skupštine) ili na svima zajedno. Stranci se pripisuju glasovi lista koje je predvodila; prsten oko točke označava izbore na kojima je bila samo partner u koaliciji. Gumbima biraš stranke, a klik na točku otvara stranicu stranke.</p>
                 <label class="form-label fw-semibold d-block">Izbori</label>
                 <div class="btn-group flex-wrap" role="group" id="psKindGroup"></div>
                 <label class="form-label fw-semibold d-block mt-3 mb-1">Stranke
