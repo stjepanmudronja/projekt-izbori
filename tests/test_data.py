@@ -309,6 +309,21 @@ class FrontendFiles(unittest.TestCase):
         on_disk = {p.name for p in (ROOT / 'static' / 'js').glob('*.js')}
         self.assertEqual(on_disk - listed, set(), 'a script on disk that the page never loads')
 
+    def test_no_name_declared_twice(self):
+        """The files share one global scope: a `const`/`let`/`class` declared at
+        the top of two files is a SyntaxError that stops the second file
+        loading (sabor-prediction.js once reused `_pred`, Predsjednički's
+        state)."""
+        seen, clashes = {}, []
+        for f in self.order:
+            text = (ROOT / 'static' / 'js' / f).read_text(encoding='utf-8')
+            for m in re.finditer(r'^(?:const|let|class)\s+([A-Za-z_$][\w$]*)', text, re.M):
+                name = m.group(1)
+                if name in seen and seen[name] != f:
+                    clashes.append(f'{name}: {seen[name]} and {f}')
+                seen.setdefault(name, f)
+        self.assertEqual(clashes, [])
+
     def test_no_load_time_reference_to_a_later_file(self):
         """Code that runs while a file loads (top-level statements) may not
         pass or call a function declared in a file loaded after it: in one

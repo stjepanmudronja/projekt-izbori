@@ -723,6 +723,61 @@ function computeAndRenderSA() {
     document.getElementById('saResetBtn').classList.toggle('d-none', !hasChanges);
 }
 
+// Seat positions for a hemicycle of `count` seats, filled row by row from
+// the inner arc and ordered left to right; shared by the coalition
+// simulator and the prediction (sabor-prediction.js).
+function hemicycleLayout(count) {
+    const svgW = 700, svgH = 380;
+    const cx = svgW / 2, cy = svgH - 30;
+    const dotR = 8;
+    const dotSpacing = dotR * 2.5;
+    const innerR = 90;
+
+    const rows = [];
+    let totalCapacity = 0;
+    let r = innerR;
+    while (totalCapacity < count) {
+        const arc = Math.PI * r;
+        const capacity = Math.floor(arc / dotSpacing);
+        rows.push({ radius: r, capacity });
+        totalCapacity += capacity;
+        r += dotSpacing;
+    }
+
+    const nRows = rows.length;
+    let seatsToPlace = count;
+    const rowSeats = [];
+    const totalCap = rows.reduce((s, r) => s + r.capacity, 0);
+    for (let i = 0; i < nRows; i++) {
+        if (i === nRows - 1) { rowSeats.push(seatsToPlace); }
+        else {
+            const n = Math.round((rows[i].capacity / totalCap) * count);
+            rowSeats.push(Math.min(n, seatsToPlace));
+            seatsToPlace -= rowSeats[i];
+        }
+    }
+
+    const positions = [];
+    for (let ri = 0; ri < nRows; ri++) {
+        const rowCount = rowSeats[ri];
+        const radius = rows[ri].radius;
+        for (let i = 0; i < rowCount; i++) {
+            const angle = Math.PI - (Math.PI * (i + 0.5) / rowCount);
+            positions.push({
+                x: cx + radius * Math.cos(angle),
+                y: cy - radius * Math.sin(angle),
+            });
+        }
+    }
+
+    positions.sort((a, b) => {
+        const angleA = Math.atan2(cy - a.y, a.x - cx);
+        const angleB = Math.atan2(cy - b.y, b.x - cx);
+        return angleB - angleA;
+    });
+    return { positions, svgW, svgH, cx, cy, dotR };
+}
+
 function renderSAHemicycle(parties, totalAllocated) {
     const container = document.getElementById('saHemicycleContainer');
     const legendContainer = document.getElementById('saLegend');
@@ -739,55 +794,7 @@ function renderSAHemicycle(parties, totalAllocated) {
         }
     });
 
-    // Hemicycle layout
-    const svgW = 700, svgH = 380;
-    const cx = svgW / 2, cy = svgH - 30;
-    const dotR = 8;
-    const dotSpacing = dotR * 2.5;
-    const innerR = 90;
-
-    const rows = [];
-    let totalCapacity = 0;
-    let r = innerR;
-    while (totalCapacity < seats.length) {
-        const arc = Math.PI * r;
-        const capacity = Math.floor(arc / dotSpacing);
-        rows.push({ radius: r, capacity });
-        totalCapacity += capacity;
-        r += dotSpacing;
-    }
-
-    const nRows = rows.length;
-    let seatsToPlace = seats.length;
-    const rowSeats = [];
-    const totalCap = rows.reduce((s, r) => s + r.capacity, 0);
-    for (let i = 0; i < nRows; i++) {
-        if (i === nRows - 1) { rowSeats.push(seatsToPlace); }
-        else {
-            const n = Math.round((rows[i].capacity / totalCap) * seats.length);
-            rowSeats.push(Math.min(n, seatsToPlace));
-            seatsToPlace -= rowSeats[i];
-        }
-    }
-
-    const positions = [];
-    for (let ri = 0; ri < nRows; ri++) {
-        const count = rowSeats[ri];
-        const radius = rows[ri].radius;
-        for (let i = 0; i < count; i++) {
-            const angle = Math.PI - (Math.PI * (i + 0.5) / count);
-            positions.push({
-                x: cx + radius * Math.cos(angle),
-                y: cy - radius * Math.sin(angle),
-            });
-        }
-    }
-
-    positions.sort((a, b) => {
-        const angleA = Math.atan2(cy - a.y, a.x - cx);
-        const angleB = Math.atan2(cy - b.y, b.x - cx);
-        return angleB - angleA;
-    });
+    const { positions, svgW, svgH, cx, cy, dotR } = hemicycleLayout(seats.length);
 
     let dots = '';
     positions.forEach((pos, i) => {

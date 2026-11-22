@@ -777,3 +777,11 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .map-swing-list .hd { font-weight: 600; margin-top: .4rem; }
 .map-swing-list .row-item { display: flex; justify-content: space-between; gap: .5rem; }
 .map-swing-list .row-item span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Sabor: your own prediction */
+.pred-table input[type=number] { width: 5.5rem; margin-left: auto; text-align: right; }
+.pred-table .pred-swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin-right: .4rem; vertical-align: middle; }
+.pred-table .pred-diff { font-size: .75rem; margin-left: .25rem; }
+.pred-table tr.pred-others td { color: #6c757d; }
+.pred-table td, .pred-table th { white-space: nowrap; }
+.pred-table td:nth-child(2) { white-space: normal; }

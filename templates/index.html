@@ -487,7 +487,7 @@
 
         <div id="module-sabor-analysis" class="module-panel">
             <div class="card search-card p-4 mb-4">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">Izbori za Hrvatski sabor od 1990. <b>Konačni rezultati</b> prikazuju raspodjelu mandata (D'Hondt) u polukrugu s popisom zastupnika, a u <b>Složi svoju koaliciju</b> spajaš stranke i mijenjaš prag. Odaberi godinu, izbornu jedinicu i mjesto. Sive godine (1990., 1992., 1993., 1995. i 1997.) imaju drugačiji izborni sustav ili dom Sabora i prikazuju se zasebno.</p>
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Izbori za Hrvatski sabor od 1990. <b>Konačni rezultati</b> prikazuju raspodjelu mandata (D'Hondt) u polukrugu s popisom zastupnika, u <b>Složi svoju koaliciju</b> spajaš stranke i mijenjaš prag, a u <b>Napravi svoju predikciju</b> upisuješ postotke stranaka i vidiš koliko bi mandata dobile. Odaberi godinu, izbornu jedinicu i mjesto. Sive godine (1990., 1992., 1993., 1995. i 1997.) imaju drugačiji izborni sustav ili dom Sabora i prikazuju se zasebno.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="saborCroatiaMapWrap"></div>
@@ -607,6 +607,49 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prediction: your own national result, projected onto the districts -->
+            <div class="card result-card mb-3" id="saPredCard">
+                <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#saPredCollapse">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-magic me-2"></i>Napravi svoju predikciju</h5>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="collapse" id="saPredCollapse">
+                    <div class="card-body p-4">
+                        <p class="text-muted mb-3" style="font-size:0.88rem;">Upiši koliki postotak očekuješ za svaku stranku u cijeloj Hrvatskoj. Svakoj se stranci udio u svakoj izbornoj jedinici promijeni u istom omjeru kao na razini države, a mandati se raspodijele D'Hondtovom metodom uz prag od 5 % po jedinici, kao na pravim izborima. Označi stranke koje bi činile koaliciju i vidi imaju li većinu.</p>
+                        <div class="row g-3 align-items-end mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold" for="predBaseYear">Polazni izbori</label>
+                                <select class="form-select" id="predBaseYear"></select>
+                            </div>
+                            <div class="col-md-8 d-flex gap-2 justify-content-md-end flex-wrap">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="predResetBtn"><i class="bi bi-arrow-counterclockwise me-1"></i>Vrati na rezultat izbora</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="predCopyBtn"><i class="bi bi-link-45deg me-1"></i>Kopiraj poveznicu</button>
+                            </div>
+                        </div>
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-1 pred-table">
+                                        <thead><tr>
+                                            <th title="Uključi u koaliciju">Koal.</th><th>Stranka</th>
+                                            <th class="text-end">Izbori</th><th class="text-end" style="width:7.5rem;">Tvoja predikcija</th>
+                                            <th class="text-end">Mandati</th>
+                                        </tr></thead>
+                                        <tbody id="predRows"></tbody>
+                                    </table>
+                                </div>
+                                <div class="small" id="predSumNote"></div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div id="predHemicycle"></div>
+                                <div id="predMajority" class="text-center mt-2"></div>
+                            </div>
+                        </div>
+                        <div class="text-muted mt-3" style="font-size:0.75rem;" id="predMethodNote"></div>
                     </div>
                 </div>
             </div>
@@ -870,6 +913,7 @@
 <script src="{{ asset('js/sabor-history.js') }}"></script>
 <script src="{{ asset('js/chart-scroll.js') }}"></script>
 <script src="{{ asset('js/links.js') }}"></script>
+<script src="{{ asset('js/sabor-prediction.js') }}"></script>
 <script src="{{ asset('js/boot.js') }}"></script>
 
 </body>
