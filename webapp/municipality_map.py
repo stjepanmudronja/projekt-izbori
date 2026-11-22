@@ -33,13 +33,6 @@ _INDEPENDENT_PREFIXES = ('NEZAVISN', 'NEOVISN', 'KANDIDACIJSKA LISTA GRUPE', 'LI
 
 
 _NOT_ABBREVIATIONS = {'STRANKA', 'LISTA', 'NL'}
-# One party under two names on the ballot, joined so the map colours it the
-# same and the swing view can compare it across years (key -> canonical key).
-# Only real renames: "Narodna stranka - Reformisti" is not HNS.
-_MAP_KEY_ALIASES = {
-    'DOMOVINSKI POKRET MIROSLAVA ŠKORE': 'DP',            # Sabor 2020; "DP" from 2021
-    'HRVATSKI LABURISTI-STRANKA RADA': 'HRVATSKI LABURISTI',  # Sabor 2011
-}
 _MAP_HEAD_ABBR = {}
 
 
@@ -58,7 +51,10 @@ def _map_party(list_name):
     borrowed from another year's spelling where a list omits it (1993's
     "SOCIJALDEMOKRATSKA PARTIJA HRVATSKE") — else by its leading name
     ("MOŽEMO!", a presidential candidate). Lists headed "Nezavisna …" with no
-    abbreviation are one group; Nezavisna platforma sjevera (NPS) is a party."""
+    abbreviation are one group; Nezavisna platforma sjevera (NPS) is a party.
+    A party whose name changed, however slightly, is a different party here
+    (the data's owner: "Domovinski pokret Miroslava Škore" in 2020 is not
+    2021's "DP"), so renames are never joined."""
     if not _MAP_HEAD_ABBR:
         seen = defaultdict(lambda: defaultdict(int))
         for (name,) in db.session.query(ElectoralList.name).distinct():
@@ -73,9 +69,6 @@ def _map_party(list_name):
         return abbr, abbr, first
     if head.upper().startswith(_INDEPENDENT_PREFIXES):
         return 'NEZAVISNI', 'Nezavisne liste', 'Nezavisne liste'
-    if head.upper() in _MAP_KEY_ALIASES:
-        key = _MAP_KEY_ALIASES[head.upper()]
-        return key, key, first
     return head.upper(), head, first
 
 

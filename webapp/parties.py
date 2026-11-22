@@ -213,13 +213,11 @@ PARTY_STRENGTH_KINDS = {
 }
 
 
-# A party the register files under two numbers, one per registration, is one
-# line on the strength chart (successor's number). Evidence: the 1992 Sabor
-# list "Socijaldemokratska partija Hrvatske - Stranka demokratskih promjena -
-# SDP" matches register no. 70 (that name, ceased) while today's SDP is no. 88;
-# HRAST stood in 2011 as Hrvatski rast (no. 218) and re-registered in 2012 as
+# Every registration is its own party, renamed or not (the data's owner: a
+# name change makes a different party). So the 1992 list "Socijaldemokratska
+# partija Hrvatske - Stranka demokratskih promjena" is register no. 70, not
+# today's SDP (no. 88), and 2011's Hrvatski rast (no. 218) is not 2012's
 # HRAST - Pokret za uspješnu Hrvatsku (no. 246).
-PARTY_SUCCESSORS = {70: 88, 218: 246}
 # Kinds decided on one national ballot, where a coalition is one agreement in
 # every district (see party_strength).
 PARTY_STRENGTH_NATIONAL = ('sabor', 'eu')
@@ -250,8 +248,7 @@ def party_strength():
     total = {e: sum(totals[r] for r in rids) for e, rids in elections.items()}
 
     parties = {p.id: p for p in RegisteredParty.query.all()}
-    by_reg = {p.registry_number: p.id for p in parties.values()}
-    owner = {pid: by_reg.get(PARTY_SUCCESSORS.get(p.registry_number), pid) for pid, p in parties.items()}
+    owner = {pid: pid for pid in parties}          # every registration is its own party
     label = lambda pid: parties[pid].short_name or parties[pid].name
 
     # Each round-1 list of these kinds: its parties, leader first.

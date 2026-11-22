@@ -186,8 +186,11 @@ class PartyStrength(unittest.TestCase):
         self.assertEqual(self.by['SDP'][2011], 40.72)
         self.assertEqual(self.by['HSP'][1995], 5.01)
 
-    def test_sdp_1992_registration_joins_its_successor(self):
-        self.assertIn(1992, self.by['SDP'])
+    def test_renamed_registration_is_another_party(self):
+        # "SDP - Stranka demokratskih promjena" (1992, register no. 70) is not
+        # today's SDP (no. 88): a name change makes a different party.
+        self.assertNotIn(1992, self.by['SDP'])
+        self.assertIn(1992, self.by['SOCIJALDEMOKRATSKA PARTIJA HRVATSKE--STRANKA DEMOKRATSKIH PROMJENA'])
 
     def test_every_kind_answers(self):
         for kind in ('sabor', 'eu', 'vijeca', 'skupstine', 'sve'):
@@ -208,10 +211,13 @@ class MapSwing(unittest.TestCase):
         self.assertEqual(d['gained'] + d['lost'] + sum(1 for m in d['munis'].values() if m['change'] == 0),
                          len(d['munis']))
 
-    def test_renamed_party_is_one_party(self):
-        # 2020's "Domovinski pokret Miroslava Škore" is 2024's DP (_MAP_KEY_ALIASES).
-        d = self.swing(kind='sabor', year=2024, base_kind='sabor', base_year=2020, party='DP')
-        self.assertEqual((d['national']['base'], d['national']['value']), (10.95, 9.71))
+    def test_renamed_party_is_another_party(self):
+        # A name change makes a different party: 2020's "Domovinski pokret
+        # Miroslava Škore" is not 2024's DP, so DP has no 2020 to compare with.
+        r = client.get('/api/map/swing?kind=sabor&year=2024&base_kind=sabor&base_year=2020&party=DP')
+        self.assertEqual(r.status_code, 404)
+        offered = [p['key'] for p in self.swing(kind='sabor', year=2024, base_kind='sabor', base_year=2020)['parties']]
+        self.assertNotIn('DP', offered)
 
     def test_same_candidate_across_runoffs(self):
         d = self.swing(kind='predsjednicki', year=2024, round=2, base_kind='predsjednicki',
