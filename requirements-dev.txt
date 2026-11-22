@@ -1,0 +1,4 @@
+# For the browser checks only (tests/test_browser.py); the site itself needs requirements.txt.
+# Playwright drives the installed Google Chrome, so no browser is downloaded.
+-r requirements.txt
+playwright==1.65.1
