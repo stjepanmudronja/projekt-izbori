@@ -14,6 +14,7 @@ from webapp.models import (
     PollingStation,
     TurnoutData,
 )
+from webapp.common import MAP_OWN_NAMES, party_wording_key
 from webapp.places import zagreb_sabor_units
 
 
@@ -63,6 +64,11 @@ def _map_party(list_name):
                 seen[head.upper()][abbr] += 1
         _MAP_HEAD_ABBR.update({h: max(c, key=c.get) for h, c in seen.items()})
     first = (list_name or '').split('\n', 1)[0].split(',', 1)[0].strip()
+    # A name that shares its abbreviation with a later name of the same
+    # registration is another party (MAP_OWN_NAMES): its own key and label.
+    own = MAP_OWN_NAMES.get(party_wording_key(first))
+    if own:
+        return own.upper(), own, first
     head, abbr = _split_party(first)
     abbr = abbr or _MAP_HEAD_ABBR.get(head.upper())
     if abbr:

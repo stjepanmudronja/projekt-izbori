@@ -8,6 +8,7 @@ from flask import jsonify, request
 from elections.importers.name_utils import strip_diacritics
 from webapp.core import app, db, static_cache
 from webapp.models import Election, ElectionRound, ElectionType, ElectoralList, RegisteredParty
+from webapp.common import PARTY_OLD_NAMES, PARTY_PRINTED_ALIASES, party_wording_key
 from webapp.municipality_map import _map_party, _map_payload, _split_party
 
 
@@ -55,23 +56,43 @@ def _party_links():
                     (p.status_on.year if p.status == 'PRESTANAK' and p.status_on else 9999))
              for p in parties}
 
+    names = {p.id: _norm_party(p.name) for p in parties}
+
+    by_reg = {p.registry_number: p.id for p in parties}
+
     def match(part, year):
+        # An old name of a renamed registration, or a damaged printing of one: curated.
+        wk = party_wording_key(part)
+        if wk in PARTY_OLD_NAMES:
+            return by_reg.get(PARTY_OLD_NAMES[wk][0])
+        if wk in PARTY_PRINTED_ALIASES:
+            return by_reg.get(PARTY_PRINTED_ALIASES[wk])
+        # "KOALICIJA HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ", "Kršćansko-slavonska
+        # koalicija: Hrvatska kršćanska demokratska unija - HKDU": the label is not the name.
+        part = re.sub(r'^(?:koalicija\s+|[^:]{0,60}koalicija:\s*)', '', part, flags=re.I)
         head, abbr = _split_party(part)
+        segs = part.split(' - ')
         tries = [part]
-        if abbr:
-            tries.append(part[:part.rfind(' - ')])
+        # Its name with trailing " - " parts dropped one at a time, longest
+        # first, so "HRVATSKA STRANKA PRAVA - 1861 - HSP-1861" is HSP-1861
+        # before it is HSP (an abbreviation with a hyphen is not read as one).
+        tries += [' - '.join(segs[:k]) for k in range(len(segs) - 1, 1, -1)]
+        if abbr and len(segs) > 2 and len(segs[-2].strip()) <= 3:
             # A two-part abbreviation ("AUTOHTONA - HRVATSKA SELJAČKA STRANKA
-            # - A - HSS" is A-HSS, not HSS): try it before its last letters.
-            # Its last letters alone would name another party, so stop there.
-            segs = part.split(' - ')
-            if len(segs) > 2 and len(segs[-2].strip()) <= 3:
-                tries += [' - '.join(segs[:-2]), ' - '.join(segs[-2:])]
-            else:
-                tries += [abbr, head]
+            # - A - HSS" is A-HSS, not HSS): its last letters alone would name
+            # another party, so stop there.
+            tries.append(' - '.join(segs[-2:]))
         else:
+            if abbr:
+                tries.append(abbr)
             tries.append(head)
         for t in tries:
             ids = {i for i in by_key.get(_norm_party(t), ()) if alive[i][0] <= year <= alive[i][1]}
+            if t == abbr and part != abbr:
+                # An abbreviation is shared by unrelated parties ("SAVEZ ZA
+                # PROMJENE - SP" is not Stranka penzionera, SP): it links only
+                # where the printed name is part of that party's name.
+                ids = {i for i in ids if _norm_party(head) in names[i]}
             if len(ids) == 1:
                 return ids.pop()
             if ids:
@@ -84,6 +105,11 @@ def _party_links():
             .join(ElectionType, Election.election_type_id == ElectionType.id)
             .filter(ElectionType.slug.in_(PARTY_LIST_TYPES)).all())
     links = defaultdict(list)                    # party id -> [(list id, role)]
+    # Which printed name linked each list to its party: party id -> {(name, year): lists}.
+    # Read by the rename review (parties linked under more than one name).
+    printed = defaultdict(lambda: defaultdict(int))
+    # (party, list) -> the old name it ran under, where it is one (PARTY_OLD_NAMES).
+    ran_as = {}
     for list_id, name, year in rows:
         parts = [x.strip() for x in re.split(r'\n|,\s+', name or '') if x.strip()]
         seen = set()
@@ -92,7 +118,13 @@ def _party_links():
             if pid and pid not in seen:
                 seen.add(pid)
                 links[pid].append((list_id, 'leader' if i == 0 else 'partner'))
+                printed[pid][(part, year)] += 1
+                old_name = PARTY_OLD_NAMES.get(party_wording_key(part))
+                if old_name:
+                    ran_as[(pid, list_id)] = old_name[1]
     _PARTY_CACHE['links'] = links
+    _PARTY_CACHE['printed'] = printed
+    _PARTY_CACHE['ran_as'] = ran_as
     return links
 
 
@@ -164,13 +196,16 @@ def party_page(registry_number):
         return jsonify({'error': 'Ta stranka nije u registru.'}), 404
     links = _party_links()
     lists, totals = _party_list_votes()
-    rows = defaultdict(lambda: {'led_votes': 0, 'led_lists': 0, 'partner_votes': 0,
+    ran_as = _PARTY_CACHE.get('ran_as', {})
+    rows = defaultdict(lambda: {'led_votes': 0, 'led_lists': 0, 'partner_votes': 0, 'ran_as': set(),
                                 'partner_lists': 0, 'round_ids': set(), 'map_keys': set(), 'top_list': None})
     for list_id, role in links.get(p.id, []):
         info = lists.get(list_id)
         if not info or info['round'] != 1:
             continue
         r = rows[(info['slug'], info['type'], info['year'])]
+        if (p.id, list_id) in ran_as:
+            r['ran_as'].add(ran_as[(p.id, list_id)])
         r['round_ids'].add(info['round_id'])
         if role == 'leader':
             r['led_votes'] += info['votes']
@@ -196,6 +231,8 @@ def party_page(registry_number):
             'partner_votes': r['partner_votes'], 'partner_lists': r['partner_lists'],
             'top_list': r['top_list'][0] if r['top_list'] else None,
             'municipalities_won': won,
+            # the older name it stood under that year (a different party, the data's owner's rule)
+            'ran_as': ', '.join(sorted(r['ran_as'])) or None,
         })
     history.sort(key=lambda h: (-h['year'], h['election_type']))
     return jsonify({**_party_summary(p, links, lists), 'seat': p.seat, 'oib': p.oib, 'history': history})
@@ -248,8 +285,10 @@ def party_strength():
     total = {e: sum(totals[r] for r in rids) for e, rids in elections.items()}
 
     parties = {p.id: p for p in RegisteredParty.query.all()}
-    owner = {pid: pid for pid in parties}          # every registration is its own party
-    label = lambda pid: parties[pid].short_name or parties[pid].name
+    # A party is its registration and, where it ran under an older name, that
+    # name (PARTY_OLD_NAMES): a renamed party's old name is its own line.
+    ran_as = _PARTY_CACHE.get('ran_as', {})
+    label = lambda key: key[1] or parties[key[0]].short_name or parties[key[0]].name
 
     # Each round-1 list of these kinds: its parties, leader first.
     members = defaultdict(list)                  # list id -> [(party, is leader)]
@@ -257,7 +296,7 @@ def party_strength():
         for list_id, role in plist:
             info = lists.get(list_id)
             if info and info['round'] == 1 and info['slug'] in slug_kind:
-                members[list_id].append((owner[pid], role == 'leader'))
+                members[list_id].append(((pid, ran_as.get((pid, list_id))), role == 'leader'))
     leader_of = {}
     for list_id, ms in members.items():
         lead = [pid for pid, is_lead in ms if is_lead]
@@ -315,7 +354,7 @@ def party_strength():
 
     order = lambda e: (e[1], e[0])
     series = []
-    for pid in set(led) | set(joined):
+    for pid in set(led) | set(joined):           # pid: (registration, old name or None)
         points = [point(pid, e, v, led_top) for e, v in sorted(led[pid].items(), key=lambda kv: order(kv[0]))
                   if v and total.get(e)]
         # Partner only where the party led nothing that election, or it would vanish.
@@ -323,9 +362,12 @@ def party_strength():
                    if v and total.get(e) and not led[pid].get(e)]
         if not points and not partner:
             continue
-        p = parties[pid]
+        p, old_name = parties[pid[0]], pid[1]
         series.append({
-            'registry_number': p.registry_number, 'name': p.name, 'short_name': p.short_name or '',
+            'id': f'{p.registry_number}' + (f':{old_name}' if old_name else ''),
+            'registry_number': p.registry_number,
+            'name': old_name or p.name, 'short_name': '' if old_name else (p.short_name or ''),
+            'old_name_of': (p.short_name or p.name) if old_name else None,
             'active': p.status != 'PRESTANAK', 'peak': max((pt['share'] for pt in points), default=0),
             'points': points, 'partner_points': partner,
         })

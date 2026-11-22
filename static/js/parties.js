@@ -104,7 +104,7 @@ function renderPartyDetail(d) {
         ? `<br><small class="text-muted">prva lista u ${h.municipalities_won} ${h.municipalities_won % 10 === 1 && h.municipalities_won % 100 !== 11 ? 'mjestu' : 'mjesta'}</small>` : '';
     const rows = d.history.map(h => `<tr>
         <td>${h.year}.</td>
-        <td>${escapeHtml(h.election_type)}</td>
+        <td>${escapeHtml(h.election_type)}${h.ran_as ? `<br><small class="text-muted" title="Pod ranijim nazivom: na stranici Snaga stranaka i na karti to je zasebna stranka.">kao: ${escapeHtml(h.ran_as)}</small>` : ''}</td>
         <td class="text-end">${h.led_lists ? `${formatNumber(h.led_votes)} <small class="text-muted">(${homePct(h.led_share)})</small>${won(h)}` : '<small class="text-muted">-</small>'}</td>
         <td class="text-end">${h.partner_lists ? `${h.partner_lists} ${[2, 3, 4].includes(h.partner_lists % 10) && ![12, 13, 14].includes(h.partner_lists % 100) ? 'liste' : 'lista'}` : '<small class="text-muted">-</small>'}</td>
         <td style="font-size:.8rem;">${h.top_list ? escapeHtml(h.top_list.replace(/\n/g, ', ')) : ''}</td>

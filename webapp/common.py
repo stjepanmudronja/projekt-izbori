@@ -2,10 +2,12 @@
 which election types are which, and who won a Sabor seat in a round.
 """
 
+import re
 from collections import defaultdict
 from types import SimpleNamespace
 from sqlalchemy import any_, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY
+from elections.importers.name_utils import strip_diacritics
 from webapp.core import db
 from webapp.models import (
     Candidacy,
@@ -343,3 +345,47 @@ def any_of(column, ids):
     row against the list (9.6 s for the 2,032 diaspora stations), while an
     array lets it read the rows by station (2.3 s)."""
     return column == any_(bindparam(None, list(ids), type_=ARRAY(db.Integer)))
+
+
+def party_wording_key(name):
+    """A printed party name's wording: case, punctuation, spacing, Croatian
+    letters, a leading "KOALICIJA" label and a trailing abbreviation ("- HDZ",
+    "- HSP-1861") set aside. Two printings with the same key are the same name;
+    anything else is another name - and so another party (the data's owner's
+    rule)."""
+    name = re.sub(r'^(?:koalicija\s+|[^:]{0,60}koalicija:\s*)', '', (name or '').strip(), flags=re.I)
+    parts = [x.strip() for x in name.split(' - ')]
+    if len(parts) > 1 and re.fullmatch(r"[A-ZČĆŠŽĐ0-9!]+(?:-[A-ZČĆŠŽĐ0-9!]+)*", parts[-1]) and len(parts[-1]) <= 12:
+        parts = parts[:-1]
+    return re.sub(r'[^A-Z0-9]', '', strip_diacritics(' '.join(parts).upper()))
+
+
+# Names a party ran under before its registration was renamed. A name change
+# makes another party (the data's owner), but the register keeps one entry per
+# registration, so these link to it and carry the name they ran under: Snaga
+# stranaka and the map give each its own line, the party page says which name
+# each election was won under. Wording key -> (register no., name).
+PARTY_OLD_NAMES = {
+    'HRVATSKANARODNASTRANKA': (45, 'Hrvatska narodna stranka'),                   # 1992-2005; HNS - Liberalni demokrati from 2007
+    'MOSTNEZAVISNIHLISTA': (245, 'Most nezavisnih lista'),                        # 2013-2020; MOST from 2021
+    'HRVATSKAGRADANSKASTRANKA': (212, 'Hrvatska građanska stranka'),              # 2011-2013; Željko Kerum - HGS from 2015
+    'NAPRIJEDHRVATSKAPROGRESIVNISAVEZIVEJOSIPOVICA': (286, 'Naprijed Hrvatska! - Progresivni savez Ive Josipovića'),  # 2015
+    'SOCIJALISTICKAPARTIJAHRVATSKELIJEVAALTERNATIVA': (174, 'Socijalistička partija Hrvatske - Lijeva alternativa'),  # 2005
+    'POKRETOSTECENIKASTRANKAEKOLOSKISVJESNIHGRADANA': (126, 'Pokret oštećenika - Stranka ekološki svjesnih građana'),  # 2000
+}
+# Printings that are one registration's own name, damaged in the 1993 OCR
+# ("DEMOKRATSKIH PROMJENA - SDP"): wording key -> register no. Register no. 70
+# is "Socijaldemokratska partija Hrvatske - Stranka demokratskih promjena", a
+# separate entry from today's SDP (no. 88).
+PARTY_PRINTED_ALIASES = {
+    'DEMOKRATSKIHPROMJENA': 70,
+    'SOCIJALDEMOKRATSKAPARTIJAHRVATSKESTRANKADEMOKRATSKIH': 70,
+}
+# For the map, which keys parties by abbreviation: names that share an
+# abbreviation with a later name but are another party (key -> label).
+MAP_OWN_NAMES = {k: name for k, (_reg, name) in PARTY_OLD_NAMES.items()}
+MAP_OWN_NAMES.update({
+    'SOCIJALDEMOKRATSKAPARTIJAHRVATSKESTRANKADEMOKRATSKIHPROMJENA': 'SDP - Stranka demokratskih promjena',
+    'DEMOKRATSKIHPROMJENA': 'SDP - Stranka demokratskih promjena',
+    'SOCIJALDEMOKRATSKAPARTIJAHRVATSKESTRANKADEMOKRATSKIH': 'SDP - Stranka demokratskih promjena',
+})

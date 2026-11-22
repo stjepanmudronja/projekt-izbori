@@ -176,6 +176,11 @@ class Interactions(BrowserTestCase):
         p = self.open('/snaga-stranaka')
         p.wait("document.querySelectorAll('#psChips .ps-chip').length > 5")
         self.assertTrue(p.js("!!_ps.chart && _ps.chart.data.datasets.length > 0"))
+        # A renamed party's old name is a line of its own, which can be switched on.
+        p.js("loadPartyStrength('vijeca')")
+        p.wait("!!document.querySelector('[data-ps-id=\"45:Hrvatska narodna stranka\"]')")
+        p.js("document.querySelector('[data-ps-id=\"45:Hrvatska narodna stranka\"]').click()")
+        self.assertTrue(p.js("_ps.chart.data.datasets.some(d => d.label === 'Hrvatska narodna stranka')"))
         self.assertNoErrors(p)
 
 

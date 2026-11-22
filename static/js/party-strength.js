@@ -24,13 +24,14 @@ async function loadPartyStrength(kind) {
     if (d.error) return;
     _ps.kind = kind;
     // The strongest six, or whatever is still shown that this kind has.
-    const regs = new Set(d.parties.map(p => p.registry_number));
+    // A line is its `id`: a registration, or a renamed one's old name ("45:Hrvatska narodna stranka").
+    const regs = new Set(d.parties.map(p => p.id));
     const kept = [..._ps.on].filter(r => regs.has(r));
-    _ps.on = new Set(kept.length ? kept : d.parties.slice(0, 6).map(p => p.registry_number));
+    _ps.on = new Set(kept.length ? kept : d.parties.slice(0, 6).map(p => p.id));
     let next = 0;
     d.parties.forEach(p => {
-        if (!_ps.colors[p.registry_number])
-            _ps.colors[p.registry_number] = MAP_PARTY_COLORS[psLabel(p).toUpperCase()] || MAP_PALETTE[next++ % MAP_PALETTE.length];
+        if (!_ps.colors[p.id])
+            _ps.colors[p.id] = MAP_PARTY_COLORS[psLabel(p).toUpperCase()] || MAP_PALETTE[next++ % MAP_PALETTE.length];
     });
     document.getElementById('psKindGroup').innerHTML = [...d.kinds, { key: 'sve', label: 'Svi zajedno' }].map(k =>
         `<button type="button" class="btn btn-outline-primary${k.key === kind ? ' active' : ''}" data-ps-kind="${k.key}">${k.label}</button>`).join('');
@@ -42,15 +43,15 @@ const psLabel = p => p.short_name || p.name;
 function renderPartyStrength() {
     const d = _ps.data[_ps.kind];
     document.getElementById('psChips').innerHTML = d.parties.slice(0, 25).map(p =>
-        `<button type="button" class="ps-chip${_ps.on.has(p.registry_number) ? ' on' : ''}${p.active ? '' : ' ceased'}"
-            data-ps-reg="${p.registry_number}" title="${escapeHtml(p.name)}${p.active ? '' : ' (prestala postojati)'} · najbolje ${formatPct(p.peak, 2)}">
-            <i style="background:${_ps.colors[p.registry_number]}"></i>${escapeHtml(psLabel(p))}</button>`).join('');
+        `<button type="button" class="ps-chip${_ps.on.has(p.id) ? ' on' : ''}${p.active ? '' : ' ceased'}"
+            data-ps-id="${escapeHtml(p.id)}" title="${escapeHtml(p.name)}${p.old_name_of ? ` (raniji naziv; poslije ${escapeHtml(p.old_name_of)})` : ''}${p.active ? '' : ' (prestala postojati)'} · najbolje ${formatPct(p.peak, 2)}">
+            <i style="background:${_ps.colors[p.id]}"></i>${escapeHtml(psLabel(p))}</button>`).join('');
     const kindLabel = Object.fromEntries(d.kinds.map(k => [k.key, k.label]));
     const all = _ps.kind === 'sve';
-    const shown = d.parties.filter(p => _ps.on.has(p.registry_number));
+    const shown = d.parties.filter(p => _ps.on.has(p.id));
     const years = d.elections.map(e => e.year);
     const datasets = shown.filter(p => p.points.length).map(p => {
-        const c = _ps.colors[p.registry_number];
+        const c = _ps.colors[p.id];
         return {
             label: psLabel(p), reg: p.registry_number, party: p,
             // An election in between that the party led no list in breaks the line.
@@ -69,7 +70,7 @@ function renderPartyStrength() {
     // It sits on the leader's own point, so it is drawn as a ring around it,
     // each further partner's a little wider.
     if (_ps.partners) shown.filter(p => p.partner_points.length).forEach((p, i) => {
-        const c = _ps.colors[p.registry_number];
+        const c = _ps.colors[p.id];
         datasets.push({
             label: psLabel(p), reg: p.registry_number, party: p, partner: true,
             data: p.partner_points.map(pt => ({ x: pt.year, y: pt.share, pt })),
@@ -145,10 +146,10 @@ document.addEventListener('change', e => {
 document.addEventListener('click', e => {
     const k = e.target.closest && e.target.closest('[data-ps-kind]');
     if (k) { loadPartyStrength(k.dataset.psKind); return; }
-    const c = e.target.closest && e.target.closest('[data-ps-reg]');
+    const c = e.target.closest && e.target.closest('[data-ps-id]');
     if (c) {
-        const reg = Number(c.dataset.psReg);
-        if (_ps.on.has(reg)) _ps.on.delete(reg); else _ps.on.add(reg);
+        const id = c.dataset.psId;
+        if (_ps.on.has(id)) _ps.on.delete(id); else _ps.on.add(id);
         renderPartyStrength();
     }
 });

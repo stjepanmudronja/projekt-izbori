@@ -198,6 +198,44 @@ class PartyStrength(unittest.TestCase):
                 self.assertTrue(get(f'/api/analytics/party-strength?kind={kind}')['parties'])
 
 
+class PartyNames(unittest.TestCase):
+    """Party linking: a name change is another party (the data's owner's
+    rule), and an abbreviation alone never joins two different parties."""
+
+    @classmethod
+    def setUpClass(cls):
+        from webapp.parties import _party_links, _PARTY_CACHE
+        from webapp.models import RegisteredParty
+        _party_links()
+        regs = {p.registry_number: p.id for p in RegisteredParty.query.all()}
+        cls.printed = staticmethod(lambda reg: {name.upper() for (name, _y) in _PARTY_CACHE['printed'].get(regs[reg], {})})
+        cls.lines = {}                            # line id -> years with a point, Sabor and councils together
+        for kind in ('sabor', 'vijeca'):
+            for p in get(f'/api/analytics/party-strength?kind={kind}')['parties']:
+                cls.lines.setdefault(p['id'], set()).update(pt['year'] for pt in p['points'])
+
+    def test_shared_abbreviation_is_not_one_party(self):
+        self.assertFalse(any('SAVEZ ZA PROMJENE' in n for n in self.printed(231)))     # Stranka penzionera, SP
+        self.assertFalse(any('PRAVAŠI' in n for n in self.printed(150)))               # Hrvatski proljećari, HP
+        self.assertFalse(any('DEMOKRATSKA AKCIJA' in n for n in self.printed(54)))     # Dalmatinska akcija, DA
+        self.assertFalse(any('1861' in n for n in self.printed(19)))                   # HSP-1861 is not HSP
+
+    def test_hyphenated_abbreviation(self):
+        # "HRVATSKA STRANKA PRAVA - 1861 - HSP-1861" (2000) is HSP-1861.
+        self.assertIn('HRVATSKA STRANKA PRAVA - 1861 - HSP-1861', self.printed(97))
+
+    def test_old_name_is_its_own_line(self):
+        self.assertIn(1992, self.lines['45:Hrvatska narodna stranka'])
+        self.assertFalse({y for y in self.lines['45'] if y < 2007}, 'HNS - Liberalni demokrati before 2007')
+        self.assertIn(2016, self.lines['245:Most nezavisnih lista'])
+        self.assertFalse({y for y in self.lines['245'] if y < 2021}, 'MOST before 2021')
+
+    def test_party_page_says_which_name(self):
+        ran = {h['year']: h['ran_as'] for h in get('/api/stranke/45')['history'] if h['led_lists']}
+        self.assertEqual(ran[1992], 'Hrvatska narodna stranka')
+        self.assertIsNone(ran[2009])
+
+
 class MapSwing(unittest.TestCase):
     """Karta općina, "Promjena": one party's change between two elections."""
 
