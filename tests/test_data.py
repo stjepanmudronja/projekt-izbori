@@ -318,6 +318,45 @@ class CacheClearing(unittest.TestCase):
             self.assertGreaterEqual(data_version(), 0)
 
 
+class WomenInPolitics(unittest.TestCase):
+    """Žene u politici: gender from first names, and the published shares."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = get('/api/analytics/women')
+        cls.by = {(e['kind'], e['year']): e for e in cls.data['elections']}
+
+    def test_name_rules(self):
+        from webapp.women import name_gender
+        for name, g in [('IVAN', 'M'), ('MARIJA', 'F'), ('Ana-Marija', 'F'), ('LUKA', 'M'), ('NIKOLA', 'M'),
+                        ('IVICA', 'M'), ('KATICA', 'F'), ('INES', 'F'), ('NIVES', 'F'), ('KARMEN', 'F'),
+                        ('SAŠA', None), ('ANDREA', None), ('I', None), ('', None)]:
+            with self.subTest(name=name):
+                self.assertEqual(name_gender(name), g)
+
+    def test_few_unknown(self):
+        p = self.data['people']
+        self.assertLess(p['unknown'] / p['total'], 0.01)
+
+    def test_published_shares(self):
+        """Sabor as elected 2003 (27 of 152, ~18 %) and 2020 (35 of 151, ~23 %);
+        Croatia's first woman president in 2014; EU 2014 six of eleven."""
+        self.assertEqual(self.by[('sabor', 2003)]['elected']['f'], 27)
+        self.assertEqual(self.by[('sabor', 2020)]['elected']['f'], 35)
+        self.assertEqual(self.by[('predsjednicki', 2014)]['elected'], {'f': 1, 'm': 0, 'u': 0})
+        self.assertEqual(self.by[('eu', 2014)]['elected']['f'], 6)
+        self.assertIsNone(self.by[('sabor', 2011)]['candidates'])      # only district XII is published
+
+    def test_parties_add_up(self):
+        """Every seat of a list election belongs to one party row."""
+        for year, seats in ((2015, 151), (2016, 151), (2020, 151), (2024, 151)):
+            rows = self.data['parties'][f'sabor-{year}']
+            total = sum(r['elected']['f'] + r['elected']['m'] + r['elected']['u'] for r in rows)
+            with self.subTest(year=year):
+                self.assertEqual(total, seats)
+                self.assertEqual(sum(r['elected']['f'] for r in rows), self.by[('sabor', year)]['elected']['f'])
+
+
 class People(unittest.TestCase):
     """Person rows: curated splits hold, no party codes left in names."""
 
@@ -351,7 +390,7 @@ class Pages(unittest.TestCase):
     def test_spa_routes_serve_the_page(self):
         for path in ('/', '/politicar', '/prema-lokaciji', '/stranke', '/stranke/8-hdz', '/mjesto/439-klis',
                      '/predsjednicki-izbori', '/eu-parlamentarni-izbori', '/lokalni-izbori',
-                     '/rezultati-koalicije-sabor', '/zupanijski-dom', '/izlaznost', '/karta', '/snaga-stranaka'):
+                     '/rezultati-koalicije-sabor', '/zupanijski-dom', '/izlaznost', '/karta', '/snaga-stranaka', '/zene-u-politici'):
             with self.subTest(path=path):
                 self.assertEqual(client.get(path).status_code, 200)
 

@@ -105,6 +105,7 @@ class EveryPage(BrowserTestCase):
         '/izlaznost': 'module-analytics-turnout',
         '/karta': 'module-analytics-map',
         '/snaga-stranaka': 'module-analytics-parties',
+        '/zene-u-politici': 'module-analytics-women',
     }
 
     def test_every_page_opens_without_errors(self):
@@ -251,6 +252,18 @@ class Interactions(BrowserTestCase):
         r = self.open('/rezultati-koalicije-sabor#simulacija=2020;n=5;x=1')
         r.wait("document.getElementById('saLinkNote').style.display === ''", timeout=60000)
         self.assertEqual(r.js("_saState.excluded.size"), 0)
+
+    def test_women_page(self):
+        p = self.open('/zene-u-politici')
+        p.wait("document.getElementById('wArea').style.display === '' && !!Chart.getChart('wChart')", timeout=60000)
+        self.assertEqual(p.js("document.querySelectorAll('#wTiles .w-tile').length"), 4)
+        p.js("document.querySelector('[data-w-which=\"candidates\"]').click()")
+        self.assertEqual(p.js("document.getElementById('wChartTitle').textContent"), 'Udio žena među kandidatima')
+        # A table row opens that election's party comparison.
+        p.js("document.querySelector('[data-w-party=\"eu-2019\"]').click()")
+        self.assertEqual(p.js("document.getElementById('wPartyElection').value"), 'eu-2019')
+        self.assertGreater(p.js("Chart.getChart('wPartyChart').data.labels.length"), 3)
+        self.assertNoErrors(p)
 
     def test_map_swing(self):
         p = self.open('/karta')

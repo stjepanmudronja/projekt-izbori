@@ -79,6 +79,9 @@
             <li><a href="#" data-module="analytics-map">
                 <i class="bi bi-map"></i> Karta općina
             </a></li>
+            <li><a href="#" data-module="analytics-women">
+                <i class="bi bi-gender-female"></i> Žene u politici
+            </a></li>
         </ul>
     </div>
 </nav>
@@ -918,6 +921,50 @@
             </div>
         </div>
 
+        <!-- Women in politics: share of women among candidates and the elected -->
+        <div id="module-analytics-women" class="module-panel">
+            <div class="card search-card p-3 mb-3">
+                <p class="text-muted mb-0" style="font-size:0.88rem;">Koliko je žena bilo među kandidatima i među izabranima na izborima za Sabor, Europski parlament, predsjednika te za gradonačelnike, načelnike i župane — kroz godine i po strankama. Spol se čita iz imena (vidi napomenu na dnu). Klikni godinu u tablici za usporedbu stranaka na tim izborima.</p>
+            </div>
+            <div class="spinner-wrapper" id="wSpinner"><div class="spinner-border text-primary"></div></div>
+            <div id="wArea" style="display:none;">
+                <div class="row g-3 mb-3" id="wTiles"></div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0" id="wChartTitle"></h6>
+                        <div class="btn-group btn-group-sm" role="group" id="wWhich">
+                            <button type="button" class="btn btn-outline-primary active" data-w-which="elected">Izabrane</button>
+                            <button type="button" class="btn btn-outline-primary" data-w-which="candidates">Kandidatkinje</button>
+                        </div>
+                    </div>
+                    <div class="w-chart"><canvas id="wChart"></canvas></div>
+                    <div class="small text-muted mt-2" id="wChartNote"></div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-xl-6">
+                        <div class="card p-3 h-100">
+                            <h6 class="fw-bold mb-2">Svi izbori</h6>
+                            <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 w-table">
+                                <thead><tr><th>Izbori</th><th class="text-end">Kandidatkinje</th><th class="text-end">Izabrane</th></tr></thead>
+                                <tbody id="wRows"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="card p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <h6 class="fw-bold mb-0">Po strankama</h6>
+                                <select class="form-select form-select-sm" style="width:auto;" id="wPartyElection" aria-label="Izbori za usporedbu stranaka"></select>
+                            </div>
+                            <div class="w-party-chart"><canvas id="wPartyChart"></canvas></div>
+                            <div class="small text-muted mt-2" id="wPartyNote"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="small text-muted mt-3" style="font-size:0.78rem;" id="wMethod"></div>
+            </div>
+        </div>
+
         <!-- Municipality map: every općina/grad coloured by an election's result -->
         <div id="module-analytics-map" class="module-panel">
             <div class="card search-card p-3 mb-3">
@@ -1014,6 +1061,7 @@
 <script src="{{ asset('js/pdf-export.js') }}"></script>
 <script src="{{ asset('js/home.js') }}"></script>
 <script src="{{ asset('js/party-strength.js') }}"></script>
+<script src="{{ asset('js/women.js') }}"></script>
 <script src="{{ asset('js/place.js') }}"></script>
 <script src="{{ asset('js/router.js') }}"></script>
 <script src="{{ asset('js/person.js') }}"></script>

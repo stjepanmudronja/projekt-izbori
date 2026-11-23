@@ -805,3 +805,8 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .sr-controls .sr-where { font-size: .75rem; color: #6c757d; line-height: 1.25; margin-bottom: .35rem; }
 .sa-tip { position: absolute; z-index: 2000; display: none; max-width: 260px; padding: .4rem .6rem; border-radius: 6px;
           background: #1a1a2e; color: #fff; font-size: .78rem; line-height: 1.3; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.w-chart { position: relative; height: 22rem; }
+.w-party-chart { position: relative; height: 20rem; }
+.w-dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .4rem; vertical-align: middle; }
+.w-table tr.w-clickable { cursor: pointer; }
+.w-table td:not(:first-child) { white-space: nowrap; }

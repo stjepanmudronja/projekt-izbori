@@ -11,7 +11,7 @@ import threading
 from webapp.core import app, db  # noqa: F401  (`from app import app, db`)
 from webapp import (  # noqa: F401  (importing registers each area's routes)
     pages, people, places, home, municipality_map, parties,
-    national, sabor, sabor_history, lokalni, turnout,
+    national, sabor, sabor_history, lokalni, turnout, women,
 )
 from webapp.models import *  # noqa: F401,F403  (models for ad-hoc scripts)
 from webapp.pages import SPA_ROUTES  # noqa: F401
