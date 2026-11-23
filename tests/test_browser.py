@@ -164,6 +164,31 @@ class Interactions(BrowserTestCase):
         p.wait("document.querySelectorAll('#saActualHemicycle circle').length === 151", timeout=60000)
         self.assertNoErrors(p)
 
+    def test_simulator_exclude_in_one_district(self):
+        """"Isključi iz ove jedinice": the party's votes leave that district
+        only, its 14 seats go to the others, and every other district stays."""
+        p = self.open('/rezultati-koalicije-sabor')
+        p.wait("!!document.querySelector('.sa-year-btn[data-year=\"2024\"]')")
+        p.js("document.querySelector('.sa-year-btn[data-year=\"2024\"]').click()")
+        p.wait("_saState.computed && _saState.year === 2024", timeout=60000)
+        r = p.js("""() => {
+            const c = () => _saState.computed.districts;
+            const before = c().map(d => JSON.stringify(d.distSeats));
+            const d0 = _saState.rawData.districts[0];
+            const dp = d0.lists.find(l => (l.group || '').includes('DOMOVINSKI'));
+            const group = _saState.merges[dp.name], total = c()[0].totalVotes;
+            excludeSAPartyInDistrict(d0.name, group);
+            const out = { votesGone: total - c()[0].totalVotes === dp.votes, dpSeats: c()[0].distSeats[group] || 0,
+                          seats: Object.values(c()[0].distSeats).reduce((a, b) => a + b, 0),
+                          othersSame: c().slice(1).every((d, i) => JSON.stringify(d.distSeats) === before[i + 1]),
+                          shown: document.getElementById('saDist0').innerText.includes('isključena iz ove jedinice') };
+            includeSAPartyInDistrict(d0.name, group);
+            out.restored = c().every((d, i) => JSON.stringify(d.distSeats) === before[i]);
+            return out;
+        }""")
+        self.assertEqual(r, {'votesGone': True, 'dpSeats': 0, 'seats': 14, 'othersSame': True, 'shown': True, 'restored': True})
+        self.assertNoErrors(p)
+
     def test_map_swing(self):
         p = self.open('/karta')
         p.wait("document.getElementById('mapTitle').textContent.length > 0", timeout=60000)

@@ -604,6 +604,14 @@ async function loadSaborAnalysis(year, seq) {
     });
 }
 
+// `excluded` holds list names left out everywhere, and saDistrictKey(district,
+// list) keys for a list left out of one district only ("Isključi iz ove
+// jedinice"): its votes leave that district, so the others' shares, the
+// threshold and the seats there are as if it had not stood.
+const saDistrictKey = (distName, listName) => `${distName}\u0001${listName}`;
+const saListExcluded = (excluded, distName, listName) =>
+    excluded.has(listName) || excluded.has(saDistrictKey(distName, listName));
+
 function computeDHondtClient(districts, merges, excluded, forceInclude) {
     const totalSeats = {};
     const districtResults = [];
@@ -614,7 +622,7 @@ function computeDHondtClient(districts, merges, excluded, forceInclude) {
         // Merge votes
         const mergedVotes = {};
         for (const list of dist.lists) {
-            if (excluded.has(list.name)) continue;
+            if (saListExcluded(excluded, dist.name, list.name)) continue;
             const group = merges[list.name] || list.name;
             mergedVotes[group] = (mergedVotes[group] || 0) + list.votes;
         }
@@ -625,7 +633,7 @@ function computeDHondtClient(districts, merges, excluded, forceInclude) {
         if (dist.minority) {
             const distSeats = {};
             for (const list of dist.lists) {
-                if (excluded.has(list.name)) continue;
+                if (saListExcluded(excluded, dist.name, list.name)) continue;
                 const group = merges[list.name] || list.name;
                 const seats = list.fixed_seats || 1;
                 distSeats[group] = (distSeats[group] || 0) + seats;
@@ -959,6 +967,21 @@ function includeSAParty(name) {
     computeAndRenderSA();
 }
 
+// One district only: every list of the group in that district.
+function excludeSAPartyInDistrict(distName, name) {
+    const { merges, excluded, rawData } = _saState;
+    const dist = rawData.districts.find(d => d.name === distName);
+    for (const l of dist ? dist.lists : []) if ((merges[l.name] || l.name) === name) excluded.add(saDistrictKey(distName, l.name));
+    computeAndRenderSA();
+}
+
+function includeSAPartyInDistrict(distName, name) {
+    const { merges, excluded, rawData } = _saState;
+    const dist = rawData.districts.find(d => d.name === distName);
+    for (const l of dist ? dist.lists : []) if ((merges[l.name] || l.name) === name) excluded.delete(saDistrictKey(distName, l.name));
+    computeAndRenderSA();
+}
+
 function forceIncludeSAParty(name) {
     _saState.forceInclude.add(name);
     computeAndRenderSA();
@@ -1208,10 +1231,11 @@ function exportSaborAnalysisXLSX() {
         const groups = {};
         dist.originalLists.forEach(l => {
             const group = merges[l.name] || l.name;
-            if (!groups[group]) groups[group] = { names: [], votes: 0, excluded: excluded.has(l.name) };
+            const out = saListExcluded(excluded, dist.name, l.name);
+            if (!groups[group]) groups[group] = { names: [], votes: 0, excluded: out };
             groups[group].names.push(l.name);
             groups[group].votes += l.votes;
-            if (!excluded.has(l.name)) groups[group].excluded = false;
+            if (!out) groups[group].excluded = false;
         });
 
         const sorted = Object.entries(groups).sort((a, b) => b[1].votes - a[1].votes);
@@ -1227,7 +1251,7 @@ function exportSaborAnalysisXLSX() {
             const isExcl = g.excluded;
 
             let status = '';
-            if (isExcl) status = 'Isključeno';
+            if (isExcl) status = excluded.has(g.names[0]) ? 'Isključeno iz svih jedinica' : 'Isključeno iz ove jedinice';
             else if (isBelowThreshold && !isForced) status = 'Ispod praga 5%';
             else if (isForced) status = 'Uključeno (zaobiđen prag)';
             else status = 'Iznad praga';
@@ -1263,12 +1287,13 @@ function renderSADistricts(districtResults) {
         // Build rows: show merged groups
         const groups = {};
         dist.originalLists.forEach(l => {
-            const isExcl = excluded.has(l.name);
+            const isExcl = saListExcluded(excluded, dist.name, l.name);
             const group = merges[l.name] || l.name;
-            if (!groups[group]) groups[group] = { names: [], votes: 0, excluded: true };
+            if (!groups[group]) groups[group] = { names: [], votes: 0, excluded: true, everywhere: true };
             groups[group].names.push(l.name);
             groups[group].votes += l.votes;
             if (!isExcl) groups[group].excluded = false;
+            if (!excluded.has(l.name)) groups[group].everywhere = false;
         });
 
         const sortedGroups = Object.entries(groups).sort((a, b) => b[1].votes - a[1].votes);
@@ -1311,19 +1336,30 @@ function renderSADistricts(districtResults) {
             let seatDisplay;
             let actionBtn;
             const esc = groupName.replace(/'/g, "\\'");
+            const distEsc = dist.name.replace(/'/g, "\\'");
+            const excludeBtns = `<div class="d-flex gap-1 justify-content-center">
+                <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" title="Isključi iz ove izborne jedinice (kao da ovdje nije izašla na izbore)" aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
+                <button class="btn btn-outline-secondary btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" title="Isključi iz svih izbornih jedinica" aria-label="Isključi iz svih izbornih jedinica"><i class="bi bi-slash-circle"></i></button>
+            </div>`;
 
             if (isExcl) {
-                // Manually excluded by user
-                rowClass += ' text-decoration-line-through text-muted';
-                rowStyle += ' opacity:0.5;';
+                // Manually excluded by user: everywhere, or in this district only
+                rowClass += ' text-muted';
+                rowStyle += ' opacity:0.55;';
                 seatDisplay = '-';
-                actionBtn = `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAParty('${esc}')" title="Uključi"><i class="bi bi-plus-circle"></i></button>`;
+                actionBtn = g.everywhere
+                    ? `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAParty('${esc}')" title="Vrati u sve izborne jedinice"><i class="bi bi-plus-circle"></i></button>`
+                    : `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAPartyInDistrict('${distEsc}', '${esc}')" title="Vrati u ovu izbornu jedinicu"><i class="bi bi-plus-circle"></i></button>`;
+                nameCell = `<div class="text-decoration-line-through">${nameCell}</div><span class="badge bg-secondary ms-1" style="font-size:0.6rem; vertical-align:middle;">${g.everywhere ? 'isključena iz svih jedinica' : 'isključena iz ove jedinice'}</span>`;
             } else if (isBelowThreshold && !isForced) {
                 // Below 5% threshold — crossed out by default
                 rowClass += ' text-decoration-line-through';
                 rowStyle += ' opacity:0.6; background:rgba(220,53,69,0.04);';
                 seatDisplay = `<span class="text-muted" title="Ispod praga od 5%">⊘</span>`;
-                actionBtn = `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" title="Uključi u izračun (zaobiđi prag)"><i class="bi bi-plus-circle"></i></button>`;
+                actionBtn = `<div class="d-flex gap-1 justify-content-center">
+                    <button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" title="Uključi u izračun (zaobiđi prag)"><i class="bi bi-plus-circle"></i></button>
+                    <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" title="Isključi iz ove izborne jedinice (kao da ovdje nije izašla na izbore)" aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
+                </div>`;
                 // Add threshold badge to name cell
                 nameCell += `<span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">ispod 5%</span>`;
             } else if (isForced) {
@@ -1335,12 +1371,14 @@ function renderSADistricts(districtResults) {
             } else {
                 // Normal — above threshold
                 seatDisplay = seats > 0 ? seats : '0';
-                actionBtn = `<button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" title="Isključi"><i class="bi bi-x-circle"></i></button>`;
+                actionBtn = excludeBtns;
             }
 
             // For eligible parties: show effective %, for below-threshold: show raw %
             const isEligible = !isExcl && (!isBelowThreshold || isForced);
-            const pctDisplay = isEligible
+            const pctDisplay = isExcl
+                ? '<span class="text-muted" title="Ne sudjeluje u ovoj jedinici">–</span>'
+                : isEligible
                 ? `<strong>${formatPct(effPct)}</strong><br><small class="text-muted" style="font-size:0.7rem;">${formatPct(rawPct)} ukupno</small>`
                 : `<span class="text-muted">${formatPct(rawPct)}</span>`;
 
@@ -1350,7 +1388,7 @@ function renderSADistricts(districtResults) {
                 <td class="text-end align-middle">${formatNumber(g.votes)}</td>
                 <td class="text-end align-middle">${pctDisplay}</td>
                 <td class="text-center fw-bold align-middle">${seatDisplay}</td>
-                <td class="text-center align-middle" style="width:40px;">${actionBtn}</td>
+                <td class="text-center align-middle" style="width:64px;">${actionBtn}</td>
             </tr>`;
         }).join('');
 
@@ -1374,6 +1412,8 @@ function renderSADistricts(districtResults) {
                     <strong>${dist.name}</strong>
                     <span class="text-muted ms-2">(${dist.seats} mandata)</span>
                     ${thresholdInfo}
+                    ${(() => { const n = Object.values(groups).filter(g => g.excluded && !g.everywhere).length;
+                        return n ? `<span class="badge bg-dark ms-1" title="Liste isključene samo iz ove jedinice">${n} isključen${n === 1 ? 'a' : 'o'}</span>` : ''; })()}
                 </div>
                 <div>
                     <span class="badge bg-primary">${allocatedSeats} dodijeljeno</span>
