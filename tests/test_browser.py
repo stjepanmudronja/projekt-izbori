@@ -243,6 +243,32 @@ class Simulators(BrowserTestCase):
         p.wait("document.getElementById('predMajority').innerText.includes('73 od 151')", timeout=60000)
         self.assertNoErrors(p)
 
+    def test_rules_with_real_rules_give_real_seats(self):
+        """Što ako?: the real rules (D'Hondt, 10 districts, 5 % per district)
+        must give every year's official seats, party by party."""
+        p = self.open('/rezultati-koalicije-sabor')
+        mismatches = p.js("""async () => {
+            const out = {};
+            for (const y of SR_YEARS) {
+                const raw = await fetch('/api/national/sabor-raw/' + y).then(r => r.json());
+                const o = await fetch('/api/national/sabor-seats/' + y).then(r => r.json());
+                const s = srSeats(raw, SR_REAL).seats;
+                const bad = o.parties.filter(x => x.name !== 'NACIONALNE MANJINE' && (s[x.name] || 0) !== x.seats).map(x => x.name);
+                const total = Object.values(s).reduce((a, b) => a + b, 0);
+                if (bad.length || total !== o.parties.reduce((a, x) => a + x.seats, 0)) out[y] = { bad, total };
+            }
+            return out;
+        }""")
+        self.assertEqual(mismatches, {})
+        self.assertNoErrors(p)
+
+    def test_rules_link_restores(self):
+        # 2024, one district, Sainte-Laguë, 3 % nationally: HDZ 57, DP 16 -> 73.
+        p = self.open('/rezultati-koalicije-sabor#pravila=2024;m:sl;j:1;p:3;o:d;k:HDZ,DP')
+        p.wait("document.getElementById('srSummary').innerText.includes('73 od 151')", timeout=60000)
+        self.assertTrue(p.js("document.getElementById('srSingle').checked && document.getElementById('srSl').checked"))
+        self.assertNoErrors(p)
+
     def test_runoff_simulator(self):
         p = self.open('/predsjednicki-izbori')
         p.js("document.querySelector('[data-bs-target=\"#rsCollapse\"]').click()")

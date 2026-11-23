@@ -534,7 +534,7 @@
 
         <div id="module-sabor-analysis" class="module-panel">
             <div class="card search-card p-4 mb-4">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">Izbori za Hrvatski sabor od 1990. <b>Konačni rezultati</b> prikazuju raspodjelu mandata (D'Hondt) u polukrugu s popisom zastupnika, u <b>Složi svoju koaliciju</b> spajaš stranke i mijenjaš prag, a u <b>Napravi svoju predikciju</b> upisuješ postotke stranaka i vidiš koliko bi mandata dobile. Odaberi godinu, izbornu jedinicu i mjesto. Sive godine (1990., 1992., 1993., 1995. i 1997.) imaju drugačiji izborni sustav ili dom Sabora i prikazuju se zasebno.</p>
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Izbori za Hrvatski sabor od 1990. <b>Konačni rezultati</b> prikazuju raspodjelu mandata (D'Hondt) u polukrugu s popisom zastupnika, u <b>Složi svoju koaliciju</b> spajaš stranke i mijenjaš prag, a u <b>Napravi svoju predikciju</b> upisuješ postotke stranaka i vidiš koliko bi mandata dobile, a <b>Što ako?</b> raspodjeljuje iste glasove po drugim pravilima (prag, jedna izborna jedinica, Sainte-Laguë). Odaberi godinu, izbornu jedinicu i mjesto. Sive godine (1990., 1992., 1993., 1995. i 1997.) imaju drugačiji izborni sustav ili dom Sabora i prikazuju se zasebno.</p>
                 <div class="row g-4 align-items-start">
                     <div class="col-md-3">
                         <div id="saborCroatiaMapWrap"></div>
@@ -697,6 +697,70 @@
                             </div>
                         </div>
                         <div class="text-muted mt-3" style="font-size:0.75rem;" id="predMethodNote"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card result-card mb-3" id="srCard">
+                <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#srCollapse">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-sliders me-2"></i>Što ako? Druga izborna pravila</h5>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="collapse" id="srCollapse">
+                    <div class="card-body p-4">
+                        <p class="text-muted mb-3" style="font-size:0.88rem;">Isti glasovi, druga pravila. Odaberi izbore pa promijeni način raspodjele mandata, izborni prag ili izborne jedinice — na primjer cijela Hrvatska kao jedna jedinica ili prag od 3 % — i usporedi Sabor koji bi iz toga nastao sa stvarnim.</p>
+                        <div class="row g-3 align-items-end mb-2">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold" for="srYear">Izbori</label>
+                                <select class="form-select" id="srYear"></select>
+                            </div>
+                            <div class="col-md-8 d-flex gap-2 justify-content-md-end flex-wrap" id="srPresets">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-sr-preset="real"><i class="bi bi-arrow-counterclockwise me-1"></i>Stvarna pravila</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-sr-preset="p3">Prag 3 %</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-sr-preset="p0">Bez praga</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-sr-preset="sl">Sainte-Laguë</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-sr-preset="one">Jedna jedinica</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="srCopyBtn"><i class="bi bi-link-45deg me-1"></i>Kopiraj poveznicu</button>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3 sr-controls" id="srControls">
+                            <div class="col-md-4">
+                                <div class="fw-semibold small mb-1">Način raspodjele</div>
+                                <div class="form-check"><input class="form-check-input" type="radio" name="srMethod" id="srDh" value="dh"><label class="form-check-label" for="srDh">D'Hondt <span class="text-muted small">(kao danas)</span></label></div>
+                                <div class="form-check"><input class="form-check-input" type="radio" name="srMethod" id="srSl" value="sl"><label class="form-check-label" for="srSl">Sainte-Laguë <span class="text-muted small">(manje pogoduje velikima)</span></label></div>
+                                <div class="form-check"><input class="form-check-input" type="radio" name="srMethod" id="srHare" value="hare"><label class="form-check-label" for="srHare">Najveći ostatak (Hare)</label></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="fw-semibold small mb-1">Izborne jedinice</div>
+                                <div class="form-check"><input class="form-check-input" type="radio" name="srDistricts" id="srTen" value="10"><label class="form-check-label" for="srTen">10 jedinica po 14 mandata <span class="text-muted small">(kao danas)</span></label></div>
+                                <div class="form-check"><input class="form-check-input" type="radio" name="srDistricts" id="srSingle" value="1"><label class="form-check-label" for="srSingle">Cijela Hrvatska jedna jedinica</label></div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="fw-semibold small mb-1 d-block" for="srThreshold">Izborni prag: <span id="srThresholdVal"></span></label>
+                                <input type="range" class="form-range" id="srThreshold" min="0" max="10" step="0.5">
+                                <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="srScope" id="srLocal" value="j"><label class="form-check-label small" for="srLocal">u svakoj jedinici</label></div>
+                                <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="srScope" id="srNational" value="d"><label class="form-check-label small" for="srNational">na razini države</label></div>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-2" id="srRealNote"><i class="bi bi-info-circle me-1"></i>Ovo su stvarna pravila: stupci „Stvarno” i „Po ovim pravilima” jednaki su.</div>
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-1 pred-table">
+                                        <thead><tr>
+                                            <th title="Uključi u koaliciju">Koal.</th><th>Stranka</th>
+                                            <th class="text-end" title="Udio glasova u jedinicama I.–X.">Glasovi</th>
+                                            <th class="text-end">Stvarno</th><th class="text-end">Po ovim pravilima</th><th class="text-end">Razlika</th>
+                                        </tr></thead>
+                                        <tbody id="srRows"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div id="srHemicycle"></div>
+                                <div id="srSummary" class="text-center mt-2"></div>
+                            </div>
+                        </div>
+                        <div class="text-muted mt-3" style="font-size:0.75rem;" id="srMethodNote"></div>
                     </div>
                 </div>
             </div>
@@ -962,6 +1026,7 @@
 <script src="{{ asset('js/chart-scroll.js') }}"></script>
 <script src="{{ asset('js/links.js') }}"></script>
 <script src="{{ asset('js/sabor-prediction.js') }}"></script>
+<script src="{{ asset('js/sabor-rules.js') }}"></script>
 <script src="{{ asset('js/presidential-runoff.js') }}"></script>
 <script src="{{ asset('js/boot.js') }}"></script>
 
