@@ -219,6 +219,39 @@ class Interactions(BrowserTestCase):
                              'shown': True, 'restored': True, 'everywhere': True})
         self.assertNoErrors(p)
 
+    def test_simulator_link_round_trip(self):
+        """Kopiraj poveznicu: a link with every kind of change (merge, both
+        exclusions, both inclusions under 5 %, skakači) opens the same simulation."""
+        snap = """JSON.stringify({ seats: _saState.computed.totalSeats, j: _saState.jumpers,
+            x: [..._saState.excluded].sort(), f: [..._saState.forceInclude].sort(),
+            m: Object.entries(_saState.merges).filter(([k, v]) => v !== _saState.initialGroups[k]) })"""
+        p = self.open('/rezultati-koalicije-sabor')
+        p.wait("!!document.querySelector('.sa-year-btn[data-year=\"2020\"]')")
+        p.js("document.querySelector('.sa-year-btn[data-year=\"2020\"]').click()")
+        p.wait("_saState.computed && _saState.year === 2020", timeout=60000)
+        link = p.js("""() => {
+            const raw = _saState.rawData, d0 = raw.districts[0], d2 = raw.districts[2];
+            const g = n => _saState.merges[raw.districts.flatMap(d => d.lists).find(l => l.name.includes(n)).name];
+            mergeSAParties(g('MOST'), g('DOMOVINSKI'));
+            excludeSAPartyInDistrict(d0.name, g('MOŽEMO'));
+            excludeSAParty(g('PAMETNO'));
+            forceIncludeSAPartyInDistrict(d2.name, g('FOKUS'));
+            forceIncludeSAParty(g('STRANKA S IMENOM'));
+            _saState.jumpers[g('HRVATSKA DEMOKRATSKA')] = -2; _saState.jumpers[g('DOMOVINSKI')] = 2;
+            computeAndRenderSA();
+            return simulationHash();
+        }""")
+        before = p.js(snap)
+        q = self.open('/rezultati-koalicije-sabor' + link)
+        q.wait("document.getElementById('saLinkNote').style.display === ''", timeout=60000)
+        self.assertEqual(q.js(snap), before)
+        self.assertIn('podijeljena simulacija', q.js("document.getElementById('saLinkNote').innerText"))
+        self.assertNoErrors(q)
+        # A link made on other data is recognised and not half-applied.
+        r = self.open('/rezultati-koalicije-sabor#simulacija=2020;n=5;x=1')
+        r.wait("document.getElementById('saLinkNote').style.display === ''", timeout=60000)
+        self.assertEqual(r.js("_saState.excluded.size"), 0)
+
     def test_map_swing(self):
         p = self.open('/karta')
         p.wait("document.getElementById('mapTitle').textContent.length > 0", timeout=60000)

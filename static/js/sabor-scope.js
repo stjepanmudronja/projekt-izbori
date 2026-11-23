@@ -584,6 +584,8 @@ async function loadSaborAnalysis(year, seq) {
     _saState.initialGroups = {};  // listName -> original primary_party label (for "A + B" merge display)
     _saState.excluded = new Set();
     _saState.forceInclude = new Set();
+    _saState.jumpers = {};               // skakači belong to the year they were made in
+    _saState.jumperSource = null;
 
     // Init merge map: use group field to pre-merge coalition variants
     data.districts.forEach(d => d.lists.forEach(l => {
@@ -1522,3 +1524,114 @@ function attachSARowDragDrop() {
     card.addEventListener('click', hide, true);       // the row is redrawn under the pointer
     window.addEventListener('scroll', hide, { passive: true });
 })();
+
+// Shareable simulator: every change the reader made, in the URL.
+// #simulacija=2024;n=212;m=3>0,5>0;x=7;xd=0.12;f=9;fd=0.11;j=0:-1,2:1
+// Lists and parties are numbered by their order in /api/national/sabor-raw
+// (every list name, then its group, first appearance first), districts by
+// position; `n` is how many names there were, so a link made on other data
+// is recognised and not half-applied.
+//   m  merges, list > the party it was merged into (only those not as imported)
+//   x  excluded everywhere (list)        xd  excluded in one district (district.list)
+//   f  let in under 5 % everywhere (party)   fd  in one district (district.party)
+//   j  skakači, party:seats moved
+function saLinkNames(raw) {
+    const names = [];
+    const seen = new Set();
+    for (const d of raw.districts) for (const l of d.lists)
+        for (const n of [l.name, l.group || l.name]) if (!seen.has(n)) { seen.add(n); names.push(n); }
+    return names;
+}
+
+function simulationHash() {
+    const { rawData: raw, year, merges, initialGroups, excluded, forceInclude, jumpers } = _saState;
+    const names = saLinkNames(raw);
+    const idx = Object.fromEntries(names.map((n, i) => [n, i]));
+    const dIdx = Object.fromEntries(raw.districts.map((d, i) => [d.name, i]));
+    const split = key => key.split('\u0001');
+    const m = Object.entries(merges).filter(([k, v]) => v !== initialGroups[k]).map(([k, v]) => `${idx[k]}>${idx[v]}`);
+    const local = set => [...set].filter(k => k.includes('\u0001')).map(k => { const [d, n] = split(k); return `${dIdx[d]}.${idx[n]}`; });
+    const global = set => [...set].filter(k => !k.includes('\u0001')).map(k => idx[k]);
+    const j = Object.entries(jumpers).filter(([, v]) => v).map(([k, v]) => `${idx[k]}:${v}`);
+    const parts = [`n=${names.length}`];
+    for (const [key, list] of [['m', m], ['x', global(excluded)], ['xd', local(excluded)], ['f', global(forceInclude)], ['fd', local(forceInclude)], ['j', j]])
+        if (list.length) parts.push(`${key}=${list.join(',')}`);
+    return `#simulacija=${year};${parts.join(';')}`;
+}
+
+function readSimulationLink() {
+    let h = window.location.hash || '';
+    try { h = decodeURIComponent(h); } catch (_) { /* keep as is */ }   // ">" arrives as %3E
+    if (!h.startsWith('#simulacija=')) return null;
+    const [year, ...parts] = h.slice('#simulacija='.length).split(';');
+    const out = { year: parseInt(year, 10) };
+    for (const p of parts) {
+        const i = p.indexOf('=');
+        if (i > 0) out[p.slice(0, i)] = p.slice(i + 1).split(',').filter(Boolean);
+    }
+    return out;
+}
+
+// Puts a link's changes onto the freshly loaded year; false when the link
+// was made on other data (the names do not match) and nothing was applied.
+function applySimulationLink(link) {
+    const raw = _saState.rawData;
+    const names = saLinkNames(raw);
+    if (!link.n || +link.n[0] !== names.length) return false;
+    const name = i => names[+i];
+    const dist = i => (raw.districts[+i] || {}).name;
+    const pair = s => { const [d, n] = s.split('.'); return dist(d) && name(n) ? saDistrictKey(dist(d), name(n)) : null; };
+    for (const s of link.m || []) {
+        const [from, to] = s.split('>');
+        if (name(from) && name(to)) _saState.merges[name(from)] = name(to);
+    }
+    for (const i of link.x || []) if (name(i)) _saState.excluded.add(name(i));
+    for (const s of link.xd || []) { const k = pair(s); if (k) _saState.excluded.add(k); }
+    for (const i of link.f || []) if (name(i)) _saState.forceInclude.add(name(i));
+    for (const s of link.fd || []) { const k = pair(s); if (k) _saState.forceInclude.add(k); }
+    for (const s of link.j || []) {
+        const [i, v] = s.split(':');
+        if (name(i) && Number.isFinite(+v)) _saState.jumpers[name(i)] = +v;
+    }
+    computeAndRenderSA();
+    return true;
+}
+
+async function copySimulationLink() {
+    if (!_saState.rawData) return;
+    const url = `${window.location.origin}/rezultati-koalicije-sabor${simulationHash()}`;
+    history.replaceState(history.state, '', url);
+    const btn = document.getElementById('saCopyBtn');
+    try {
+        await navigator.clipboard.writeText(url);
+        btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Poveznica kopirana';
+    } catch (_) {
+        btn.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Poveznica je u adresnoj traci';
+    }
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Kopiraj poveznicu'; }, 2500);
+}
+
+// A shared simulation: pick its year, wait for the data, apply, open the card.
+window.addEventListener('load', async () => {
+    const link = readSimulationLink();
+    if (!link || !Number.isFinite(link.year)) return;
+    const until = async (test, ms = 30000) => {
+        for (const end = Date.now() + ms; Date.now() < end; await new Promise(r => setTimeout(r, 100))) if (test()) return true;
+        return false;
+    };
+    if (!await until(() => document.querySelector(`.sa-year-btn[data-year="${link.year}"]`))) return;
+    setSaborYears([link.year]);
+    if (!await until(() => _saState.year === link.year && _saState.rawData && _saState.computed)) return;
+    const ok = applySimulationLink(link);
+    const note = document.getElementById('saLinkNote');
+    if (note) {
+        note.textContent = ok ? 'Otvorena je podijeljena simulacija.' : 'Poveznica je napravljena na drugačijim podacima, pa je prikazan stvarni rezultat.';
+        note.classList.toggle('text-danger', !ok);
+        note.style.display = '';
+    }
+    const el = document.getElementById('saSimCollapse');
+    if (el && window.bootstrap) {
+        bootstrap.Collapse.getOrCreateInstance(el, { toggle: false }).show();
+        setTimeout(() => el.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
+    }
+});
