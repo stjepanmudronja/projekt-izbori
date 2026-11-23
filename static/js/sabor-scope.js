@@ -851,17 +851,17 @@ function renderSAHemicycle(parties, totalAllocated) {
             if (!jumperSource) {
                 // No source selected: show "oduzmi" button on each party that has seats
                 jumperBtns = `<button class="btn btn-outline-danger btn-sm py-0 px-1 ms-1" style="font-size:0.7rem; line-height:1.3;"
-                    onclick="event.stopPropagation(); selectJumperSource('${p.name.replace(/'/g, "\\'")}')">
+                    data-tip="Skakač: oduzmi jedan mandat ovoj stranci, a zatim odaberi stranku kojoj prelazi." onclick="event.stopPropagation(); selectJumperSource('${p.name.replace(/'/g, "\\'")}')">
                     <i class="bi bi-dash-lg"></i></button>`;
             } else if (isSource) {
                 // This is the source: show cancel button
                 jumperBtns = `<button class="btn btn-outline-secondary btn-sm py-0 px-1 ms-1" style="font-size:0.7rem; line-height:1.3;"
-                    onclick="event.stopPropagation(); _saState.jumperSource=null; computeAndRenderSA();">
+                    data-tip="Odustani od prelaska mandata." onclick="event.stopPropagation(); _saState.jumperSource=null; computeAndRenderSA();">
                     <i class="bi bi-x-lg"></i></button>`;
             } else {
                 // Source is selected, this is a target: show "dodaj" button
                 jumperBtns = `<button class="btn btn-outline-success btn-sm py-0 px-1 ms-1" style="font-size:0.7rem; line-height:1.3;"
-                    onclick="event.stopPropagation(); transferSeat('${jumperSource.replace(/'/g, "\\'")}', '${p.name.replace(/'/g, "\\'")}')">
+                    data-tip="Dodaj ovoj stranci mandat oduzet odabranoj stranci." onclick="event.stopPropagation(); transferSeat('${jumperSource.replace(/'/g, "\\'")}', '${p.name.replace(/'/g, "\\'")}')">
                     <i class="bi bi-plus-lg"></i></button>`;
             }
         }
@@ -1318,7 +1318,7 @@ function renderSADistricts(districtResults) {
                                 style="font-size:0.7rem; line-height:1; margin-top:2px;"
                                 onmousedown="event.stopPropagation();"
                                 onclick="event.stopPropagation(); unmergeSAParty('${esc}')"
-                                title="Odspoji ovu listu iz koalicije">
+                                data-tip="Odspoji ovu listu iz koalicije: opet se računa kao zasebna lista.">
                             <i class="bi bi-x-lg"></i>
                         </button>
                         <span style="flex:1;">${n}</span>
@@ -1338,8 +1338,8 @@ function renderSADistricts(districtResults) {
             const esc = groupName.replace(/'/g, "\\'");
             const distEsc = dist.name.replace(/'/g, "\\'");
             const excludeBtns = `<div class="d-flex gap-1 justify-content-center">
-                <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" title="Isključi iz ove izborne jedinice (kao da ovdje nije izašla na izbore)" aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
-                <button class="btn btn-outline-secondary btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" title="Isključi iz svih izbornih jedinica" aria-label="Isključi iz svih izbornih jedinica"><i class="bi bi-slash-circle"></i></button>
+                <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Isključi iz ove izborne jedinice: kao da ovdje nije izašla na izbore. Ostalima rastu udjeli, a prag i mandati u ovoj jedinici računaju se iznova." aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
+                <button class="btn btn-outline-secondary btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" data-tip="Isključi iz svih izbornih jedinica: stranka nigdje ne sudjeluje u raspodjeli mandata." aria-label="Isključi iz svih izbornih jedinica"><i class="bi bi-slash-circle"></i></button>
             </div>`;
 
             if (isExcl) {
@@ -1348,8 +1348,8 @@ function renderSADistricts(districtResults) {
                 rowStyle += ' opacity:0.55;';
                 seatDisplay = '-';
                 actionBtn = g.everywhere
-                    ? `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAParty('${esc}')" title="Vrati u sve izborne jedinice"><i class="bi bi-plus-circle"></i></button>`
-                    : `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAPartyInDistrict('${distEsc}', '${esc}')" title="Vrati u ovu izbornu jedinicu"><i class="bi bi-plus-circle"></i></button>`;
+                    ? `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAParty('${esc}')" data-tip="Vrati stranku u sve izborne jedinice."><i class="bi bi-plus-circle"></i></button>`
+                    : `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Vrati stranku u ovu izbornu jedinicu."><i class="bi bi-plus-circle"></i></button>`;
                 nameCell = `<div class="text-decoration-line-through">${nameCell}</div><span class="badge bg-secondary ms-1" style="font-size:0.6rem; vertical-align:middle;">${g.everywhere ? 'isključena iz svih jedinica' : 'isključena iz ove jedinice'}</span>`;
             } else if (isBelowThreshold && !isForced) {
                 // Below 5% threshold — crossed out by default
@@ -1357,8 +1357,8 @@ function renderSADistricts(districtResults) {
                 rowStyle += ' opacity:0.6; background:rgba(220,53,69,0.04);';
                 seatDisplay = `<span class="text-muted" title="Ispod praga od 5%">⊘</span>`;
                 actionBtn = `<div class="d-flex gap-1 justify-content-center">
-                    <button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" title="Uključi u izračun (zaobiđi prag)"><i class="bi bi-plus-circle"></i></button>
-                    <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" title="Isključi iz ove izborne jedinice (kao da ovdje nije izašla na izbore)" aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
+                    <button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" data-tip="Uključi u raspodjelu mandata iako je ispod praga od 5 % (u svim jedinicama)."><i class="bi bi-plus-circle"></i></button>
+                    <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Isključi iz ove izborne jedinice: kao da ovdje nije izašla na izbore. Ostalima rastu udjeli, a prag i mandati u ovoj jedinici računaju se iznova." aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
                 </div>`;
                 // Add threshold badge to name cell
                 nameCell += `<span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">ispod 5%</span>`;
@@ -1366,7 +1366,7 @@ function renderSADistricts(districtResults) {
                 // Force-included (was below threshold, user enabled it)
                 rowStyle += ' background:rgba(25,135,84,0.06);';
                 seatDisplay = seats > 0 ? seats : '0';
-                actionBtn = `<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" title="Vrati prag od 5%"><i class="bi bi-dash-circle"></i></button>`;
+                actionBtn = `<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" data-tip="Vrati prag od 5 %: stranka opet ne sudjeluje u raspodjeli ondje gdje je ispod praga."><i class="bi bi-dash-circle"></i></button>`;
                 nameCell += `<span class="badge bg-success bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">uključeno</span>`;
             } else {
                 // Normal — above threshold
@@ -1475,3 +1475,34 @@ function attachSARowDragDrop() {
 // modules' inits. It used to hang off a separate sidebar-link click handler,
 // which meant loading /rezultati-koalicije-sabor directly — or arriving via
 // back/forward — showed the module with an empty year picker.)
+
+// Hover hints for the simulator's buttons (`data-tip`): one floating box on
+// <body>, so the district tables' scrolling cannot clip it, and nothing to set
+// up again when the rows are redrawn on every change.
+(function saTips() {
+    const card = document.getElementById('saSimCollapse');
+    if (!card) return;
+    const tip = document.createElement('div');
+    tip.className = 'sa-tip';
+    tip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tip);
+    let current = null;
+    const hide = () => { tip.style.display = 'none'; current = null; };
+    card.addEventListener('mouseover', e => {
+        const el = e.target.closest('[data-tip]');
+        if (!el || el === current) return;
+        current = el;
+        tip.textContent = el.dataset.tip;
+        tip.style.display = 'block';
+        const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+        const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+        const above = r.top - h - 8 >= 0;
+        tip.style.left = `${left + window.scrollX}px`;
+        tip.style.top = `${(above ? r.top - h - 8 : r.bottom + 8) + window.scrollY}px`;
+    });
+    card.addEventListener('mouseout', e => {
+        if (current && !current.contains(e.relatedTarget)) hide();
+    });
+    card.addEventListener('click', hide, true);       // the row is redrawn under the pointer
+    window.addEventListener('scroll', hide, { passive: true });
+})();
