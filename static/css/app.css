@@ -802,3 +802,4 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .area-chip button { border: 0; background: transparent; color: #6c757d; padding: 0 .3rem; line-height: 1; }
 .area-chip button:hover { color: #dc3545; }
 .area-chip .area-kind { color: #6c757d; font-size: .72rem; }
+.sr-controls .sr-where { font-size: .75rem; color: #6c757d; line-height: 1.25; margin-bottom: .35rem; }
