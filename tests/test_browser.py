@@ -189,6 +189,36 @@ class Interactions(BrowserTestCase):
         self.assertEqual(r, {'votesGone': True, 'dpSeats': 0, 'seats': 14, 'othersSame': True, 'shown': True, 'restored': True})
         self.assertNoErrors(p)
 
+    def test_simulator_include_under_threshold_in_one_district(self):
+        """The green ⊕ lets a party under 5 % in where it is clicked only; the
+        ⊞ beside it everywhere."""
+        p = self.open('/rezultati-koalicije-sabor')
+        p.wait("!!document.querySelector('.sa-year-btn[data-year=\"2024\"]')")
+        p.js("document.querySelector('.sa-year-btn[data-year=\"2024\"]').click()")
+        p.wait("_saState.computed && _saState.year === 2024", timeout=60000)
+        r = p.js("""() => {
+            const c = () => _saState.computed.districts;
+            const before = c().map(d => JSON.stringify(d.distSeats));
+            const d0 = _saState.rawData.districts[0];
+            const group = _saState.merges[d0.lists.find(l => l.name.startsWith('FOKUS')).name];
+            const under = () => c().filter(d => d.belowThreshold.has(group)).length;
+            const underBefore = under();
+            forceIncludeSAPartyInDistrict(d0.name, group);
+            const out = { lessUnderByOne: underBefore - under() === 1, inHere: !c()[0].belowThreshold.has(group),
+                          othersSame: c().slice(1).every((d, i) => JSON.stringify(d.distSeats) === before[i + 1]),
+                          seats: Object.values(c()[0].distSeats).reduce((a, b) => a + b, 0),
+                          shown: document.getElementById('saDist0').innerText.includes('uključena u ovoj jedinici') };
+            unforceIncludeSAPartyInDistrict(d0.name, group);
+            out.restored = c().every((d, i) => JSON.stringify(d.distSeats) === before[i]);
+            forceIncludeSAParty(group);
+            out.everywhere = under() === 0;
+            unforceIncludeSAParty(group);
+            return out;
+        }""")
+        self.assertEqual(r, {'lessUnderByOne': True, 'inHere': True, 'othersSame': True, 'seats': 14,
+                             'shown': True, 'restored': True, 'everywhere': True})
+        self.assertNoErrors(p)
+
     def test_map_swing(self):
         p = self.open('/karta')
         p.wait("document.getElementById('mapTitle').textContent.length > 0", timeout=60000)

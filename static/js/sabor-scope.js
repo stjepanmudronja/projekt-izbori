@@ -657,7 +657,7 @@ function computeDHondtClient(districts, merges, excluded, forceInclude) {
         const eligible = Object.entries(mergedVotes).filter(([name, v]) => {
             if (v >= threshold) return true;
             // Force-included parties bypass threshold
-            if (forceInclude && forceInclude.has(name)) return true;
+            if (forceInclude && (forceInclude.has(name) || forceInclude.has(saDistrictKey(dist.name, name)))) return true;
             belowThreshold.add(name);
             return false;
         });
@@ -987,6 +987,17 @@ function forceIncludeSAParty(name) {
     computeAndRenderSA();
 }
 
+// Below the threshold in one district only: let it in there.
+function forceIncludeSAPartyInDistrict(distName, name) {
+    _saState.forceInclude.add(saDistrictKey(distName, name));
+    computeAndRenderSA();
+}
+
+function unforceIncludeSAPartyInDistrict(distName, name) {
+    _saState.forceInclude.delete(saDistrictKey(distName, name));
+    computeAndRenderSA();
+}
+
 function unforceIncludeSAParty(name) {
     _saState.forceInclude.delete(name);
     computeAndRenderSA();
@@ -1247,7 +1258,7 @@ function exportSaborAnalysisXLSX() {
             const effPct = dist.eligibleVotes > 0 ? (g.votes / dist.eligibleVotes * 100).toFixed(1) : '0.0';
             const seats = dist.distSeats[groupName] || 0;
             const isBelowThreshold = dist.belowThreshold.has(groupName);
-            const isForced = forceInclude.has(groupName);
+            const isForced = forceInclude.has(groupName) || forceInclude.has(saDistrictKey(dist.name, groupName));
             const isExcl = g.excluded;
 
             let status = '';
@@ -1303,7 +1314,10 @@ function renderSADistricts(districtResults) {
             const effPct = dist.eligibleVotes > 0 ? (g.votes / dist.eligibleVotes * 100) : 0;
             const seats = dist.distSeats[groupName] || 0;
             const isBelowThreshold = dist.belowThreshold.has(groupName);
-            const isForced = forceInclude.has(groupName);
+            const forcedHere = forceInclude.has(saDistrictKey(dist.name, groupName));
+            const forcedEverywhere = forceInclude.has(groupName);
+            // Let in under the threshold - shown only where it is in fact under it.
+            const isForced = (forcedHere || forcedEverywhere) && dist.thresholdPct > 0 && g.votes < dist.thresholdVotes;
             const isExcl = g.excluded;
 
             // Show each merged list on its own line
@@ -1355,15 +1369,21 @@ function renderSADistricts(districtResults) {
                 rowClass += ' text-decoration-line-through';
                 rowStyle += ' opacity:0.6; background:rgba(220,53,69,0.04);';
                 seatDisplay = `<span class="text-muted" title="Ispod praga od 5%">⊘</span>`;
-                actionBtn = buttons(`<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" data-tip="Uključi u raspodjelu mandata iako je ispod praga od 5 % (u svim jedinicama)."><i class="bi bi-plus-circle"></i></button>`, localBtn, globalBtn);
+                actionBtn = buttons(
+                    `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Uključi u ovoj izbornoj jedinici iako je ispod praga od 5 %: sudjeluje u raspodjeli njezinih mandata." aria-label="Uključi u ovoj jedinici unatoč pragu"><i class="bi bi-plus-circle"></i></button>`,
+                    `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" data-tip="Uključi u svim izbornim jedinicama iako je ispod praga od 5 %: prag za nju ne vrijedi nigdje." aria-label="Uključi u svim jedinicama unatoč pragu"><i class="bi bi-plus-square"></i></button>`,
+                    localBtn, globalBtn);
                 // Add threshold badge to name cell
                 nameCell += `<span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">ispod 5%</span>`;
             } else if (isForced) {
                 // Force-included (was below threshold, user enabled it)
                 rowStyle += ' background:rgba(25,135,84,0.06);';
                 seatDisplay = seats > 0 ? seats : '0';
-                actionBtn = buttons(`<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" data-tip="Vrati prag od 5 %: stranka opet ne sudjeluje u raspodjeli ondje gdje je ispod praga."><i class="bi bi-dash-circle"></i></button>`, localBtn, globalBtn);
-                nameCell += `<span class="badge bg-success bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">uključeno</span>`;
+                const unforce = forcedEverywhere
+                    ? `<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" data-tip="Vrati prag od 5 % u svim jedinicama: stranka opet ne sudjeluje u raspodjeli ondje gdje je ispod praga." aria-label="Vrati prag u svim jedinicama"><i class="bi bi-dash-square"></i></button>`
+                    : `<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Vrati prag od 5 % u ovoj jedinici: stranka ovdje opet ne sudjeluje u raspodjeli." aria-label="Vrati prag u ovoj jedinici"><i class="bi bi-dash-circle"></i></button>`;
+                actionBtn = buttons(unforce, localBtn, globalBtn);
+                nameCell += `<span class="badge bg-success bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">${forcedEverywhere ? 'uključena u svim jedinicama' : 'uključena u ovoj jedinici'}</span>`;
             } else {
                 // Normal — above threshold
                 seatDisplay = seats > 0 ? seats : '0';
@@ -1384,7 +1404,7 @@ function renderSADistricts(districtResults) {
                 <td class="text-end align-middle">${formatNumber(g.votes)}</td>
                 <td class="text-end align-middle">${pctDisplay}</td>
                 <td class="text-center fw-bold align-middle">${seatDisplay}</td>
-                <td class="text-center align-middle" style="width:90px;">${actionBtn}</td>
+                <td class="text-center align-middle" style="width:118px;">${actionBtn}</td>
             </tr>`;
         }).join('');
 
