@@ -1337,10 +1337,9 @@ function renderSADistricts(districtResults) {
             let actionBtn;
             const esc = groupName.replace(/'/g, "\\'");
             const distEsc = dist.name.replace(/'/g, "\\'");
-            const excludeBtns = `<div class="d-flex gap-1 justify-content-center">
-                <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Isključi iz ove izborne jedinice: kao da ovdje nije izašla na izbore. Ostalima rastu udjeli, a prag i mandati u ovoj jedinici računaju se iznova." aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
-                <button class="btn btn-outline-secondary btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" data-tip="Isključi iz svih izbornih jedinica: stranka nigdje ne sudjeluje u raspodjeli mandata." aria-label="Isključi iz svih izbornih jedinica"><i class="bi bi-slash-circle"></i></button>
-            </div>`;
+            const localBtn = `<button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Isključi iz ove izborne jedinice: kao da ovdje nije izašla na izbore. Ostalima rastu udjeli, a prag i mandati u ovoj jedinici računaju se iznova." aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>`;
+            const globalBtn = `<button class="btn btn-outline-secondary btn-sm p-0 px-1" onclick="excludeSAParty('${esc}')" data-tip="Isključi iz svih izbornih jedinica: kao da nikada nije izašla na izbore. Njezini glasovi nestaju u svakoj jedinici, a udjeli, prag i mandati računaju se iznova." aria-label="Isključi iz svih izbornih jedinica"><i class="bi bi-slash-circle"></i></button>`;
+            const buttons = (...b) => `<div class="d-flex gap-1 justify-content-center">${b.join('')}</div>`;
 
             if (isExcl) {
                 // Manually excluded by user: everywhere, or in this district only
@@ -1349,29 +1348,26 @@ function renderSADistricts(districtResults) {
                 seatDisplay = '-';
                 actionBtn = g.everywhere
                     ? `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAParty('${esc}')" data-tip="Vrati stranku u sve izborne jedinice."><i class="bi bi-plus-circle"></i></button>`
-                    : `<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Vrati stranku u ovu izbornu jedinicu."><i class="bi bi-plus-circle"></i></button>`;
+                    : buttons(`<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="includeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Vrati stranku u ovu izbornu jedinicu."><i class="bi bi-plus-circle"></i></button>`, globalBtn);
                 nameCell = `<div class="text-decoration-line-through">${nameCell}</div><span class="badge bg-secondary ms-1" style="font-size:0.6rem; vertical-align:middle;">${g.everywhere ? 'isključena iz svih jedinica' : 'isključena iz ove jedinice'}</span>`;
             } else if (isBelowThreshold && !isForced) {
                 // Below 5% threshold — crossed out by default
                 rowClass += ' text-decoration-line-through';
                 rowStyle += ' opacity:0.6; background:rgba(220,53,69,0.04);';
                 seatDisplay = `<span class="text-muted" title="Ispod praga od 5%">⊘</span>`;
-                actionBtn = `<div class="d-flex gap-1 justify-content-center">
-                    <button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" data-tip="Uključi u raspodjelu mandata iako je ispod praga od 5 % (u svim jedinicama)."><i class="bi bi-plus-circle"></i></button>
-                    <button class="btn btn-outline-danger btn-sm p-0 px-1" onclick="excludeSAPartyInDistrict('${distEsc}', '${esc}')" data-tip="Isključi iz ove izborne jedinice: kao da ovdje nije izašla na izbore. Ostalima rastu udjeli, a prag i mandati u ovoj jedinici računaju se iznova." aria-label="Isključi iz ove izborne jedinice"><i class="bi bi-x-circle"></i></button>
-                </div>`;
+                actionBtn = buttons(`<button class="btn btn-outline-success btn-sm p-0 px-1" onclick="forceIncludeSAParty('${esc}')" data-tip="Uključi u raspodjelu mandata iako je ispod praga od 5 % (u svim jedinicama)."><i class="bi bi-plus-circle"></i></button>`, localBtn, globalBtn);
                 // Add threshold badge to name cell
                 nameCell += `<span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">ispod 5%</span>`;
             } else if (isForced) {
                 // Force-included (was below threshold, user enabled it)
                 rowStyle += ' background:rgba(25,135,84,0.06);';
                 seatDisplay = seats > 0 ? seats : '0';
-                actionBtn = `<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" data-tip="Vrati prag od 5 %: stranka opet ne sudjeluje u raspodjeli ondje gdje je ispod praga."><i class="bi bi-dash-circle"></i></button>`;
+                actionBtn = buttons(`<button class="btn btn-outline-warning btn-sm p-0 px-1" onclick="unforceIncludeSAParty('${esc}')" data-tip="Vrati prag od 5 %: stranka opet ne sudjeluje u raspodjeli ondje gdje je ispod praga."><i class="bi bi-dash-circle"></i></button>`, localBtn, globalBtn);
                 nameCell += `<span class="badge bg-success bg-opacity-75 ms-1" style="font-size:0.6rem; vertical-align:middle;">uključeno</span>`;
             } else {
                 // Normal — above threshold
                 seatDisplay = seats > 0 ? seats : '0';
-                actionBtn = excludeBtns;
+                actionBtn = buttons(localBtn, globalBtn);
             }
 
             // For eligible parties: show effective %, for below-threshold: show raw %
@@ -1388,7 +1384,7 @@ function renderSADistricts(districtResults) {
                 <td class="text-end align-middle">${formatNumber(g.votes)}</td>
                 <td class="text-end align-middle">${pctDisplay}</td>
                 <td class="text-center fw-bold align-middle">${seatDisplay}</td>
-                <td class="text-center align-middle" style="width:64px;">${actionBtn}</td>
+                <td class="text-center align-middle" style="width:90px;">${actionBtn}</td>
             </tr>`;
         }).join('');
 
