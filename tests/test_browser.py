@@ -106,6 +106,7 @@ class EveryPage(BrowserTestCase):
         '/karta': 'module-analytics-map',
         '/snaga-stranaka': 'module-analytics-parties',
         '/zene-u-politici': 'module-analytics-women',
+        '/ponovni-izbor': 'module-analytics-incumbency',
     }
 
     def test_every_page_opens_without_errors(self):
@@ -263,6 +264,15 @@ class Interactions(BrowserTestCase):
         p.js("document.querySelector('[data-w-party=\"eu-2019\"]').click()")
         self.assertEqual(p.js("document.getElementById('wPartyElection').value"), 'eu-2019')
         self.assertGreater(p.js("Chart.getChart('wPartyChart').data.labels.length"), 3)
+        self.assertNoErrors(p)
+
+    def test_incumbency_page(self):
+        p = self.open('/ponovni-izbor')
+        p.wait("document.getElementById('incArea').style.display === '' && !!Chart.getChart('incChart')", timeout=60000)
+        all_rows = p.js("document.querySelectorAll('#incDefeated tr').length")
+        p.js("document.querySelector('[data-inc-kind=\"zupanija\"]').click()")
+        self.assertLess(p.js("document.querySelectorAll('#incDefeated tr').length"), all_rows)
+        self.assertIn('župani', p.js("document.getElementById('incLongTitle').textContent"))
         self.assertNoErrors(p)
 
     def test_map_swing(self):

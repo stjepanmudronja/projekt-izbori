@@ -357,6 +357,37 @@ class WomenInPolitics(unittest.TestCase):
                 self.assertEqual(sum(r['elected']['f'] for r in rows), self.by[('sabor', year)]['elected']['f'])
 
 
+class Incumbency(unittest.TestCase):
+    """Ponovni izbor: what happened to each place's last winner."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = get('/api/analytics/incumbency')
+
+    def test_every_place_accounted_for(self):
+        self.assertEqual(self.data['years'], [2009, 2013, 2017, 2021, 2025])
+        for y in self.data['per_year']:
+            for kind, c in y['by_kind'].items():
+                with self.subTest(year=y['year'], kind=kind):
+                    self.assertEqual(c['won'] + c['lost'] + c['did_not_run'], c['races'])
+            self.assertEqual(y['by_kind']['sve']['races'], 576)          # 556 towns + 20 counties
+
+    def test_lists_match_counts(self):
+        terms = self.data['terms']['by_kind']['sve']
+        self.assertEqual(sum(terms.values()), 576)
+        self.assertEqual(len(self.data['long_serving']), terms['5'])
+        for y in self.data['per_year']:
+            self.assertEqual(len(self.data['defeated'][str(y['year'])]), y['by_kind']['sve']['lost'])
+
+    def test_known_races(self):
+        """Zagreb 2021: Bandić, the 2017 winner, had died - not a defeat; Korčula
+        2025: the sitting gradonačelnica lost the runoff 49.9 : 50.1."""
+        names = lambda y: {d['name']: d for d in self.data['defeated'][y]}
+        self.assertNotIn('GRAD ZAGREB', names('2021'))
+        k = names('2025')['KORČULA']
+        self.assertEqual((k['incumbent']['share'], k['winner']['share'], k['round']), (49.9, 50.1, 2))
+
+
 class People(unittest.TestCase):
     """Person rows: curated splits hold, no party codes left in names."""
 
@@ -390,7 +421,7 @@ class Pages(unittest.TestCase):
     def test_spa_routes_serve_the_page(self):
         for path in ('/', '/politicar', '/prema-lokaciji', '/stranke', '/stranke/8-hdz', '/mjesto/439-klis',
                      '/predsjednicki-izbori', '/eu-parlamentarni-izbori', '/lokalni-izbori',
-                     '/rezultati-koalicije-sabor', '/zupanijski-dom', '/izlaznost', '/karta', '/snaga-stranaka', '/zene-u-politici'):
+                     '/rezultati-koalicije-sabor', '/zupanijski-dom', '/izlaznost', '/karta', '/snaga-stranaka', '/zene-u-politici', '/ponovni-izbor'):
             with self.subTest(path=path):
                 self.assertEqual(client.get(path).status_code, 200)
 

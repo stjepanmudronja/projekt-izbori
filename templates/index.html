@@ -82,6 +82,9 @@
             <li><a href="#" data-module="analytics-women">
                 <i class="bi bi-gender-female"></i> Žene u politici
             </a></li>
+            <li><a href="#" data-module="analytics-incumbency">
+                <i class="bi bi-arrow-repeat"></i> Ponovni izbor
+            </a></li>
         </ul>
     </div>
 </nav>
@@ -965,6 +968,60 @@
             </div>
         </div>
 
+        <!-- Incumbency: do načelnici, gradonačelnici and župani win again? -->
+        <div id="module-analytics-incumbency" class="module-panel">
+            <div class="card search-card p-3 mb-3">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Dobivaju li načelnici, gradonačelnici i župani ponovno izbore? Od 2009. biraju se izravno, pa za svake izbore znamo je li se onaj tko je pobijedio prošli put ponovno kandidirao u istom mjestu i je li opet pobijedio. Ispod su oni koji su izgubili na dužnosti i oni koji su na dužnosti od 2009.</p>
+                <div class="btn-group flex-wrap" role="group" id="incKind">
+                    <button type="button" class="btn btn-outline-primary active" data-inc-kind="sve">Svi</button>
+                    <button type="button" class="btn btn-outline-primary" data-inc-kind="opcina">Općine</button>
+                    <button type="button" class="btn btn-outline-primary" data-inc-kind="grad">Gradovi</button>
+                    <button type="button" class="btn btn-outline-primary" data-inc-kind="zupanija">Županije</button>
+                </div>
+            </div>
+            <div class="spinner-wrapper" id="incSpinner"><div class="spinner-border text-primary"></div></div>
+            <div id="incArea" style="display:none;">
+                <div class="row g-3 mb-3" id="incTiles"></div>
+                <div class="row g-3 mb-3">
+                    <div class="col-xl-7">
+                        <div class="card p-3 h-100">
+                            <h6 class="fw-bold mb-2">Što se dogodilo onima na dužnosti</h6>
+                            <div class="inc-chart"><canvas id="incChart"></canvas></div>
+                            <div class="small text-muted mt-2">Postotak mjesta po izborima. Na dužnosti je onaj tko je pobijedio na prethodnim izborima u tom mjestu.</div>
+                        </div>
+                    </div>
+                    <div class="col-xl-5">
+                        <div class="card p-3 h-100">
+                            <h6 class="fw-bold mb-2" id="incTermsTitle"></h6>
+                            <div class="inc-chart"><canvas id="incTermsChart"></canvas></div>
+                            <div class="small text-muted mt-2">Koliko su izbora zaredom u tom mjestu dobili sadašnji nositelji dužnosti.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Izgubili na dužnosti</h6>
+                        <select class="form-select form-select-sm" style="width:auto;" id="incYear" aria-label="Izbori"></select>
+                    </div>
+                    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                        <thead><tr><th>Mjesto</th><th>Na dužnosti</th><th class="text-end" title="Udio kojim je pobijedio/la na prethodnim izborima">Prošli put</th><th class="text-end">Sada</th><th>Pobijedio/la</th><th class="text-end">Udio</th></tr></thead>
+                        <tbody id="incDefeated"></tbody>
+                    </table></div>
+                </div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0" id="incLongTitle"></h6>
+                        <input type="search" class="form-control form-control-sm" style="width:14rem;" id="incSearch" placeholder="Traži mjesto ili ime" aria-label="Traži mjesto ili ime">
+                    </div>
+                    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                        <thead><tr><th>Mjesto</th><th>Dužnost</th><th>Ime</th><th class="text-end" id="incLongShareHead"></th></tr></thead>
+                        <tbody id="incLong"></tbody>
+                    </table></div>
+                </div>
+                <div class="small text-muted" style="font-size:0.78rem;">Samo iz rezultata izbora: ostavke, smrti i prijevremeni izbori između redovitih nisu poznati, pa je „na dužnosti” onaj tko je posljednji izabran. Pobjednik je prvi u odlučujućem (zadnjem) krugu. Općina koja je postala grad isto je mjesto.</div>
+            </div>
+        </div>
+
         <!-- Municipality map: every općina/grad coloured by an election's result -->
         <div id="module-analytics-map" class="module-panel">
             <div class="card search-card p-3 mb-3">
@@ -1062,6 +1119,7 @@
 <script src="{{ asset('js/home.js') }}"></script>
 <script src="{{ asset('js/party-strength.js') }}"></script>
 <script src="{{ asset('js/women.js') }}"></script>
+<script src="{{ asset('js/incumbency.js') }}"></script>
 <script src="{{ asset('js/place.js') }}"></script>
 <script src="{{ asset('js/router.js') }}"></script>
 <script src="{{ asset('js/person.js') }}"></script>

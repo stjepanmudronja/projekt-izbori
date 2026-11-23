@@ -810,3 +810,4 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .w-dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .4rem; vertical-align: middle; }
 .w-table tr.w-clickable { cursor: pointer; }
 .w-table td:not(:first-child) { white-space: nowrap; }
+.inc-chart { position: relative; height: 18rem; }
