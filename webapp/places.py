@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from flask import jsonify, request
 from elections.importers.name_utils import place_key, strip_diacritics
-from webapp.core import app, db, static_cache
+from webapp.core import app, data_cache, db, static_cache
 from webapp.models import (
     Candidacy,
     CandidateResult,
@@ -207,7 +207,7 @@ def _building_words(location):
     return {w[:4] for w in words if len(w) >= 4 and not re.fullmatch(r'[IVX]+', w)}
 
 
-_PLACE_CACHE = {}
+_PLACE_CACHE = data_cache({})
 
 
 _STREET_TYPES = {'ULICA', 'UL', 'CESTA', 'TRG', 'PUT', 'BB', 'KBR', 'BR', 'BROJ',
@@ -298,19 +298,18 @@ def _town_places(muni_ids):
     return places
 
 
-_ZAGREB_UNITS = None
+_ZAGREB_UNITS = data_cache({})
 
 
 def zagreb_sabor_units():
     """Sabor files Zagreb's stations under its electoral districts ("ZAGREB
     - VI. IZBORNA JEDINICA", "ZAGREB-JUGOISTOK") rather than GRAD ZAGREB.
     Every other municipality of county 21 is one of those."""
-    global _ZAGREB_UNITS
-    if _ZAGREB_UNITS is None:
-        _ZAGREB_UNITS = [m.id for m in Municipality.query.join(County)
+    if 'ids' not in _ZAGREB_UNITS:
+        _ZAGREB_UNITS['ids'] = [m.id for m in Municipality.query.join(County)
                          .filter(County.code == '21', Municipality.name != 'GRAD ZAGREB')
                          .filter(~Municipality.name.like('%SAŽETAK%'))]
-    return _ZAGREB_UNITS
+    return _ZAGREB_UNITS['ids']
 
 
 def town_muni_ids(municipality_id):
@@ -400,7 +399,7 @@ def stations_by_street(municipality_id):
 
 PLACE_EXEC_TYPES = {'Načelnik', 'Gradonačelnik'}
 PLACE_COUNCIL_TYPES = {'Općinsko vijeće', 'Gradsko vijeće', 'Kotarska skupština'}
-_PROFILE_CACHE = {}     # muni id -> (time, payload); ten minutes, as _town_places
+_PROFILE_CACHE = data_cache({})     # muni id -> (time, payload); ten minutes, as _town_places
 
 
 @app.route('/api/place/<int:muni_id>')

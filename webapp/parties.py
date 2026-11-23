@@ -6,7 +6,7 @@ import re
 from collections import defaultdict
 from flask import jsonify, request
 from elections.importers.name_utils import strip_diacritics
-from webapp.core import app, db, static_cache
+from webapp.core import app, data_cache, db, static_cache
 from webapp.models import Election, ElectionRound, ElectionType, ElectoralList, RegisteredParty
 from webapp.common import PARTY_OLD_NAMES, PARTY_PRINTED_ALIASES, party_wording_key
 from webapp.municipality_map import _map_party, _map_payload, _split_party
@@ -18,7 +18,7 @@ from webapp.municipality_map import _map_party, _map_payload, _split_party
 PARTY_LIST_TYPES = ('sabor', 'eu_parliament', 'local_municipal_council', 'local_city_council',
                     'local_county_assembly', 'local_kotar_assembly', 'sabor_zupanijski',
                     'sabor_dpv', 'sabor_vo', 'sabor_vur')
-_PARTY_CACHE = {}
+_PARTY_CACHE = data_cache({})
 # Town and municipal councils are one race in practice (the map shows them
 # together); a party's page shows them as one row.
 PARTY_KIND_MERGE = {'local_municipal_council': ('vijeca', 'Gradska i općinska vijeća'),
@@ -30,8 +30,16 @@ def _norm_party(text):
 
 
 def _party_links():
-    """Which register party each election list names, as leader (first-named)
-    or partner, cached until the server restarts.
+    """Which register party each election list names: {pid: [(list_id, role)]}."""
+    return _party_link_tables()[0]
+
+
+def _party_link_tables():
+    """(links, printed, ran_as): which register party each election list
+    names, as leader (first-named) or partner; the wordings each party was
+    printed under; and the old name a list ran under. Kept as one entry, so a
+    cache clear between two reads can never pair new links with no names; cached
+    until the data changes.
 
     A list's parties are its comma- or line-separated parts. Each is matched
     by, in turn: its whole name, its name without a trailing abbreviation
@@ -41,8 +49,9 @@ def _party_links():
     year, and not ceased before it), which is what tells apart an abbreviation
     used twice ("MOŽEMO!", 2017 and 2019); a part still matching two parties is
     left unlinked."""
-    if 'links' in _PARTY_CACHE:
-        return _PARTY_CACHE['links']
+    hit = _PARTY_CACHE.get('links')
+    if hit:
+        return hit
     parties = RegisteredParty.query.all()
     by_key = defaultdict(set)
     for p in parties:
@@ -122,10 +131,8 @@ def _party_links():
                 old_name = PARTY_OLD_NAMES.get(party_wording_key(part))
                 if old_name:
                     ran_as[(pid, list_id)] = old_name[1]
-    _PARTY_CACHE['links'] = links
-    _PARTY_CACHE['printed'] = printed
-    _PARTY_CACHE['ran_as'] = ran_as
-    return links
+    _PARTY_CACHE['links'] = (links, printed, ran_as)
+    return links, printed, ran_as
 
 
 def _party_list_votes():
@@ -134,8 +141,9 @@ def _party_list_votes():
     (121+) are a separate ballot and left out of both, and so are 1992's and
     1995's constituency races, cast on a second ballot beside the national
     list. Cached."""
-    if 'votes' in _PARTY_CACHE:
-        return _PARTY_CACHE['votes']
+    hit = _PARTY_CACHE.get('votes')
+    if hit is not None:
+        return hit
     sql = lambda q, **kw: db.session.execute(db.text(q), kw).fetchall()
     rows = sql("""
         select el.id, el.name, er.id, er.round_number, e.year, e.id, et.slug, et.name, coalesce(t.v, 0)
@@ -177,12 +185,13 @@ def _party_summary(p, links, lists):
 def parties_list():
     """Every party in the official register with how many elections it stood
     in (by the lists it led or joined)."""
-    if 'list' not in _PARTY_CACHE:
+    out = _PARTY_CACHE.get('list')
+    if out is None:
         links = _party_links()
         lists, _ = _party_list_votes()
-        _PARTY_CACHE['list'] = [_party_summary(p, links, lists)
-                                for p in RegisteredParty.query.order_by(RegisteredParty.name)]
-    return jsonify(_PARTY_CACHE['list'])
+        out = _PARTY_CACHE['list'] = [_party_summary(p, links, lists)
+                                      for p in RegisteredParty.query.order_by(RegisteredParty.name)]
+    return jsonify(out)
 
 
 @app.route('/api/stranke/<int:registry_number>')
@@ -194,9 +203,8 @@ def party_page(registry_number):
     p = RegisteredParty.query.filter_by(registry_number=registry_number).first()
     if not p:
         return jsonify({'error': 'Ta stranka nije u registru.'}), 404
-    links = _party_links()
+    links, _printed, ran_as = _party_link_tables()
     lists, totals = _party_list_votes()
-    ran_as = _PARTY_CACHE.get('ran_as', {})
     rows = defaultdict(lambda: {'led_votes': 0, 'led_lists': 0, 'partner_votes': 0, 'ran_as': set(),
                                 'partner_lists': 0, 'round_ids': set(), 'map_keys': set(), 'top_list': None})
     for list_id, role in links.get(p.id, []):
@@ -271,8 +279,9 @@ def party_strength():
     if any(k not in PARTY_STRENGTH_KINDS for k in kinds):
         return jsonify({'error': 'Nepoznata vrsta izbora.'}), 400
     key = ('strength', kind)
-    if key in _PARTY_CACHE:
-        return jsonify(_PARTY_CACHE[key])
+    hit = _PARTY_CACHE.get(key)
+    if hit is not None:
+        return jsonify(hit)
     slug_kind = {s: k for k in kinds for s in PARTY_STRENGTH_KINDS[k]['slugs']}
     links = _party_links()
     lists, totals = _party_list_votes()
@@ -287,7 +296,7 @@ def party_strength():
     parties = {p.id: p for p in RegisteredParty.query.all()}
     # A party is its registration and, where it ran under an older name, that
     # name (PARTY_OLD_NAMES): a renamed party's old name is its own line.
-    ran_as = _PARTY_CACHE.get('ran_as', {})
+    ran_as = _party_link_tables()[2]
     label = lambda key: key[1] or parties[key[0]].short_name or parties[key[0]].name
 
     # Each round-1 list of these kinds: its parties, leader first.

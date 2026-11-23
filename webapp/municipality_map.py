@@ -4,7 +4,7 @@
 import re
 from collections import defaultdict
 from flask import jsonify, request
-from webapp.core import app, db, static_cache
+from webapp.core import app, data_cache, db, static_cache
 from webapp.models import (
     Election,
     ElectionRound,
@@ -29,12 +29,12 @@ MAP_KINDS = {
                'slugs': ('local_municipal_council', 'local_city_council')},
 }
 MAP_TOP_PARTIES = 10
-_MAP_CACHE = {}
+_MAP_CACHE = data_cache({})
 _INDEPENDENT_PREFIXES = ('NEZAVISN', 'NEOVISN', 'KANDIDACIJSKA LISTA GRUPE', 'LISTA GRUPE BIRAČA', 'GRUPA BIRAČA')
 
 
 _NOT_ABBREVIATIONS = {'STRANKA', 'LISTA', 'NL'}
-_MAP_HEAD_ABBR = {}
+_MAP_HEAD_ABBR = data_cache({})
 
 
 def _split_party(first):
@@ -94,8 +94,9 @@ def map_elections():
     """The elections the map can show: per kind, the years (and rounds) with
     results in real municipalities — 1992/1995 Sabor and 1992/1997
     presidential exist only as national totals and are left out."""
-    if 'elections' in _MAP_CACHE:
-        return jsonify(_MAP_CACHE['elections'])
+    hit = _MAP_CACHE.get('elections')
+    if hit is not None:
+        return jsonify(hit)
     with_munis = {r for (r,) in db.session.query(TurnoutData.election_round_id)
                   .join(PollingStation, PollingStation.id == TurnoutData.polling_station_id)
                   .join(Municipality, Municipality.id == PollingStation.municipality_id)
@@ -137,8 +138,9 @@ def _map_votes(kind, year, rnd=1):
     election. Sabor's minority districts (121+) are left out and Zagreb's
     Sabor units count as Grad Zagreb."""
     cache_key = ('votes', kind, year, rnd)
-    if cache_key in _MAP_CACHE:
-        return _MAP_CACHE[cache_key]
+    hit = _MAP_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
     round_ids = [r for r, _, n in _map_rounds(kind, year) if n == rnd]
     if not round_ids:
         return None
@@ -188,8 +190,9 @@ def _map_payload(kind, year, rnd=1):
     """The map's figures for one election (see map_data), cached; None when
     there is no such election."""
     cache_key = (kind, year, rnd)
-    if cache_key in _MAP_CACHE:
-        return _MAP_CACHE[cache_key]
+    hit = _MAP_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
     mv = _map_votes(kind, year, rnd)
     if mv is None:
         return None

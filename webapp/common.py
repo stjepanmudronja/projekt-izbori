@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from sqlalchemy import any_, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY
 from elections.importers.name_utils import strip_diacritics
-from webapp.core import db
+from webapp.core import data_cache, db
 from webapp.models import (
     Candidacy,
     CandidateResult,
@@ -173,7 +173,7 @@ def sabor_total_seats(year):
 
 
 # Cache of Sabor seat winners per election round (data is static after import).
-_SABOR_SEAT_WINNERS_CACHE = {}
+_SABOR_SEAT_WINNERS_CACHE = data_cache({})
 
 
 def sabor_seat_winner_candidacy_ids(er_id):
@@ -182,8 +182,9 @@ def sabor_seat_winner_candidacy_ids(er_id):
     Mirrors the D'Hondt + preferential-vote allocation in sabor_seats() but
     tracks the chosen candidacies at the individual level so the politician
     page can flag who actually entered the Sabor."""
-    if er_id in _SABOR_SEAT_WINNERS_CACHE:
-        return _SABOR_SEAT_WINNERS_CACHE[er_id]
+    hit = _SABOR_SEAT_WINNERS_CACHE.get(er_id)
+    if hit is not None:
+        return hit
 
     MINORITY_SEATS = {121: 3, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1}
     PREF_THRESHOLD_PCT = 10.0

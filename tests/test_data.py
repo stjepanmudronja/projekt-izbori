@@ -204,11 +204,11 @@ class PartyNames(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from webapp.parties import _party_links, _PARTY_CACHE
+        from webapp.parties import _party_links, _party_link_tables
         from webapp.models import RegisteredParty
         _party_links()
         regs = {p.registry_number: p.id for p in RegisteredParty.query.all()}
-        cls.printed = staticmethod(lambda reg: {name.upper() for (name, _y) in _PARTY_CACHE['printed'].get(regs[reg], {})})
+        cls.printed = staticmethod(lambda reg: {name.upper() for (name, _y) in _party_link_tables()[1].get(regs[reg], {})})
         cls.lines = {}                            # line id -> years with a point, Sabor and councils together
         for kind in ('sabor', 'vijeca'):
             for p in get(f'/api/analytics/party-strength?kind={kind}')['parties']:
@@ -266,6 +266,56 @@ class MapSwing(unittest.TestCase):
         self.assertEqual(client.get('/api/map/swing?kind=sabor&year=2024&base_kind=sabor&base_year=2020&party=XX').status_code, 404)
         self.assertEqual(client.get('/api/map/swing?kind=sabor&year=2099&base_kind=sabor&base_year=2020').status_code, 404)
         self.assertEqual(client.get('/api/map/swing?kind=nema&year=2024&base_kind=sabor&base_year=2020').status_code, 400)
+
+
+class CacheClearing(unittest.TestCase):
+    """New data empties the caches by itself: no restart after an import."""
+
+    def test_every_module_cache_is_registered(self):
+        """A module-level dict a view keeps results in must be data_cache(...),
+        or it would keep serving the data from before an import."""
+        unregistered = []
+        for path in sorted((ROOT / 'webapp').glob('*.py')):
+            if path.name == 'core.py':            # the registry itself
+                continue
+            for n, line in enumerate(path.read_text().splitlines(), 1):
+                if re.match(r'_\w*(CACHE|cache|_UNITS)\w* = ', line) and 'data_cache(' not in line:
+                    unregistered.append(f'{path.name}:{n}: {line.strip()}')
+        self.assertEqual(unregistered, [])
+
+    def test_a_write_clears_everything_once(self):
+        from webapp import core
+        versions = iter([100, 100, 101, 101])
+        hooks, ran = core._AFTER_CLEAR[:], []
+        cache = core.data_cache({'x': 1})
+        original = core.data_version
+        core.data_version = lambda: next(versions)
+        core._AFTER_CLEAR[:] = [lambda: ran.append(1)]   # not the real warm-up
+        core._data_check['version'] = None
+        try:
+            self.assertFalse(core.check_data_changed(force=True))   # first look: the mark
+            self.assertFalse(core.check_data_changed(force=True))   # unchanged
+            self.assertEqual(cache, {'x': 1})
+            self.assertTrue(core.check_data_changed(force=True))    # a write
+            self.assertEqual((cache, ran), ({}, [1]))
+            cache['x'] = 2
+            self.assertFalse(core.check_data_changed(force=True))   # nothing new
+            self.assertEqual(cache, {'x': 2})
+        finally:
+            core.data_version = original
+            core._AFTER_CLEAR[:] = hooks
+            core._DATA_CACHES.remove(cache.clear)
+            core._data_check['version'] = None
+
+    def test_static_cache_is_registered(self):
+        from webapp import core
+        from webapp.sabor import sabor_seats
+        self.assertIn(sabor_seats.cache.clear, core._DATA_CACHES)
+
+    def test_data_version_reads(self):
+        from webapp.core import data_version
+        with app.app_context():
+            self.assertGreaterEqual(data_version(), 0)
 
 
 class People(unittest.TestCase):

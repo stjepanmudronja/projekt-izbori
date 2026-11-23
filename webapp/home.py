@@ -8,14 +8,14 @@ import time
 from collections import defaultdict
 from flask import jsonify
 from elections.importers.name_utils import normalize_person_name
-from webapp.core import app, db
+from webapp.core import after_data_change, app, data_cache, data_generation, db
 from webapp.models import County, Election, ElectionRound, ElectionType, Municipality, Person
 from webapp.common import SABOR_1990_SLUGS, sabor_seat_winner_candidacy_ids
 from webapp.people import person_detail
 from webapp.parties import _party_links, _party_list_votes
 
 
-_HOME_CACHE = {}            # one payload; the data only changes on import
+_HOME_CACHE = data_cache({})  # one payload; emptied when the data changes
 HOME_EXEC_SLUGS = ('local_mayor', 'local_city_mayor', 'local_county_prefect')
 HOME_OFFICE = {'local_mayor': 'Načelnik', 'local_city_mayor': 'Gradonačelnik',
                'local_county_prefect': 'Župan'}
@@ -33,7 +33,12 @@ def _rebuild_home():
             return
     try:
         with app.app_context():
-            _HOME_CACHE['payload'] = (time.time(), _home_highlights())
+            for _attempt in range(3):         # data changed mid-build: build again
+                generation = data_generation()
+                payload = (time.time(), _home_highlights())
+                if generation == data_generation():
+                    _HOME_CACHE['payload'] = payload
+                    break
     finally:
         _HOME_LOCK.release()
 
@@ -50,9 +55,10 @@ def home_highlights():
             threading.Thread(target=_rebuild_home, daemon=True).start()
         return jsonify(hit[1])
     _rebuild_home()
-    if 'payload' not in _HOME_CACHE:          # the other thread's rebuild failed
-        _HOME_CACHE['payload'] = (time.time(), _home_highlights())
-    return jsonify(_HOME_CACHE['payload'][1])
+    hit = _HOME_CACHE.get('payload')
+    if hit is None:                           # the other thread's rebuild failed (or new data)
+        hit = _HOME_CACHE['payload'] = (time.time(), _home_highlights())
+    return jsonify(hit[1])
 
 
 def _home_highlights():
@@ -376,3 +382,10 @@ def _warm_home_cache():
             _party_list_votes()
         except Exception as exc:
             app.logger.warning('caches not precomputed: %s', exc)
+
+
+@after_data_change
+def _rewarm_after_import():
+    """New data: fill the same caches again in the background, so the first
+    visitor after an import does not wait for them."""
+    threading.Thread(target=_warm_home_cache, daemon=True).start()

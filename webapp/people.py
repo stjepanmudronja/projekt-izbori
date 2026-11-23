@@ -6,7 +6,7 @@ from datetime import date as _date
 from flask import jsonify, request
 from elections.importers.name_utils import normalize_person_name
 from elections.sabor_roles import SABOR_ROLES, ROLE_TITLES, ROLE_ORDER
-from webapp.core import app, db
+from webapp.core import app, data_cache, db
 from webapp.models import (
     Candidacy,
     CandidateResult,
@@ -511,7 +511,7 @@ for _entry in SABOR_ROLES:
 # only Person of that name stood in local elections, it is far likelier a
 # namesake than the minister (Ivica Kirin, Predrag Šustar…), and is left out.
 NATIONAL_SLUGS = SABOR_ROLE_SLUGS | {'sabor_zupanijski', 'eu_parliament', 'presidential'}
-_national_cache = {}
+_national_cache = data_cache({})
 
 
 def _has_national_record(person_id):
