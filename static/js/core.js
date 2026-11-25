@@ -49,6 +49,39 @@ const MODULE_SLUGS = {
 };
 const SLUG_TO_MODULE = Object.fromEntries(Object.entries(MODULE_SLUGS).map(([k, v]) => [v, k]));
 
+// ---- The browser tab's title: the page, or the politician / town / party on show ----
+// PAGE_TITLES comes from the server (webapp/meta.py, written into the page), so
+// the tab reads the same as the title a shared link shows before any script runs.
+const DOC_SITE = 'Projekt Izbori';
+const DOC_SMALL_WORDS = new Set(['i', 'u', 'na', 'za', 'od', 'do', 's', 'sa', 'iz', 'po', 'pri', 'de', 'di', 'la', 'del']);
+// 'ZORAN MILANOVIĆ' -> 'Zoran Milanović' (webapp/meta.py name_case).
+function docNameCase(s) {
+    return (s || '').toLowerCase().split(/\s+/).filter(Boolean).map((w, i) =>
+        i && DOC_SMALL_WORDS.has(w) ? w : w.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-')).join(' ');
+}
+// 'HRVATSKA DEMOKRATSKA ZAJEDNICA' -> 'Hrvatska demokratska zajednica' (webapp/meta.py party_case).
+function docPartyCase(s) {
+    return (s || '').toLowerCase().split(/\s+/).filter(Boolean).map((w, i) =>
+        i === 0 || /^(hrvatsk|republik|europ|zagreb|dalmacij|istr|slavonij)/.test(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(' ');
+}
+function updateDocTitle() {
+    const panel = document.querySelector('.module-panel.active');
+    const mod = panel ? panel.id.replace(/^module-/, '') : 'home';
+    const titles = window.PAGE_TITLES || {};
+    let name = titles[MODULE_SLUGS[mod]] || null;
+    if (mod === 'person' && typeof _compareItems !== 'undefined' && _compareItems.person.length) {
+        const names = _compareItems.person.map(it => docNameCase(it.name.replace(/\s*\(.*\)$/, '')));
+        name = names.length > 1 ? names.slice(0, -1).join(', ') + ' i ' + names[names.length - 1] : names[0];
+    } else if (mod === 'place' && typeof _placeShown !== 'undefined' && _placeShown) {
+        name = docNameCase(_placeShown.name);
+    } else if (mod === 'parties' && typeof _partyShown !== 'undefined' && _partyShown) {
+        const full = docPartyCase(_partyShown.name);
+        name = _partyShown.short_name ? `${full} (${_partyShown.short_name})` : full;
+    }
+    const title = !name || name === DOC_SITE ? DOC_SITE : `${name} · ${DOC_SITE}`;
+    if (document.title !== title) document.title = title;
+}
+
 function activateModule(mod, opts) {
     opts = opts || {};
     const link = document.querySelector(`.sidebar-nav a[data-module="${mod}"]`);
@@ -71,6 +104,7 @@ function activateModule(mod, opts) {
     else stationSubnav.classList.remove('open');
 
     if (moduleTitles[mod]) moduleTitle.innerHTML = moduleTitles[mod];
+    updateDocTitle();
     // One PDF export for every page; Sabor and EU keep their own, richer ones.
     document.getElementById('pdfExportBtn').style.display = PDF_SKIP_MODULES.has(mod) ? 'none' : '';
 
@@ -133,6 +167,7 @@ let _restoringUrl = null;     // the path being restored, while it loads
 // Put the politicians on show in the address bar, so the page can be
 // bookmarked or sent. Not while a link is being restored.
 function syncPersonUrl() {
+    updateDocTitle();
     if (_restoringUrl) return;
     const panel = document.getElementById('module-person');
     if (!panel || !panel.classList.contains('active')) return;

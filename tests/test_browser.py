@@ -25,7 +25,7 @@ from werkzeug.serving import make_server
 from app import app
 
 # Console messages that are not the site's fault.
-IGNORED = ('favicon.ico',)
+IGNORED = ()
 
 
 def setUpModule():
@@ -273,6 +273,19 @@ class Interactions(BrowserTestCase):
         p.js("document.querySelector('[data-inc-kind=\"zupanija\"]').click()")
         self.assertLess(p.js("document.querySelectorAll('#incDefeated tr').length"), all_rows)
         self.assertIn('župani', p.js("document.getElementById('incLongTitle').textContent"))
+        self.assertNoErrors(p)
+
+    def test_tab_title_follows_what_is_shown(self):
+        p = self.open('/mjesto/439-klis')
+        p.wait("document.title === 'Klis · Projekt Izbori'", timeout=60000)
+        p.js("activateModule('analytics-incumbency', { pushState: true })")
+        self.assertEqual(p.js("document.title"), 'Ponovni izbor · Projekt Izbori')
+        p.js("activateModule('parties', { pushState: true, focusInput: false }); openParty(8, { push: true })")
+        p.wait("document.title === 'Hrvatska demokratska zajednica (HDZ) · Projekt Izbori'", timeout=30000)
+        p.js("activateModule('person', { pushState: true, focusInput: false }); loadDetail('person', 1952)")
+        p.wait("document.title === 'Jakov Vetma · Projekt Izbori'", timeout=30000)
+        p.js("activateModule('home', { pushState: true, focusInput: false })")
+        self.assertEqual(p.js("document.title"), 'Projekt Izbori')
         self.assertNoErrors(p)
 
     def test_map_swing(self):

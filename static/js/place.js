@@ -43,6 +43,7 @@ async function loadPlaceMunis(countyId, selectId) {
 }
 function clearPlace() {
     _placeShown = null;
+    updateDocTitle();
     document.getElementById('placeContent').innerHTML = '';
 }
 async function openPlace(id, opts) {
@@ -63,6 +64,7 @@ async function openPlace(id, opts) {
     }
     spinner.classList.remove('show');
     _placeShown = { id: d.id, name: d.name };
+    updateDocTitle();
     content.innerHTML = renderPlace(d);
     // Keep the pickers on the town shown, also when it came from a link.
     const selC = document.getElementById('placeCounty');

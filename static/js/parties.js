@@ -83,12 +83,14 @@ async function openParty(n, opts = {}) {
     }
     if (d.error) { closeParty({ push: false }); return; }
     _partyShown = d;
+    updateDocTitle();
     if (opts.push) history.pushState({ mod: 'parties' }, '', partyPath(d));
     renderPartyDetail(d);
 }
 
 function closeParty(opts = {}) {
     _partyShown = null;
+    updateDocTitle();
     if (_partyChart) { _partyChart.destroy(); _partyChart = null; }
     document.getElementById('partyDetail').style.display = 'none';
     document.getElementById('partyControls').style.display = '';

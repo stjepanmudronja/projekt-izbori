@@ -3,7 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Projekt Izbori</title>
+    {% set m = meta or {'title': 'Projekt Izbori', 'description': '', 'name': 'Projekt Izbori'} %}
+    <title>{{ m.title }}</title>
+    <meta name="description" content="{{ m.description }}">
+    <link rel="canonical" href="{{ request.base_url }}">
+    <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ asset('favicon-32.png') }}" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Projekt Izbori">
+    <meta property="og:locale" content="hr_HR">
+    <meta property="og:title" content="{{ m.title }}">
+    <meta property="og:description" content="{{ m.description }}">
+    <meta property="og:url" content="{{ request.base_url }}">
+    <meta property="og:image" content="{{ request.url_root.rstrip('/') }}{{ asset('og-image.png') }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Projekt Izbori — hrvatski izborni podaci od 1990.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ m.title }}">
+    <meta name="twitter:description" content="{{ m.description }}">
+    <meta name="twitter:image" content="{{ request.url_root.rstrip('/') }}{{ asset('og-image.png') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
@@ -1112,6 +1133,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>window.PAGE_TITLES = {{ page_titles|tojson }};</script>
 <script src="{{ asset('js/core.js') }}"></script>
 <script src="{{ asset('js/parties.js') }}"></script>
 <script src="{{ asset('js/municipality-map.js') }}"></script>

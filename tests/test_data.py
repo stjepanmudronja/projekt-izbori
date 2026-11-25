@@ -446,6 +446,57 @@ class Pages(unittest.TestCase):
                     self.assertIn(slugs[mod], SPA_ROUTES)
 
 
+class PageMeta(unittest.TestCase):
+    """Each page carries its own title, description and link preview
+    (webapp/meta.py), since a crawler reading a shared link runs no script."""
+
+    def head(self, path):
+        html = client.get(path).get_data(as_text=True)
+        tag = lambda pat: (re.search(pat, html) or [None, None])[1]
+        return {'title': tag(r'<title>(.*?)</title>'), 'description': tag(r'name="description" content="(.*?)"'),
+                'og_title': tag(r'property="og:title" content="(.*?)"'), 'og_image': tag(r'property="og:image" content="(.*?)"')}
+
+    def test_every_route_has_its_own_title(self):
+        from app import SPA_ROUTES
+        from webapp.meta import PAGE_META
+        seen = {}
+        for slug in SPA_ROUTES:
+            with self.subTest(slug=slug):
+                self.assertIn(slug, PAGE_META)                      # a new page needs its title
+                h = self.head(f'/{slug}')
+                self.assertTrue(h['title'].endswith('· Projekt Izbori'))
+                self.assertGreater(len(h['description']), 40)
+                self.assertEqual(h['og_title'], h['title'])
+                self.assertNotIn(h['title'], seen, seen.get(h['title']))
+                seen[h['title']] = slug
+        self.assertEqual(self.head('/')['title'], 'Projekt Izbori')
+
+    def test_deep_links_name_what_they_show(self):
+        self.assertEqual(self.head('/politicar/1952-jakov-vetma')['title'], 'Jakov Vetma · Projekt Izbori')
+        self.assertEqual(self.head('/politicar/1952-x/5-y')['title'], 'Jakov Vetma i Zoran Milanović · Projekt Izbori')
+        klis = self.head('/mjesto/439-klis')
+        self.assertEqual(klis['title'], 'Klis · Projekt Izbori')
+        self.assertIn('Općina Klis, Splitsko-dalmatinska županija', klis['description'])
+        self.assertEqual(self.head('/stranke/8-hdz')['title'], 'Hrvatska demokratska zajednica (HDZ) · Projekt Izbori')
+        # An id that does not exist still opens the page, with the section's title.
+        self.assertEqual(self.head('/mjesto/999999-nema')['title'], 'Općine i gradovi · Projekt Izbori')
+        self.assertEqual(self.head('/politicar/nista')['title'], 'Političari · Projekt Izbori')
+
+    def test_icons_and_preview_are_served(self):
+        img = self.head('/')['og_image']
+        self.assertTrue(img.startswith('http') and 'og-image.png' in img)
+        for path, mime in (('/favicon.ico', 'image/png'), ('/static/favicon.svg', 'image/svg+xml'),
+                           ('/static/favicon-32.png', 'image/png'), ('/static/apple-touch-icon.png', 'image/png'),
+                           ('/static/og-image.png', 'image/png')):
+            with self.subTest(path=path):
+                r = client.get(path)
+                self.assertEqual(r.status_code, 200)
+                self.assertEqual(r.mimetype, mime)
+                r.close()
+        png = (ROOT / 'static' / 'og-image.png').read_bytes()
+        self.assertEqual((int.from_bytes(png[16:20], 'big'), int.from_bytes(png[20:24], 'big')), (1200, 630))
+
+
 class FrontendFiles(unittest.TestCase):
     """The site script is split into static/js/*.js files that share one
     global scope and load in the order templates/index.html lists them."""
