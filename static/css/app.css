@@ -811,3 +811,15 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .w-table tr.w-clickable { cursor: pointer; }
 .w-table td:not(:first-child) { white-space: nowrap; }
 .inc-chart { position: relative; height: 18rem; }
+.inc-map-wrap { position: relative; }
+.inc-map svg { width: 100%; height: auto; max-height: 26rem; display: block; }
+.inc-map path { stroke: #fff; stroke-width: 1.2; stroke-linejoin: round; cursor: pointer; transition: fill .15s; }
+.inc-map path:hover { stroke: #1a1a2e; stroke-width: 2; }
+.inc-map path.selected { stroke: #1a1a2e; stroke-width: 2.6; }
+.inc-legend { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: #6c757d; margin-top: .4rem; flex-wrap: wrap; }
+.inc-legend .bar { width: 10rem; height: .6rem; border-radius: 3px; }
+.inc-legend .none { width: .9rem; height: .6rem; border-radius: 2px; background: #e9ecef; margin-left: .5rem; }
+.inc-county-table tbody tr { cursor: pointer; }
+.inc-county-table tbody tr.selected td { background: #e3f2f4; font-weight: 600; }
+.inc-county-table .inc-swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -1px; }
+.inc-county-filter .badge { font-weight: 500; margin-left: .5rem; cursor: pointer; }

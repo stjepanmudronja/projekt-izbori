@@ -388,6 +388,28 @@ class Incumbency(unittest.TestCase):
         self.assertEqual((k['incumbent']['share'], k['winner']['share'], k['round']), (49.9, 50.1, 2))
 
 
+    def test_counties_add_up_to_the_country(self):
+        d = self.data
+        self.assertEqual(len(d['counties']), 21)
+        for row in d['per_year']:
+            per = d['by_county'][str(row['year'])]
+            for kind, total in row['by_kind'].items():
+                with self.subTest(year=row['year'], kind=kind):
+                    for k in ('races', 'won', 'lost', 'did_not_run'):
+                        self.assertEqual(sum(c.get(kind, {}).get(k, 0) for c in per.values()), total[k])
+
+    def test_close_calls(self):
+        d = self.data
+        for y, rows in d['close'].items():
+            margins = [r['margin'] for r in rows]
+            self.assertEqual(margins, sorted(margins))
+            self.assertTrue(all(0 <= m < d['close_margin'] for m in margins))
+            self.assertTrue(all(r['votes_ahead'] > 0 and r['county'] for r in rows))
+        # Varaždinska 2025: Stričak kept the county by 18 votes in the runoff.
+        top = d['close']['2025'][0]
+        self.assertEqual((top['name'], top['incumbent']['name'], top['votes_ahead'], top['round']),
+                         ('VARAŽDINSKA ŽUPANIJA', 'ANĐELKO STRIČAK', 18, 2))
+
 class People(unittest.TestCase):
     """Person rows: curated splits hold, no party codes left in names."""
 

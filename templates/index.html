@@ -992,7 +992,7 @@
         <!-- Incumbency: do načelnici, gradonačelnici and župani win again? -->
         <div id="module-analytics-incumbency" class="module-panel">
             <div class="card search-card p-3 mb-3">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">Dobivaju li načelnici, gradonačelnici i župani ponovno izbore? Od 2009. biraju se izravno, pa za svake izbore znamo je li se onaj tko je pobijedio prošli put ponovno kandidirao u istom mjestu i je li opet pobijedio. Ispod su oni koji su izgubili na dužnosti i oni koji su na dužnosti od 2009.</p>
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Dobivaju li načelnici, gradonačelnici i župani ponovno izbore? Od 2009. biraju se izravno, pa za svake izbore znamo je li se onaj tko je pobijedio prošli put ponovno kandidirao u istom mjestu i je li opet pobijedio. Karta i tablica pokazuju to po županijama (klik na županiju suzi popise na nju), a ispod su tijesne pobjede, oni koji su izgubili na dužnosti i oni koji su na dužnosti od 2009.</p>
                 <div class="btn-group flex-wrap" role="group" id="incKind">
                     <button type="button" class="btn btn-outline-primary active" data-inc-kind="sve">Svi</button>
                     <button type="button" class="btn btn-outline-primary" data-inc-kind="opcina">Općine</button>
@@ -1021,7 +1021,37 @@
                 </div>
                 <div class="card p-3 mb-3">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                        <h6 class="fw-bold mb-0">Izgubili na dužnosti</h6>
+                        <h6 class="fw-bold mb-0">Po županijama</h6>
+                        <select class="form-select form-select-sm" style="width:auto;" id="incCountyYear" aria-label="Izbori za kartu"></select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="inc-map-wrap"><div id="incMap" class="inc-map"></div><div class="map-tooltip" id="incMapTip"></div></div>
+                            <div class="inc-legend" id="incMapLegend"></div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 small inc-county-table">
+                                <thead><tr><th>Županija</th><th class="text-end" title="Od onih koji su se ponovno kandidirali">Ponovno izabrani</th><th class="text-end">Izgubili</th><th class="text-end">Nisu se kandidirali</th><th class="text-end">Mjesta</th></tr></thead>
+                                <tbody id="incCounties"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2" id="incCountyNote">Udio ponovno izabranih od onih koji su se ponovno kandidirali. Županija obuhvaća svoje općine i gradove te izbor župana. Grad Zagreb ima samo jedno takvo mjesto (gradonačelnik), pa je njegov postotak 0 ili 100 %. Klikni županiju na karti ili u tablici: popisi ispod tada prikazuju samo nju.</div>
+                </div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Tijesne pobjede<span class="inc-county-filter"></span></h6>
+                        <select class="form-select form-select-sm" style="width:auto;" id="incCloseYear" aria-label="Izbori za tijesne pobjede"></select>
+                    </div>
+                    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                        <thead><tr><th>Mjesto</th><th>Na dužnosti, ponovno izabran/a</th><th class="text-end">Udio</th><th>Drugi/a</th><th class="text-end">Udio</th><th class="text-end" title="Razlika u postotnim bodovima i u glasovima">Razlika</th></tr></thead>
+                        <tbody id="incClose"></tbody>
+                    </table></div>
+                    <div class="small text-muted mt-2" id="incCloseNote"></div>
+                </div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Izgubili na dužnosti<span class="inc-county-filter"></span></h6>
                         <select class="form-select form-select-sm" style="width:auto;" id="incYear" aria-label="Izbori"></select>
                     </div>
                     <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
@@ -1031,7 +1061,7 @@
                 </div>
                 <div class="card p-3 mb-3">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                        <h6 class="fw-bold mb-0" id="incLongTitle"></h6>
+                        <h6 class="fw-bold mb-0"><span id="incLongTitle"></span><span class="inc-county-filter"></span></h6>
                         <input type="search" class="form-control form-control-sm" style="width:14rem;" id="incSearch" placeholder="Traži mjesto ili ime" aria-label="Traži mjesto ili ime">
                     </div>
                     <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">

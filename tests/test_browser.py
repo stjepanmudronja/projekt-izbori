@@ -273,6 +273,20 @@ class Interactions(BrowserTestCase):
         p.js("document.querySelector('[data-inc-kind=\"zupanija\"]').click()")
         self.assertLess(p.js("document.querySelectorAll('#incDefeated tr').length"), all_rows)
         self.assertIn('župani', p.js("document.getElementById('incLongTitle').textContent"))
+        # By county: the map is coloured, and a county narrows every list to it.
+        p.js("document.querySelector('[data-inc-kind=\"sve\"]').click()")
+        p.wait("document.querySelectorAll('#incMap path[id^=\"HR-\"]').length === 21")
+        self.assertEqual(p.js("document.querySelectorAll('#incCounties tr').length"), 21)
+        self.assertTrue(p.js("[...document.querySelectorAll('#incMap path[id^=\"HR-\"]')].every(x => x.style.fill.startsWith('rgb'))"))
+        p.js("document.getElementById('incCloseYear').value = '2025'; renderIncClose()")
+        all_close = p.js("document.querySelectorAll('#incClose tr').length")
+        p.js("document.querySelector('#incMap #HR-05').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+        self.assertEqual(p.js("_inc.county"), '05')
+        self.assertLess(p.js("document.querySelectorAll('#incClose tr').length"), all_close)
+        self.assertIn('VARAŽDINSKA', p.js("document.getElementById('incClose').textContent"))
+        p.js("document.querySelector('.inc-county-filter .badge').click()")
+        self.assertIsNone(p.js("_inc.county"))
+        self.assertEqual(p.js("document.querySelectorAll('#incClose tr').length"), all_close)
         self.assertNoErrors(p)
 
     def test_tab_title_follows_what_is_shown(self):
