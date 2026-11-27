@@ -30,6 +30,7 @@ PAGE_META = {
     'snaga-stranaka': ('Snaga stranaka kroz vrijeme', 'Udio glasova svake stranke na izborima za Sabor, Europski parlament, vijeća i skupštine kroz godine.'),
     'zene-u-politici': ('Žene u politici', 'Koliko je žena među kandidatima i izabranima na hrvatskim izborima: Sabor, Europski parlament, predsjednik, gradonačelnici i župani, po godinama i strankama.'),
     'ponovni-izbor': ('Ponovni izbor', 'Dobivaju li načelnici, gradonačelnici i župani ponovno izbore? Svi lokalni izbori od 2009.: tko je ponovno izabran, tko je izgubio i tko je na dužnosti od 2009.'),
+    'prelasci': ('Prelasci između stranaka', 'Političari koji su na izborima za Sabor i Europski parlament nastupili za jednu stranku, a zatim za drugu: tko je prešao, iz koje stranke u koju i kada.'),
 }
 
 _SMALL = {'i', 'u', 'na', 'za', 'od', 'do', 's', 'sa', 'iz', 'po', 'pri', 'de', 'di', 'la', 'del'}

@@ -264,6 +264,14 @@ class Interactions(BrowserTestCase):
         p.js("document.querySelector('[data-w-party=\"eu-2019\"]').click()")
         self.assertEqual(p.js("document.getElementById('wPartyElection').value"), 'eu-2019')
         self.assertGreater(p.js("Chart.getChart('wPartyChart').data.labels.length"), 3)
+        # The finer cuts: offices, place on the list, the county map, list leaders.
+        self.assertEqual(p.js("document.querySelectorAll('#wOffices tr').length"), 5)
+        self.assertEqual(p.js("Chart.getChart('wPosChart').data.labels.length"), 3)
+        p.wait("document.querySelectorAll('#wMap path[id^=\"HR-\"]').length === 21")
+        self.assertEqual(p.js("document.querySelectorAll('#wCounties tr').length"), 21)
+        self.assertTrue(p.js("[...document.querySelectorAll('#wMap path[id^=\"HR-\"]')].every(x => x.style.fill.startsWith('rgb'))"))
+        p.js("document.getElementById('wCountyYear').value = 'all'; renderWomenCounties()")
+        self.assertEqual(p.js("document.querySelectorAll('#wLeaders tr').length"), 3)
         self.assertNoErrors(p)
 
     def test_incumbency_page(self):
@@ -287,6 +295,33 @@ class Interactions(BrowserTestCase):
         p.js("document.querySelector('.inc-county-filter .badge').click()")
         self.assertIsNone(p.js("_inc.county"))
         self.assertEqual(p.js("document.querySelectorAll('#incClose tr').length"), all_close)
+        # By municipality: every općina and grad coloured by its outcome, the
+        # legend counting each place once (island towns are drawn in pieces).
+        p.wait("_inc.placesYear === '2025' && document.querySelector('#incMuniLegend').textContent.includes('556')", timeout=60000)
+        self.assertEqual(p.js("new Set([...document.querySelectorAll('#incMuniMap path')].filter(x => x.style.fill !== 'rgb(233, 236, 239)').map(x => x.dataset.id)).size"), 556)
+        p.js("document.querySelector('[data-inc-kind=\"grad\"]').click()")
+        self.assertIn('128 gradova', p.js("document.getElementById('incMuniLegend').textContent"))
+        p.js("document.getElementById('incMuniYear').value = '2013'")
+        p.js("document.getElementById('incMuniYear').dispatchEvent(new Event('change'))")
+        p.wait("_inc.placesYear === '2013'", timeout=30000)
+        self.assertNoErrors(p)
+
+    def test_switchers_page(self):
+        p = self.open('/prelasci')
+        p.wait("document.getElementById('swArea').style.display === '' && document.querySelectorAll('#swPeople tr').length > 10", timeout=60000)
+        self.assertEqual(p.js("document.title"), 'Prelasci između stranaka · Projekt Izbori')
+        elected = p.js("swPeople().length")
+        p.js("document.querySelector('[data-sw-who=\"all\"]').click()")
+        self.assertGreater(p.js("swPeople().length"), elected)
+        # A move in the table narrows the list to the people who made it.
+        p.js("document.querySelector('#swFlows tr[data-sw-flow]').click()")
+        n = p.js("swPeople().filter(swMatches).length")
+        self.assertEqual(p.js("document.querySelectorAll('#swPeople tr').length"), min(n, 60))
+        self.assertTrue(p.js("!!document.querySelector('#swFilter .badge')"))
+        p.js("document.querySelector('#swFilter .badge').click()")
+        self.assertIsNone(p.js("_sw.filter"))
+        p.js("const s = document.getElementById('swSearch'); s.value = 'Penava'; s.dispatchEvent(new Event('input'))")
+        self.assertIn('Penava', p.js("document.getElementById('swPeople').textContent"))
         self.assertNoErrors(p)
 
     def test_tab_title_follows_what_is_shown(self):

@@ -5,7 +5,8 @@
 
 const INC_COLORS = { won: '#0c8599', lost: '#e8590c', did_not_run: '#adb5bd' };
 const INC_KIND_LABEL = { sve: 'svi', opcina: 'načelnici', grad: 'gradonačelnici', zupanija: 'župani' };
-const _inc = { ready: false, data: null, kind: 'sve', chart: null, termsChart: null, county: null };
+const _inc = { ready: false, data: null, kind: 'sve', chart: null, termsChart: null, county: null,
+               places: {}, placesYear: null, muniReady: false };
 // Map: re-election rate, one hue light -> dark (the chart's "won" teal).
 const INC_MAP_LO = [227, 244, 246], INC_MAP_HI = [8, 92, 107], INC_MAP_NONE = '#e9ecef';
 
@@ -49,8 +50,12 @@ async function initIncumbency() {
     document.getElementById('incArea').addEventListener('click', e => {
         if (e.target.closest('.inc-county-filter .badge')) setIncCounty(null);
     });
+    const my = document.getElementById('incMuniYear');
+    my.innerHTML = years.map(y => `<option value="${y}">${y}.</option>`).join('');
+    my.addEventListener('change', loadIncPlaces);
     await loadIncMap();
     renderIncumbency();
+    loadIncMuniMap();               // the outlines are large: after the rest is on screen
 }
 
 function renderIncumbency() {
@@ -58,6 +63,7 @@ function renderIncumbency() {
     renderIncChart();
     renderIncTerms();
     renderIncCounties();
+    renderIncMuni();
     renderIncClose();
     renderIncDefeated();
     renderIncLong();
@@ -159,6 +165,7 @@ function renderIncCounties() {
 function setIncCounty(code) {
     _inc.county = code && code !== _inc.county ? code : null;
     renderIncCounties();
+    renderIncMuni();
     renderIncClose();
     renderIncDefeated();
     renderIncLong();
@@ -291,4 +298,89 @@ function renderIncLong() {
             <td>${personLinkHtml(d.person.name, d.person.person_id)}</td>
             <td class="text-end">${d.unopposed ? '<span class="text-muted small">jedini kandidat</span>' : incShare(d.person.share)}</td>
         </tr>`).join('') : '<tr><td colspan="4" class="text-muted">Nitko.</td></tr>';
+}
+
+// ---- By municipality: what happened to the načelnik / gradonačelnik in each place ----
+// The chart's colours: re-elected teal (dark in round 1, light after a runoff),
+// lost orange, did not run grey.
+const INC_OUTCOMES = [
+    { key: 'won1', label: 'Ponovno izabran/a u 1. krugu', color: '#0b7285' },
+    { key: 'won2', label: 'Ponovno izabran/a u 2. krugu', color: '#66d9e8' },
+    { key: 'lost', label: 'Izgubio/la', color: INC_COLORS.lost },
+    { key: 'open', label: 'Nije se kandidirao/la', color: INC_COLORS.did_not_run },
+];
+
+async function loadIncMuniMap() {
+    const holder = document.getElementById('incMuniMap');
+    try {
+        const shapes = await fetch('/static/hr_municipalities.json').then(r => r.json());
+        holder.innerHTML = `<svg viewBox="${shapes.viewBox}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Karta općina i gradova: ishod za načelnika ili gradonačelnika na dužnosti">${
+            shapes.shapes.map(s => `<path d="${s.d}" data-id="${s.id ?? ''}" data-name="${escapeHtml(s.name)}"></path>`).join('')}</svg>`;
+    } catch (e) {
+        holder.innerHTML = '<div class="text-muted small">Karta trenutačno nije dostupna.</div>';
+        return;
+    }
+    const svg = holder.querySelector('svg');
+    const tip = document.getElementById('incMuniTip');
+    const wrap = holder.parentElement;
+    svg.addEventListener('mousemove', e => {
+        const path = e.target.closest('path');
+        const d = path && _inc.places[_inc.placesYear] && _inc.places[_inc.placesYear][path.dataset.id];
+        if (!path) { tip.style.display = 'none'; return; }
+        const o = d && INC_OUTCOMES.find(x => x.key === d.o);
+        const nm = v => escapeHtml(docNameCase(v.name));
+        tip.innerHTML = `<b>${escapeHtml(docNameCase(path.dataset.name))}</b>` + (!d ? '<br>Nema podataka za te izbore.'
+            : `<div class="small">${d.office}</div>Na dužnosti: ${nm(d.incumbent)}<br><b>${o.label}</b>`
+              + (d.o === 'won1' || d.o === 'won2' ? ` (${incShare(d.winner.share)})` : `<br>Pobijedio/la: ${nm(d.winner)} (${incShare(d.winner.share)}${d.round > 1 ? ', 2. krug' : ''})`)
+              + `<div class="text-muted mt-1" style="font-size:.72rem;">Klikni za stranicu mjesta</div>`);
+        const box = wrap.getBoundingClientRect();
+        tip.style.display = 'block';
+        let x = e.clientX - box.left + 14;
+        if (x + tip.offsetWidth > box.width) x = e.clientX - box.left - tip.offsetWidth - 14;
+        tip.style.left = `${Math.max(0, x)}px`;
+        tip.style.top = `${e.clientY - box.top + 14}px`;
+    });
+    svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+    svg.addEventListener('click', e => {
+        const id = parseInt(e.target.dataset && e.target.dataset.id, 10);
+        if (!id || !activateModule('place', { pushState: false, focusInput: false })) return;
+        openPlace(id, { push: true });
+    });
+    _inc.muniReady = true;
+    loadIncPlaces();
+}
+
+async function loadIncPlaces() {
+    const year = document.getElementById('incMuniYear').value;
+    if (!_inc.places[year]) {
+        try {
+            _inc.places[year] = (await fetch(`/api/analytics/incumbency/places/${year}`).then(r => r.json())).munis || {};
+        } catch (e) {
+            _inc.places[year] = {};
+        }
+    }
+    _inc.placesYear = year;
+    renderIncMuni();
+}
+
+function renderIncMuni() {
+    const places = _inc.places[_inc.placesYear];
+    if (!_inc.muniReady || !places) return;
+    const shown = d => d && (_inc.kind === 'sve' || d.kind === _inc.kind) && incInCounty(d);
+    // Counted from the data, not the paths: an island town is drawn in several pieces.
+    const counts = Object.fromEntries(INC_OUTCOMES.map(o => [o.key, 0]));
+    Object.values(places).forEach(d => { if (shown(d)) counts[d.o]++; });
+    document.querySelectorAll('#incMuniMap path').forEach(path => {
+        const d = places[path.dataset.id];
+        const on = shown(d);
+        path.style.fill = on ? INC_OUTCOMES.find(o => o.key === d.o).color : INC_MAP_NONE;
+        // With a county picked, the rest of the country stays as a faint outline.
+        path.classList.toggle('dim', !!_inc.county && !(d && d.county === _inc.county));
+    });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    document.getElementById('incMuniLegend').innerHTML = _inc.kind === 'zupanija'
+        ? '<div class="text-muted small">Na karti su općine i gradovi; župani su u karti po županijama iznad.</div>'
+        : `<div class="fw-semibold mb-2">${_inc.placesYear}. · ${total} ${_inc.kind === 'grad' ? 'gradova' : _inc.kind === 'opcina' ? 'općina' : 'općina i gradova'}</div>`
+          + INC_OUTCOMES.map(o => `<div class="map-legend-row"><i style="background:${o.color}"></i><span>${o.label}</span><span>${counts[o.key]} · ${incPct(counts[o.key], total)}</span></div>`).join('')
+          + `<div class="map-legend-row"><i style="background:${INC_MAP_NONE}"></i><span class="text-muted">${_inc.kind === 'sve' ? 'Nema podataka' : 'Nije prikazano'}</span><span></span></div>`;
 }

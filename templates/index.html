@@ -106,6 +106,9 @@
             <li><a href="#" data-module="analytics-incumbency">
                 <i class="bi bi-arrow-repeat"></i> Ponovni izbor
             </a></li>
+            <li><a href="#" data-module="analytics-switchers">
+                <i class="bi bi-shuffle"></i> Prelasci
+            </a></li>
         </ul>
     </div>
 </nav>
@@ -985,7 +988,111 @@
                         </div>
                     </div>
                 </div>
+                <div class="row g-3 mt-0">
+                    <div class="col-xl-6">
+                        <div class="card p-3 h-100">
+                            <h6 class="fw-bold mb-2">Načelnice, gradonačelnice i županice</h6>
+                            <div class="table-responsive"><table class="table table-sm align-middle mb-0 w-table">
+                                <thead><tr><th>Izbori</th><th class="text-end">Načelnice</th><th class="text-end">Gradonačelnice</th><th class="text-end">Županice</th></tr></thead>
+                                <tbody id="wOffices"></tbody>
+                            </table></div>
+                            <div class="small text-muted mt-2">Udio žena među izabranima; ispod je udio među kandidatima za tu dužnost.</div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="card p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <h6 class="fw-bold mb-0">Mjesto na listi</h6>
+                                <select class="form-select form-select-sm" style="width:auto;" id="wPosElection" aria-label="Izbori za mjesto na listi"></select>
+                            </div>
+                            <div class="w-pos-chart"><canvas id="wPosChart"></canvas></div>
+                            <div class="small text-muted mt-2" id="wPosNote"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-3 mt-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Po županijama: načelnice, gradonačelnice i županice</h6>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <div class="btn-group btn-group-sm" role="group" id="wCountyWhich">
+                                <button type="button" class="btn btn-outline-primary active" data-w-cwhich="elected">Izabrane</button>
+                                <button type="button" class="btn btn-outline-primary" data-w-cwhich="candidates">Kandidatkinje</button>
+                            </div>
+                            <select class="form-select form-select-sm" style="width:auto;" id="wCountyYear" aria-label="Izbori za kartu"></select>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="inc-map-wrap"><div id="wMap" class="inc-map w-map"></div><div class="map-tooltip" id="wMapTip"></div></div>
+                            <div class="inc-legend" id="wMapLegend"></div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 small inc-county-table">
+                                <thead><tr><th>Županija</th><th class="text-end">Izabrane</th><th class="text-end">Kandidatkinje</th></tr></thead>
+                                <tbody id="wCounties"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">Županija obuhvaća izbore za načelnike i gradonačelnike svojih općina i gradova te za župana. Malo je takvih mjesta po županiji, pa jedna izabrana više ili manje mijenja postotak za nekoliko bodova; „Svi izbori” zbraja sve izbore od 2009.</div>
+                </div>
+                <div class="card p-3 mt-3">
+                    <h6 class="fw-bold mb-2">Nositeljice lista za vijeća i skupštine, 2001.–2009.</h6>
+                    <div class="table-responsive"><table class="table table-sm align-middle mb-0 w-table">
+                        <thead><tr><th>Izbori</th><th class="text-end">Gradska i općinska vijeća</th><th class="text-end" title="Lista s najviše glasova u tom vijeću">… lista s najviše glasova</th><th class="text-end">Županijske skupštine</th><th class="text-end" title="Lista s najviše glasova u toj skupštini">… lista s najviše glasova</th></tr></thead>
+                        <tbody id="wLeaders"></tbody>
+                    </table></div>
+                    <div class="small text-muted mt-2">Za vijeća i skupštine objavljena su samo imena nositelja lista (2001., 2005. i 2009.), ne i ostalih kandidata, pa udio žena na tim listama nije poznat. Prije 2009. vijeće je biralo načelnika, pa nositelj prve liste često, ali ne uvijek, postaje načelnik.</div>
+                </div>
                 <div class="small text-muted mt-3" style="font-size:0.78rem;" id="wMethod"></div>
+            </div>
+        </div>
+
+        <!-- Party switchers: who stood for one party and later for another -->
+        <div id="module-analytics-switchers" class="module-panel">
+            <div class="card search-card p-3 mb-3">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">Političari koji su na izborima za Sabor i Europski parlament nastupili za jednu stranku, a kasnije za drugu. Stranka se čita s liste na kojoj su bili (i iz popisa zastupnika); prelazak je kad nova lista nema nijednu stranku s prethodne. Klikni prelazak ili stranku u tablicama za popis tih ljudi.</p>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <div class="btn-group" role="group" id="swWho">
+                        <button type="button" class="btn btn-outline-primary active" data-sw-who="elected">Barem jednom izabrani</button>
+                        <button type="button" class="btn btn-outline-primary" data-sw-who="all">Svi kandidati</button>
+                    </div>
+                </div>
+            </div>
+            <div class="spinner-wrapper" id="swSpinner"><div class="spinner-border text-primary"></div></div>
+            <div id="swArea" style="display:none;">
+                <div class="row g-3 mb-3" id="swTiles"></div>
+                <div class="row g-3 mb-3">
+                    <div class="col-xl-6">
+                        <div class="card p-3 h-100">
+                            <h6 class="fw-bold mb-2">Najčešći prelasci</h6>
+                            <div class="table-responsive sw-scroll"><table class="table table-sm table-hover align-middle mb-0 small">
+                                <thead><tr><th>Iz</th><th></th><th>U</th><th class="text-end">Ljudi</th></tr></thead>
+                                <tbody id="swFlows"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="card p-3 h-100">
+                            <h6 class="fw-bold mb-2">Po strankama</h6>
+                            <div class="table-responsive sw-scroll"><table class="table table-sm table-hover align-middle mb-0 small">
+                                <thead><tr><th>Stranka</th><th class="text-end" title="Prešli iz stranke u drugu">Otišli</th><th class="text-end" title="Došli iz druge stranke">Došli</th><th class="text-end">Razlika</th></tr></thead>
+                                <tbody id="swParties"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0"><span id="swListTitle"></span><span id="swFilter"></span></h6>
+                        <input type="search" class="form-control form-control-sm" style="width:14rem;" id="swSearch" placeholder="Traži ime ili stranku" aria-label="Traži ime ili stranku">
+                    </div>
+                    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Ime</th><th>Put kroz stranke</th><th class="text-end">Prelasci</th></tr></thead>
+                        <tbody id="swPeople"></tbody>
+                    </table></div>
+                    <div class="text-center mt-2" id="swMore"></div>
+                </div>
+                <div class="small text-muted" style="font-size:0.78rem;" id="swMethod"></div>
             </div>
         </div>
 
@@ -1037,6 +1144,21 @@
                         </div>
                     </div>
                     <div class="small text-muted mt-2" id="incCountyNote">Udio ponovno izabranih od onih koji su se ponovno kandidirali. Županija obuhvaća svoje općine i gradove te izbor župana. Grad Zagreb ima samo jedno takvo mjesto (gradonačelnik), pa je njegov postotak 0 ili 100 %. Klikni županiju na karti ili u tablici: popisi ispod tada prikazuju samo nju.</div>
+                </div>
+                <div class="card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="fw-bold mb-0">Po općinama i gradovima<span class="inc-county-filter"></span></h6>
+                        <select class="form-select form-select-sm" style="width:auto;" id="incMuniYear" aria-label="Izbori za kartu općina"></select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-lg-8">
+                            <div class="inc-map-wrap"><div id="incMuniMap" class="inc-muni-map"></div><div class="map-tooltip" id="incMuniTip"></div></div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div id="incMuniLegend"></div>
+                            <div class="small text-muted mt-3" id="incMuniNote">Što se na tim izborima dogodilo načelniku ili gradonačelniku koji je bio na dužnosti. Klikni općinu ili grad za njegovu stranicu.</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="card p-3 mb-3">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
@@ -1172,6 +1294,7 @@
 <script src="{{ asset('js/party-strength.js') }}"></script>
 <script src="{{ asset('js/women.js') }}"></script>
 <script src="{{ asset('js/incumbency.js') }}"></script>
+<script src="{{ asset('js/switchers.js') }}"></script>
 <script src="{{ asset('js/place.js') }}"></script>
 <script src="{{ asset('js/router.js') }}"></script>
 <script src="{{ asset('js/person.js') }}"></script>

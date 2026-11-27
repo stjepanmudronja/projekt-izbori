@@ -816,6 +816,11 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .inc-map path { stroke: #fff; stroke-width: 1.2; stroke-linejoin: round; cursor: pointer; transition: fill .15s; }
 .inc-map path:hover { stroke: #1a1a2e; stroke-width: 2; }
 .inc-map path.selected { stroke: #1a1a2e; stroke-width: 2.6; }
+.w-pos-chart { position: relative; height: 15rem; }
+.inc-muni-map svg { width: 100%; height: auto; max-height: 34rem; display: block; }
+.inc-muni-map path { stroke: #fff; stroke-width: .5; stroke-linejoin: round; cursor: pointer; transition: fill .15s, opacity .15s; }
+.inc-muni-map path:hover { stroke: #1a1a2e; stroke-width: 1.5; }
+.inc-muni-map path.dim { opacity: .25; }
 .inc-legend { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: #6c757d; margin-top: .4rem; flex-wrap: wrap; }
 .inc-legend .bar { width: 10rem; height: .6rem; border-radius: 3px; }
 .inc-legend .none { width: .9rem; height: .6rem; border-radius: 2px; background: #e9ecef; margin-left: .5rem; }
@@ -823,3 +828,14 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .inc-county-table tbody tr.selected td { background: #e3f2f4; font-weight: 600; }
 .inc-county-table .inc-swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -1px; }
 .inc-county-filter .badge { font-weight: 500; margin-left: .5rem; cursor: pointer; }
+.w-map path { cursor: default; }
+/* Prelasci između stranaka */
+.sw-scroll { max-height: 22rem; overflow-y: auto; }
+.sw-click { cursor: pointer; }
+.sw-click.selected td { background: #e8eaf6; }
+.sw-dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .35rem; vertical-align: 0; }
+.sw-path { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem; font-size: .8rem; }
+.sw-step { border: 1px solid #dee2e6; border-left-width: 4px; border-radius: 4px; padding: .05rem .4rem; white-space: nowrap; background: #fff; }
+.sw-step.won { font-weight: 600; }
+.sw-move { color: #e8590c; font-size: .95rem; }
+.sw-reg { cursor: pointer; font-size: .75rem; }

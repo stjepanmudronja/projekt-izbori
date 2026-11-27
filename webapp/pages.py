@@ -23,7 +23,7 @@ def index():
 SPA_ROUTES = {
     'politicar', 'prema-lokaciji', 'usporedba', 'stranke',
     'predsjednicki-izbori', 'eu-parlamentarni-izbori', 'lokalni-izbori',
-    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto', 'snaga-stranaka', 'zene-u-politici', 'ponovni-izbor',
+    'rezultati-koalicije-sabor', 'zupanijski-dom', 'izlaznost', 'karta', 'mjesto', 'snaga-stranaka', 'zene-u-politici', 'ponovni-izbor', 'prelasci',
 }
 
 

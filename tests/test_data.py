@@ -357,6 +357,35 @@ class WomenInPolitics(unittest.TestCase):
                 self.assertEqual(sum(r['elected']['f'] for r in rows), self.by[('sabor', year)]['elected']['f'])
 
 
+    def test_offices_and_counties_add_up(self):
+        """Executives by office add up to the local row; counties to the country,
+        less Zagreb's župan-less count (Grad Zagreb's gradonačelnik is its race)."""
+        for year in (2009, 2013, 2017, 2021, 2025):
+            offices = self.data['by_office'][str(year)]
+            counties = self.data['by_county'][str(year)]
+            local = self.by[('lokalni', year)]['elected']
+            with self.subTest(year=year):
+                self.assertEqual(sum(o['elected']['f'] for o in offices.values()), local['f'])
+                self.assertEqual(len(counties), 21)
+                self.assertEqual(sum(sum(c['elected'].values()) for c in counties.values()),
+                                 sum(sum(o['elected'].values()) for o in offices.values()))
+        self.assertEqual(self.data['by_office']['2025']['zupanija']['elected']['f'], 3)
+
+    def test_list_positions_and_leaders(self):
+        """Place on the list: buckets add up to the party rows (Sabor 2024, every
+        seat but the minorities'); list leaders exist for 2001-2009 only."""
+        rows = self.data['by_position']['sabor-2024']
+        self.assertEqual([r['bucket'] for r in rows], ['1', '2-3', '4+'])
+        won = sum(sum(r['elected'].values()) for r in rows)
+        self.assertEqual(won, 151 - 8)
+        self.assertLess(rows[0]['candidates']['f'] / sum(rows[0]['candidates'].values()),
+                        rows[2]['candidates']['f'] / sum(rows[2]['candidates'].values()))
+        self.assertEqual(sorted({l['year'] for l in self.data['leaders']}), [2001, 2005, 2009])
+        for l in self.data['leaders']:
+            with self.subTest(year=l['year'], body=l['body']):
+                self.assertLessEqual(sum(l['first'].values()), sum(l['all'].values()))
+
+
 class Incumbency(unittest.TestCase):
     """Ponovni izbor: what happened to each place's last winner."""
 
@@ -409,6 +438,21 @@ class Incumbency(unittest.TestCase):
         top = d['close']['2025'][0]
         self.assertEqual((top['name'], top['incumbent']['name'], top['votes_ahead'], top['round']),
                          ('VARAŽDINSKA ŽUPANIJA', 'ANĐELKO STRIČAK', 18, 2))
+
+    def test_places_match_the_counts(self):
+        """The map's outcome per općina/grad adds up to the counts per kind."""
+        for row in self.data['per_year']:
+            places = get(f"/api/analytics/incumbency/places/{row['year']}")['munis']
+            c = {k: row['by_kind'][k] for k in ('opcina', 'grad')}
+            with self.subTest(year=row['year']):
+                self.assertEqual(len(places), c['opcina']['races'] + c['grad']['races'])
+                outcomes = [p['o'] for p in places.values()]
+                self.assertEqual(outcomes.count('won1') + outcomes.count('won2'), c['opcina']['won'] + c['grad']['won'])
+                self.assertEqual(outcomes.count('won1'), c['opcina']['won_first_round'] + c['grad']['won_first_round'])
+                self.assertEqual(outcomes.count('lost'), c['opcina']['lost'] + c['grad']['lost'])
+                self.assertEqual(outcomes.count('open'), c['opcina']['did_not_run'] + c['grad']['did_not_run'])
+        self.assertNotIn('munis', self.data)        # kept off the page's own payload
+
 
 class People(unittest.TestCase):
     """Person rows: curated splits hold, no party codes left in names."""
@@ -466,6 +510,48 @@ class Pages(unittest.TestCase):
                 self.assertIn(f'id="module-{mod}"', html)
                 if slugs.get(mod):
                     self.assertIn(slugs[mod], SPA_ROUTES)
+
+
+class PartySwitchers(unittest.TestCase):
+    """Prelasci između stranaka: moves between lists that share no party."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = get('/api/analytics/switchers')
+        cls.by_name = {p['name']: p for p in cls.data['people']}
+        cls.label = lambda self, k: self.data['parties'][str(k)]['label']
+
+    def path(self, name):
+        return [(e['year'], self.label(e['parties'][0])) for e in self.by_name[name]['path']]
+
+    def test_every_move_shares_no_party(self):
+        for p in self.data['people']:
+            self.assertTrue(p['moves'])
+            steps = p['path']
+            moves = sum(1 for a, b in zip(steps, steps[1:]) if not set(a['parties']) & set(b['parties']))
+            self.assertEqual(moves, len(p['moves']), p['name'])
+
+    def test_renames_are_not_moves(self):
+        """SKH-SDP -> SDP, Most nezavisnih lista -> MOST, DP Miroslava Škore -> DP;
+        no move is between two names that read the same."""
+        for p in self.data['people']:
+            for m in p['moves']:
+                pair = {self.label(m['from']), self.label(m['to'])}
+                self.assertNotEqual(len(pair), 1, p['name'])
+        # Penava: HDZ 2016, then DP from 2020 on — one move, not two.
+        self.assertEqual([(m['year'], self.label(m['to'])) for m in self.by_name['Ivan Penava']['moves']], [(2020, 'DP')])
+
+    def test_known_moves(self):
+        self.assertIn((2016, 'Nezavisni'), self.path('Željko Glasnović'))
+        self.assertEqual(self.path('Matija Posavec')[-2:], [(2024, 'NPS'), (2024, 'IDS')])   # NPS on IDS's EU list: no move
+        self.assertEqual([m['year'] for m in self.by_name['Matija Posavec']['moves']], [2020, 2024])
+        # A coalition partner standing on its own list has not moved (HSLS on HDZ's 2016 list).
+        self.assertNotIn('Darinko Kosor', {p['name'] for p in self.data['people'] if p['elected']})
+
+    def test_elected_by_default_is_most_of_the_moves(self):
+        elected = [p for p in self.data['people'] if p['elected']]
+        self.assertGreater(len(elected), 100)
+        self.assertLess(len(elected), len(self.data['people']))
 
 
 class PageMeta(unittest.TestCase):

@@ -22,6 +22,7 @@ const moduleTitles = {
     'analytics-parties': '<i class="bi bi-bar-chart-line me-2"></i>Snaga stranaka kroz vrijeme',
     'analytics-women': '<i class="bi bi-gender-female me-2"></i>Žene u politici',
     'analytics-incumbency': '<i class="bi bi-arrow-repeat me-2"></i>Ponovni izbor načelnika, gradonačelnika i župana',
+    'analytics-switchers': '<i class="bi bi-shuffle me-2"></i>Prelasci između stranaka',
     parties: '<i class="bi bi-flag me-2"></i>Stranke',
 };
 
@@ -46,6 +47,7 @@ const MODULE_SLUGS = {
     'analytics-parties': 'snaga-stranaka',
     'analytics-women': 'zene-u-politici',
     'analytics-incumbency': 'ponovni-izbor',
+    'analytics-switchers': 'prelasci',
 };
 const SLUG_TO_MODULE = Object.fromEntries(Object.entries(MODULE_SLUGS).map(([k, v]) => [v, k]));
 
@@ -115,6 +117,7 @@ function activateModule(mod, opts) {
     if (mod === 'analytics-parties') initPartyStrength();
     if (mod === 'analytics-women') initWomen();
     if (mod === 'analytics-incumbency') initIncumbency();
+    if (mod === 'analytics-switchers') initSwitchers();
     if (mod === 'parties') initPartiesModule();
     if (mod === 'sabor-analysis') initSaborAnalysis();
     if (mod === 'results-lokalni') initLokalniModule();

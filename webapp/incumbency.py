@@ -15,6 +15,10 @@ county's own župan race), so the same counts are given per county code
 (01-21, as the map's HR-NN paths) for each election. Close calls: an
 incumbent re-elected by under CLOSE_MARGIN points over the runner-up in
 the deciding round.
+
+By municipality: for the map, what happened in each općina and grad at each
+election — the incumbent re-elected in round 1 or in the runoff, lost, or
+did not run (an open seat) — with who held it and who won.
 """
 from collections import defaultdict
 
@@ -70,6 +74,22 @@ def _share(cands, i=0, digits=1):
 @app.route('/api/analytics/incumbency')
 @static_cache
 def incumbency():
+    data = _incumbency()
+    return jsonify({k: v for k, v in data.items() if k != 'munis'})
+
+
+@app.route('/api/analytics/incumbency/places/<int:year>')
+@static_cache
+def incumbency_places(year):
+    """One election's outcome in every općina and grad, for the map: kept
+    apart from the page's data, which it would triple."""
+    munis = _incumbency()['munis']
+    if year not in munis:
+        return jsonify({'error': 'Nema podataka za te izbore.'}), 404
+    return jsonify({'year': year, 'munis': munis[year]})
+
+
+def _incumbency():
     races = exec_races()
     years = sorted({y for (_, y) in races})
     munis = {m.id: m for m in Municipality.query}
@@ -95,11 +115,12 @@ def incumbency():
 
     # Election by election: what happened to the incumbent.
     per_year, defeated, close = [], defaultdict(list), defaultdict(list)
-    by_county = {}
+    by_county, munis_out = {}, {}
     new_counts = lambda: {'races': 0, 'won': 0, 'won_first_round': 0, 'lost': 0, 'did_not_run': 0}
     for prev, year in zip(years, years[1:]):
         counts = defaultdict(new_counts)
         county_counts = defaultdict(lambda: defaultdict(new_counts))
+        outcome = {}
         for (key, y), r in races.items():
             if y != year or (key, prev) not in races:
                 continue
@@ -119,6 +140,14 @@ def incumbency():
                     c['lost'] += 1
                 else:
                     c['did_not_run'] += 1
+            if key[0] == 'm':
+                won = r['cands'][0][1] == inc[1]
+                outcome[key[1]] = {
+                    'o': ('won1' if r['round'] == 1 else 'won2') if won else ('lost' if inc[1] in r['stood'] else 'open'),
+                    'office': OFFICE_TITLE[r['slug']], 'kind': kind, 'county': code,
+                    'incumbent': {'name': inc[2], 'person_id': inc[1]},
+                    'winner': person(r['cands'][0], r['cands']), 'round': r['round'],
+                }
             if r['cands'][0][1] != inc[1] and inc[1] in r['stood']:
                 # Where they stood in the deciding round, or went out in round 1.
                 mine = next((c for c in r['cands'] if c[1] == inc[1]), None)
@@ -143,6 +172,7 @@ def incumbency():
                     })
         per_year.append({'year': year, 'previous': prev, 'by_kind': counts})
         by_county[year] = {code: dict(k) for code, k in county_counts.items()}
+        munis_out[year] = outcome
 
     # Unbroken runs of today's holders: how many elections in a row they won there.
     latest = years[-1]
@@ -168,7 +198,7 @@ def incumbency():
     long_serving.sort(key=lambda d: (d['kind'] != 'zupanija', d['kind'] != 'grad', d['name'] or ''))
     for y in close:
         close[y].sort(key=lambda d: d['margin'])
-    return jsonify({
+    return {
         'years': years,
         'per_year': per_year,
         'terms': {'year': latest, 'by_kind': {k: dict(v) for k, v in terms.items()}},
@@ -178,4 +208,5 @@ def incumbency():
         'by_county': by_county,
         'close': close,
         'close_margin': CLOSE_MARGIN,
-    })
+        'munis': munis_out,
+    }

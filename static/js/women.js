@@ -5,7 +5,9 @@
 
 const W_COLORS = { sabor: '#3b5bdb', eu: '#e8590c', lokalni: '#0ca678', predsjednicki: '#ae3ec9' };
 const W_SHORT = { sabor: 'Sabor', eu: 'Europski parlament', lokalni: 'Gradonačelnici, načelnici i župani', predsjednicki: 'Predsjednički' };
-const _w = { ready: false, data: null, which: 'elected', chart: null, partyChart: null };
+const _w = { ready: false, data: null, which: 'elected', chart: null, partyChart: null, posChart: null, cwhich: 'elected' };
+// County map: share of women, one hue light -> dark (the party chart's indigo).
+const W_MAP_LO = [238, 240, 253], W_MAP_HI = [55, 48, 163], W_MAP_NONE = '#e9ecef';
 
 const wTotal = c => c ? c.f + c.m + c.u : 0;
 // Share of women among those whose gender is known; the unknown are left out of both sides.
@@ -46,6 +48,10 @@ async function initWomen() {
     renderWomenChart();
     renderWomenTable();
     renderWomenParties(partyKeys[0]);
+    renderWomenOffices();
+    initWomenPositions();
+    renderWomenLeaders();
+    initWomenCounties();
     renderWomenMethod();
 }
 
@@ -182,4 +188,164 @@ function renderWomenMethod() {
         `<b>Kako je određen spol.</b> Podaci o izborima ne bilježe spol, pa se čita iz imena: ženska imena u hrvatskom završavaju na -a, osim muških poput Luka, Nikola ili Ivica, a neka ženska ne završavaju (Ines, Nives, Karmen) — oba su popisa ručno provjerena na svim imenima u bazi. `
         + `Imena koja nose i muškarci i žene ostavljena su kao nepoznata i ne ulaze u postotak: ${wNum(p.unknown)} od ${wNum(p.total)} osoba (${p.unknown_names.slice(0, 5).map(([n, c]) => `${n.charAt(0) + n.slice(1).toLowerCase()} ${c}`).join(', ')}). `
         + `Svaka se osoba na jednim izborima broji jednom. Izabrani na lokalnim izborima su pobjednici odlučujućeg kruga za gradonačelnika, načelnika ili župana; zamjenici nisu uključeni.`;
+}
+
+// ---- Executives by office ----
+function renderWomenOffices() {
+    const years = Object.keys(_w.data.by_office).sort().reverse();
+    const cell = c => c && wTotal(c.elected)
+        ? `<b>${wPct(wShare(c.elected))}</b> <span class="small text-muted">${wNum(c.elected.f)}/${wNum(c.elected.f + c.elected.m)}</span>`
+          + `<div class="small text-muted">kandidatkinje ${wPct(wShare(c.candidates))}</div>`
+        : '<span class="text-muted">–</span>';
+    document.getElementById('wOffices').innerHTML = years.map(y => {
+        const o = _w.data.by_office[y];
+        return `<tr><td>${y}.</td><td class="text-end">${cell(o.opcina)}</td><td class="text-end">${cell(o.grad)}</td><td class="text-end">${cell(o.zupanija)}</td></tr>`;
+    }).join('');
+}
+
+// ---- Place on the list (Sabor from 2015, EU) ----
+const W_POS_LABEL = { '1': 'Nositelj/ica liste (1.)', '2-3': '2. i 3. mjesto', '4+': '4. mjesto i niže' };
+
+function initWomenPositions() {
+    const keys = Object.keys(_w.data.by_position).sort((a, b) => b.split('-')[1] - a.split('-')[1] || (a < b ? 1 : -1));
+    const sel = document.getElementById('wPosElection');
+    sel.innerHTML = keys.map(k => { const [kind, y] = k.split('-'); return `<option value="${k}">${W_SHORT[kind]} ${y}.</option>`; }).join('');
+    sel.addEventListener('change', () => renderWomenPositions(sel.value));
+    renderWomenPositions(keys[0]);
+}
+
+function renderWomenPositions(key) {
+    const rows = _w.data.by_position[key] || [];
+    if (_w.posChart) _w.posChart.destroy();
+    _w.posChart = new Chart(document.getElementById('wPosChart'), {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => W_POS_LABEL[r.bucket]),
+            datasets: [
+                { label: 'Kandidatkinje', data: rows.map(r => wShare(r.candidates) ?? 0), raw: rows.map(r => r.candidates), backgroundColor: '#a5b4fc', borderRadius: 4 },
+                { label: 'Izabrane', data: rows.map(r => wTotal(r.elected) ? wShare(r.elected) : null), raw: rows.map(r => r.elected), backgroundColor: '#4338ca', borderRadius: 4 },
+            ],
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            scales: { x: { min: 0, max: 60, ticks: { callback: v => v + ' %' }, grid: { color: '#eef0f3' } }, y: { grid: { display: false } } },
+            plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+                tooltip: {
+                    callbacks: {
+                        label: item => {
+                            const c = item.dataset.raw[item.dataIndex];
+                            return wTotal(c) ? `${item.dataset.label}: ${wPct(item.raw)} (${wNum(c.f)} od ${wNum(c.f + c.m)})` : `${item.dataset.label}: nitko s tog mjesta`;
+                        },
+                    },
+                },
+            },
+        },
+    });
+    const lead = rows.find(r => r.bucket === '1'), rest = rows.find(r => r.bucket === '4+');
+    const [kind] = key.split('-');
+    document.getElementById('wPosNote').textContent =
+        `Udio žena prema mjestu na listi. Žene su ${wPct(wShare(rest.candidates))} kandidata od 4. mjesta naniže, ali ${wPct(wShare(lead.candidates))} nositelja lista. `
+        + (kind === 'sabor' ? 'Izabrani su prema mjestu na listi s kojeg su kandidirali, a manjinske liste (XII. izborna jedinica) nisu uključene.' : 'Izabrani su prema mjestu na listi s kojeg su kandidirali; preferencijski glasovi mogu nekoga izabrati i s niže pozicije.');
+}
+
+// ---- List leaders for councils and assemblies, 2001-2009 ----
+function renderWomenLeaders() {
+    const by = {};
+    _w.data.leaders.forEach(l => { (by[l.year] = by[l.year] || {})[l.body] = l; });
+    const cell = c => c && wTotal(c) ? `<b>${wPct(wShare(c))}</b><div class="small text-muted">${wNum(c.f)} od ${wNum(c.f + c.m)}</div>` : '<span class="text-muted">–</span>';
+    document.getElementById('wLeaders').innerHTML = Object.keys(by).sort().reverse().map(y => {
+        const v = by[y].vijeca || {}, a = by[y].skupstine || {};
+        return `<tr><td>${y}.</td><td class="text-end">${cell(v.all)}</td><td class="text-end">${cell(v.first)}</td><td class="text-end">${cell(a.all)}</td><td class="text-end">${cell(a.first)}</td></tr>`;
+    }).join('');
+}
+
+// ---- By county: map + table ----
+const wCountyName = code => docPartyCase(_w.data.counties[code] || '').replace(/ županija$/, '');
+
+async function initWomenCounties() {
+    const years = Object.keys(_w.data.by_county).sort().reverse();
+    const sel = document.getElementById('wCountyYear');
+    sel.innerHTML = years.map(y => `<option value="${y}">${y}.</option>`).join('')
+        + `<option value="all">Svi izbori ${years[years.length - 1]}.–${years[0]}.</option>`;
+    sel.addEventListener('change', renderWomenCounties);
+    document.getElementById('wCountyWhich').addEventListener('click', e => {
+        const b = e.target.closest('[data-w-cwhich]');
+        if (!b) return;
+        _w.cwhich = b.dataset.wCwhich;
+        document.querySelectorAll('#wCountyWhich button').forEach(x => x.classList.toggle('active', x === b));
+        renderWomenCounties();
+    });
+    const holder = document.getElementById('wMap');
+    try {
+        holder.innerHTML = await fetch('/static/croatia_map.svg').then(r => r.text());
+        const svg = holder.querySelector('svg');
+        svg.querySelectorAll('style, title').forEach(x => x.remove());   // its global "path" rule would leak
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', 'Karta županija: udio žena');
+        const tip = document.getElementById('wMapTip');
+        const wrap = holder.parentElement;
+        svg.querySelectorAll('path[id^="HR-"]').forEach(path => {
+            const code = path.id.slice(3);
+            path.addEventListener('mousemove', e => {
+                const c = wCountyCounts()[code];
+                const line = (label, x) => `${label}: ${wPct(wShare(x))} (${wNum(x.f)} od ${wNum(x.f + x.m)})`;
+                tip.innerHTML = `<b>${escapeHtml(docPartyCase(_w.data.counties[code] || ''))}</b><br>`
+                    + (c ? `${line('Izabrane', c.elected)}<br>${line('Kandidatkinje', c.candidates)}` : 'Nema podataka');
+                const box = wrap.getBoundingClientRect();
+                tip.style.display = 'block';
+                tip.style.left = Math.min(e.clientX - box.left + 14, box.width - tip.offsetWidth - 4) + 'px';
+                tip.style.top = (e.clientY - box.top + 14) + 'px';
+            });
+            path.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+        });
+    } catch (e) {
+        holder.innerHTML = '';     // the table still has every figure
+    }
+    renderWomenCounties();
+}
+
+function wCountyCounts() {
+    const year = document.getElementById('wCountyYear').value;
+    if (year !== 'all') return _w.data.by_county[year] || {};
+    const out = {};
+    Object.values(_w.data.by_county).forEach(per => Object.entries(per).forEach(([code, c]) => {
+        const t = out[code] = out[code] || { candidates: { f: 0, m: 0, u: 0 }, elected: { f: 0, m: 0, u: 0 } };
+        ['candidates', 'elected'].forEach(w => Object.keys(t[w]).forEach(k => { t[w][k] += c[w][k]; }));
+    }));
+    return out;
+}
+
+function wMapColor(v, lo, hi) {
+    if (v == null) return W_MAP_NONE;
+    const t = hi > lo ? Math.min(1, Math.max(0, (v - lo) / (hi - lo))) : 1;
+    return `rgb(${W_MAP_LO.map((a, i) => Math.round(a + (W_MAP_HI[i] - a) * t)).join(',')})`;
+}
+
+function renderWomenCounties() {
+    const counts = wCountyCounts();
+    const rows = Object.keys(_w.data.counties).sort().map(code => {
+        const c = counts[code];
+        return { code, c, v: c ? wShare(c[_w.cwhich]) : null };
+    });
+    const vals = rows.map(r => r.v).filter(v => v != null);
+    const lo = vals.length ? Math.floor(Math.min(...vals) / 5) * 5 : 0;
+    const hi = vals.length ? Math.max(lo + 5, Math.ceil(Math.max(...vals) / 5) * 5) : 100;
+    rows.forEach(r => { r.color = wMapColor(r.v, lo, hi); });
+    document.querySelectorAll('#wMap path[id^="HR-"]').forEach(path => {
+        const r = rows.find(x => x.code === path.id.slice(3));
+        path.style.fill = r ? r.color : W_MAP_NONE;
+    });
+    const grad = [0, .5, 1].map(t => wMapColor(lo + (hi - lo) * t, lo, hi)).join(',');
+    document.getElementById('wMapLegend').innerHTML =
+        `<span>${lo} %</span><span class="bar" style="background:linear-gradient(90deg,${grad})"></span><span>${hi} %</span>`
+        + `<span class="ms-2">${_w.cwhich === 'elected' ? 'žena među izabranima' : 'žena među kandidatima'}</span>`;
+    rows.sort((a, b) => (b.v ?? -1) - (a.v ?? -1) || wCountyName(a.code).localeCompare(wCountyName(b.code), 'hr'));
+    const cell = (x, bold) => x && wTotal(x) ? `${bold ? '<b>' : ''}${wPct(wShare(x))}${bold ? '</b>' : ''} <span class="text-muted small">${wNum(x.f)}/${wNum(x.f + x.m)}</span>` : '–';
+    document.getElementById('wCounties').innerHTML = rows.map(r => `<tr>
+            <td><span class="inc-swatch" style="background:${r.color}"></span>${escapeHtml(wCountyName(r.code))}</td>
+            <td class="text-end">${cell(r.c && r.c.elected, _w.cwhich === 'elected')}</td>
+            <td class="text-end">${cell(r.c && r.c.candidates, _w.cwhich === 'candidates')}</td></tr>`).join('');
 }

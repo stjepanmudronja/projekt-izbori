@@ -34,22 +34,10 @@ def _party_links():
     return _party_link_tables()[0]
 
 
-def _party_link_tables():
-    """(links, printed, ran_as): which register party each election list
-    names, as leader (first-named) or partner; the wordings each party was
-    printed under; and the old name a list ran under. Kept as one entry, so a
-    cache clear between two reads can never pair new links with no names; cached
-    until the data changes.
-
-    A list's parties are its comma- or line-separated parts. Each is matched
-    by, in turn: its whole name, its name without a trailing abbreviation
-    ("HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ"), its abbreviation, its leading
-    name; punctuation and spacing are ignored ("SOCIJALNO - LIBERALNA"). A
-    party only matches an election held while it existed (registered by that
-    year, and not ceased before it), which is what tells apart an abbreviation
-    used twice ("MOŽEMO!", 2017 and 2019); a part still matching two parties is
-    left unlinked."""
-    hit = _PARTY_CACHE.get('links')
+def _party_matcher():
+    """match(part, year) -> register party id for one printed party name, or
+    None; the rules are in _party_link_tables. Cached until the data changes."""
+    hit = _PARTY_CACHE.get('matcher')
     if hit:
         return hit
     parties = RegisteredParty.query.all()
@@ -107,6 +95,30 @@ def _party_link_tables():
             if ids:
                 return None                       # two parties fit: leave it
         return None
+
+    _PARTY_CACHE['matcher'] = match
+    return match
+
+
+def _party_link_tables():
+    """(links, printed, ran_as): which register party each election list
+    names, as leader (first-named) or partner; the wordings each party was
+    printed under; and the old name a list ran under. Kept as one entry, so a
+    cache clear between two reads can never pair new links with no names; cached
+    until the data changes.
+
+    A list's parties are its comma- or line-separated parts. Each is matched
+    by, in turn: its whole name, its name without a trailing abbreviation
+    ("HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ"), its abbreviation, its leading
+    name; punctuation and spacing are ignored ("SOCIJALNO - LIBERALNA"). A
+    party only matches an election held while it existed (registered by that
+    year, and not ceased before it), which is what tells apart an abbreviation
+    used twice ("MOŽEMO!", 2017 and 2019); a part still matching two parties is
+    left unlinked."""
+    hit = _PARTY_CACHE.get('links')
+    if hit:
+        return hit
+    match = _party_matcher()
 
     rows = (db.session.query(ElectoralList.id, ElectoralList.name, Election.year)
             .join(ElectionRound, ElectoralList.election_round_id == ElectionRound.id)

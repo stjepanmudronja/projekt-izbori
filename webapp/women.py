@@ -81,6 +81,85 @@ def _count(person_ids, gender):
     return out
 
 
+EXEC_KIND = {'local_mayor': 'opcina', 'local_city_mayor': 'grad', 'local_county_prefect': 'zupanija'}
+# Places on a list: the leader, the next two, the rest.
+POSITION_BUCKETS = [('1', 1, 1), ('2-3', 2, 3), ('4+', 4, 99)]
+HOLDER_BODY = {'local_municipal_council': 'vijeca', 'local_city_council': 'vijeca', 'local_county_assembly': 'skupstine'}
+
+
+def _depth(cand_by_id, position, elected_cands, race_cands, race_winner, holders, gender):
+    """The finer cuts: executives by office and by county, women by place on
+    Sabor and EU lists, and the women who led council and assembly lists
+    2001-2009 (the only local lists whose candidates are named are the
+    leaders: DIP's reports print the "nositelj liste", not the rest)."""
+    from webapp.models import County, Municipality
+    muni_county = {m.id: m.county_id for m in Municipality.query}
+    code = {c.id: c.code for c in County.query}
+
+    def county_of(slug, dnum):
+        c = code.get(dnum if slug == 'local_county_prefect' else muni_county.get(dnum))
+        return c if c and '01' <= c <= '21' else None
+
+    # Executive races by office and by county: who stood, who won, per election.
+    office = defaultdict(lambda: {'cand': set(), 'won': set()})
+    county = defaultdict(lambda: {'cand': set(), 'won': set()})
+    for race, pids in race_cands.items():
+        slug, year, dnum = race
+        if slug not in EXEC_KIND:
+            continue
+        won = race_winner.get(race)
+        buckets = [office[(year, EXEC_KIND[slug])]]
+        cc = county_of(slug, dnum)
+        if cc:
+            buckets.append(county[(year, cc)])
+        for b in buckets:
+            b['cand'] |= pids
+            if won:
+                b['won'].add(won)
+    by_office = defaultdict(dict)
+    for (year, kind), b in office.items():
+        by_office[year][kind] = {'candidates': _count(b['cand'], gender), 'elected': _count(b['won'], gender)}
+    by_county = defaultdict(dict)
+    for (year, cc), b in county.items():
+        by_county[year][cc] = {'candidates': _count(b['cand'], gender), 'elected': _count(b['won'], gender)}
+
+    # Place on the list (Sabor from 2015 and EU; Sabor's minority seats, one
+    # candidate a list, are left out).
+    pos = defaultdict(lambda: defaultdict(lambda: {'cand': set(), 'won': set()}))
+    for cid, (key, pid, _name, dnum, slug) in cand_by_id.items():
+        if not ((slug == 'sabor' and key[1] >= 2015 and not (dnum and dnum >= 121)) or slug == 'eu_parliament'):
+            continue
+        p = position.get(cid)
+        b = next((label for label, lo, hi in POSITION_BUCKETS if p and lo <= p <= hi), None)
+        if not b:
+            continue
+        pos[f'{key[0]}-{key[1]}'][b]['cand'].add(pid)
+        if cid in elected_cands:
+            pos[f'{key[0]}-{key[1]}'][b]['won'].add(pid)
+    by_position = {ek: [{'bucket': label, 'candidates': _count(g[label]['cand'], gender),
+                         'elected': _count(g[label]['won'], gender)} for label, _, _ in POSITION_BUCKETS]
+                   for ek, g in pos.items()}
+
+    # List leaders 2001-2009: all of them, and those whose list came first there.
+    best = defaultdict(int)
+    for slug, year, pid, muni, list_id, votes in holders:
+        k = (HOLDER_BODY[slug], year, muni)
+        best[k] = max(best[k], votes)
+    lead = defaultdict(lambda: {'all': set(), 'first': set()})
+    for slug, year, pid, muni, list_id, votes in holders:
+        if not pid:
+            continue
+        body = HOLDER_BODY[slug]
+        # A person counts once per body and year, wherever they led a list.
+        lead[(year, body)]['all'].add(pid)
+        if votes and votes == best[(body, year, muni)]:
+            lead[(year, body)]['first'].add(pid)
+    leaders = [{'year': y, 'body': body, 'all': _count(b['all'], gender), 'first': _count(b['first'], gender)}
+               for (y, body), b in sorted(lead.items())]
+    return {'by_office': by_office, 'by_county': by_county, 'by_position': by_position, 'leaders': leaders,
+            'counties': {c.code: c.name for c in County.query if '01' <= (c.code or '') <= '21'}}
+
+
 @app.route('/api/analytics/women')
 @static_cache
 def women_in_politics():
@@ -89,7 +168,7 @@ def women_in_politics():
 
     # Every candidacy of these elections: who, in which election, round, list and district.
     cand = _rows("""
-        select et.slug, e.id, e.year, er.id, er.round_number, c.id, c.person_id, el.id, el.name, ed.number
+        select et.slug, e.id, e.year, er.id, er.round_number, c.id, c.person_id, el.id, el.name, ed.number, c.position_on_list
         from elections_candidacy c
         join elections_electorallist el on el.id = c.electoral_list_id
         join elections_electionround er on er.id = el.election_round_id
@@ -102,9 +181,11 @@ def women_in_politics():
     candidates = defaultdict(set)
     cand_by_id = {}
     rounds_of = defaultdict(set)                 # (kind, year) -> election round ids
-    for slug, eid, year, er_id, rnd, cid, pid, list_id, list_name, dnum in cand:
+    position = {}
+    for slug, eid, year, er_id, rnd, cid, pid, list_id, list_name, dnum, pos in cand:
         key = (kind_of[slug], year)
         cand_by_id[cid] = (key, pid, list_name, dnum, slug)
+        position[cid] = pos
         rounds_of[(slug, year)].add(er_id)
         if SABOR_FULL_CANDIDATES(slug, year):
             candidates[key].add(pid)
@@ -148,19 +229,36 @@ def women_in_politics():
         where et.slug in ('presidential', 'local_mayor', 'local_city_mayor', 'local_county_prefect')
         group by 1, 2, 3, 4, 5""")
     races = defaultdict(lambda: (0, []))
+    race_cands = defaultdict(set)                # executive race -> everyone who stood in any round
     for slug, year, dnum, rnd, pid, v in votes:
         race = (slug, year, dnum if slug != 'presidential' else None)
+        race_cands[race].add(pid)
         last, cands = races[race]
         if rnd > last:
             races[race] = (rnd, [(int(v or 0), pid)])
         elif rnd == last:
             cands.append((int(v or 0), pid))
-    for (slug, year, _), (_, cands) in races.items():
+    race_winner = {}
+    for race, (_, cands) in races.items():
         if cands and max(cands)[0] > 0:
-            elected[(kind_of[slug], year)].add(max(cands)[1])
+            elected[(kind_of[race[0]], race[1])].add(max(cands)[1])
+            race_winner[race] = max(cands)[1]
 
-    # Gender of everyone counted, roster members with no candidacy included.
-    persons = {r[6] for r in cand} | {pid for ps in elected.values() for pid in ps}
+    holders = _rows("""
+        select et.slug, e.year, lh.person_id, lh.municipality_id, lh.electoral_list_id,
+               coalesce(sum(lr.votes) filter (where ps.municipality_id = lh.municipality_id), 0)
+        from elections_listholder lh
+        join elections_electorallist el on el.id = lh.electoral_list_id
+        join elections_electionround er on er.id = el.election_round_id
+        join elections_election e on e.id = er.election_id
+        join elections_electiontype et on et.id = e.election_type_id
+        left join elections_listresult lr on lr.electoral_list_id = el.id
+        left join elections_pollingstation ps on ps.id = lr.polling_station_id
+        group by 1, 2, 3, 4, 5""")
+
+    # Gender of everyone counted, roster members with no candidacy and list leaders included.
+    persons = ({r[6] for r in cand} | {pid for ps in elected.values() for pid in ps}
+               | {h[2] for h in holders if h[2]})
     gender, first = {}, {}
     for pid, fn in _rows("select id, first_name from elections_person where id = any(:ids)", ids=list(persons)):
         gender[pid] = name_gender(fn)
@@ -194,6 +292,8 @@ def women_in_politics():
                 for name, g in groups.items() if len(g['cand']) >= 10 or g['won']]
         parties[ek] = sorted(rows, key=lambda r: (-sum(r['elected'].values()), -sum(r['candidates'].values())))
 
+    depth = _depth(cand_by_id, position, elected_cands, race_cands, race_winner, holders, gender)
+
     unknown = defaultdict(int)
     for pid in persons:
         if gender.get(pid) is None:
@@ -202,6 +302,7 @@ def women_in_politics():
         'kinds': [{'key': k['key'], 'label': k['label']} for k in WOMEN_KINDS],
         'elections': elections,
         'parties': parties,
+        **depth,
         'people': {'total': len(persons), 'unknown': sum(unknown.values()),
                    'unknown_names': sorted(unknown.items(), key=lambda x: -x[1])[:30]},
     })
