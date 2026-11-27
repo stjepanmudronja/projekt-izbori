@@ -94,9 +94,12 @@ class RegisteredParty(models.Model):
     """A party in the official Registar političkih stranaka (Ministarstvo
     pravosuđa, uprave i digitalne transformacije), published daily as open
     data on data.gov.hr and loaded by `import_party_register`. Kept apart from
-    `Party`, which the election imports leave empty: parties in results live
-    inside ElectoralList names, and the Stranke page links the two by name,
-    abbreviation and the years the party existed (app.py `_party_links`)."""
+    `Party`: parties in list results live inside ElectoralList names, and the
+    Stranke page links the two by name, abbreviation and the years the party
+    existed (webapp/parties.py `_party_links`). `Party` and
+    `ElectoralList.parties` hold only who nominated each executive candidate
+    (načelnik, gradonačelnik, župan, 2009-2025), whose list is named for the
+    candidate: filled by `set_local_nominators`, one row per printed name."""
     registry_number = models.IntegerField(unique=True)
     name = models.CharField(max_length=500)
     short_name = models.CharField(max_length=200, blank=True)

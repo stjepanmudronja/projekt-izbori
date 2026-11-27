@@ -339,10 +339,12 @@ class WomenInPolitics(unittest.TestCase):
         self.assertLess(p['unknown'] / p['total'], 0.01)
 
     def test_published_shares(self):
-        """Sabor as elected 2003 (27 of 152, ~18 %) and 2020 (35 of 151, ~23 %);
+        """Sabor as elected 2003 (27 of 152, ~18 %) and 2020 (34 of 151 as elected —
+        a count of 35 includes a later substitute; it matched here only while
+        Peđa Grbin was read as a woman);
         Croatia's first woman president in 2014; EU 2014 six of eleven."""
         self.assertEqual(self.by[('sabor', 2003)]['elected']['f'], 27)
-        self.assertEqual(self.by[('sabor', 2020)]['elected']['f'], 35)
+        self.assertEqual(self.by[('sabor', 2020)]['elected']['f'], 34)
         self.assertEqual(self.by[('predsjednicki', 2014)]['elected'], {'f': 1, 'm': 0, 'u': 0})
         self.assertEqual(self.by[('eu', 2014)]['elected']['f'], 6)
         self.assertIsNone(self.by[('sabor', 2011)]['candidates'])      # only district XII is published
@@ -524,12 +526,15 @@ class PartySwitchers(unittest.TestCase):
     def path(self, name):
         return [(e['year'], self.label(e['parties'][0])) for e in self.by_name[name]['path']]
 
-    def test_every_move_shares_no_party(self):
+    def test_every_move_is_a_change_of_leader(self):
+        """Each move: neither list's leader stood on the other list; local
+        races on the candidate's own independent list are skipped."""
+        from webapp.switchers import party_moves
         for p in self.data['people']:
             self.assertTrue(p['moves'])
-            steps = p['path']
-            moves = sum(1 for a, b in zip(steps, steps[1:]) if not set(a['parties']) & set(b['parties']))
-            self.assertEqual(moves, len(p['moves']), p['name'])
+            self.assertEqual(party_moves(p['path']), p['moves'], p['name'])
+            for m in p['moves']:
+                self.assertNotEqual(m['from'], m['to'])
 
     def test_renames_are_not_moves(self):
         """SKH-SDP -> SDP, Most nezavisnih lista -> MOST, DP Miroslava Škore -> DP;
@@ -538,13 +543,18 @@ class PartySwitchers(unittest.TestCase):
             for m in p['moves']:
                 pair = {self.label(m['from']), self.label(m['to'])}
                 self.assertNotEqual(len(pair), 1, p['name'])
-        # Penava: HDZ 2016, then DP from 2020 on — one move, not two.
+        # Penava: HDZ (Vukovar 2013/2017, Sabor 2016), DP from 2020, his own list in
+        # Vukovar 2021 in between — one move, not three.
         self.assertEqual([(m['year'], self.label(m['to'])) for m in self.by_name['Ivan Penava']['moves']], [(2020, 'DP')])
 
     def test_known_moves(self):
         self.assertIn((2016, 'Nezavisni'), self.path('Željko Glasnović'))
-        self.assertEqual(self.path('Matija Posavec')[-2:], [(2024, 'NPS'), (2024, 'IDS')])   # NPS on IDS's EU list: no move
-        self.assertEqual([m['year'] for m in self.by_name['Matija Posavec']['moves']], [2020, 2024])
+        # NPS on IDS's EU list 2024 and with SDP for župan 2025: no move after 2024.
+        self.assertEqual([(m['year'], self.label(m['to'])) for m in self.by_name['Matija Posavec']['moves']],
+                         [(2020, 'SDP'), (2024, 'NPS')])
+        # Local races: nominators count; a mayor on his own list in between is no move.
+        self.assertEqual([(m['year'], self.label(m['to'])) for m in self.by_name['Zlatko Hasanbegović']['moves']][:1],
+                         [(2019, 'NHR')])   # Neovisni za Hrvatsku
         # A coalition partner standing on its own list has not moved (HSLS on HDZ's 2016 list).
         self.assertNotIn('Darinko Kosor', {p['name'] for p in self.data['people'] if p['elected']})
 
@@ -552,6 +562,83 @@ class PartySwitchers(unittest.TestCase):
         elected = [p for p in self.data['people'] if p['elected']]
         self.assertGreater(len(elected), 100)
         self.assertLess(len(elected), len(self.data['people']))
+
+
+class LocalNominators(unittest.TestCase):
+    """Who nominated each executive candidate (set_local_nominators)."""
+
+    def nominators(self, year, slug, person):
+        return [r[0] for r in db.session.execute(db.text("""
+            select pa.name from elections_candidacy c
+            join elections_person p on p.id = c.person_id
+            join elections_electorallist el on el.id = c.electoral_list_id
+            join elections_electorallist_parties lp on lp.electorallist_id = el.id
+            join elections_party pa on pa.id = lp.party_id
+            join elections_electionround er on er.id = el.election_round_id and er.round_number = 1
+            join elections_election e on e.id = er.election_id and e.year = :y
+            join elections_electiontype et on et.id = e.election_type_id and et.slug = :slug
+            where p.normalized_name = :n order by lp.id"""), {'y': year, 'slug': slug, 'n': person})]
+
+    def test_every_executive_candidate_has_nominators(self):
+        with app.app_context():
+            rows = db.session.execute(db.text("""
+                select e.year, count(distinct el.id), count(distinct lp.electorallist_id)
+                from elections_electorallist el
+                join elections_electionround er on er.id = el.election_round_id
+                join elections_election e on e.id = er.election_id
+                join elections_electiontype et on et.id = e.election_type_id
+                left join elections_electorallist_parties lp on lp.electorallist_id = el.id
+                where et.slug in ('local_mayor', 'local_city_mayor', 'local_county_prefect')
+                group by 1 order by 1""")).fetchall()
+        for year, lists, linked in rows:
+            with self.subTest(year=year):
+                self.assertEqual(linked, lists)
+
+    def test_known_nominators(self):
+        with app.app_context():
+            self.assertEqual(self.nominators(2025, 'local_county_prefect', 'ANDELKO STRICAK'),
+                             ['HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', 'HRVATSKA SOCIJALNO - LIBERALNA STRANKA - HSLS',
+                              'STRANKA UMIROVLJENIKA SJEVER - SUS'])
+            self.assertEqual(self.nominators(2009, 'local_county_prefect', 'PREDRAG STROMAR')[:2],
+                             ['HRVATSKA NARODNA STRANKA - LIBERALNI DEMOKRATI - HNS', 'SOCIJALDEMOKRATSKA PARTIJA HRVATSKE - SDP'])
+            self.assertEqual(self.nominators(2025, 'local_city_mayor', 'STIPO VELIC'),
+                             ['HRVATSKA DEMOKRATSKA ZAJEDNICA - HDZ', 'HRVATSKA DEMOKRŠĆANSKA STRANKA - HDS',
+                              'HRVATSKA STRANKA UMIROVLJENIKA - HSU'])
+
+
+class Loyalty(unittest.TestCase):
+    """Medalja vjernosti: one party on every list, three elections, eight years."""
+
+    def medal(self, name):
+        with app.app_context():
+            pid = db.session.execute(db.text(
+                "select id from elections_person where normalized_name = :n and disambiguation = ''"), {'n': name}).scalar()
+        return get(f'/api/person/{pid}/loyalty')['medal']
+
+    def test_loyal(self):
+        m = self.medal('ANDREJ PLENKOVIC')
+        self.assertEqual((m['kind'], m['party']['label'], m['from']), ('career', 'HDZ', 2011))
+        m = self.medal('PEDA GRBIN')
+        self.assertEqual((m['kind'], m['party']['label'], m['gender']), ('career', 'SDP', 'M'))
+
+    def test_not_loyal(self):
+        for name in ('JADRANKA KOSOR', 'IVAN PENAVA', 'MATIJA POSAVEC', 'VLADIMIR SISLJAGIC'):
+            with self.subTest(name=name):
+                self.assertIsNone(self.medal(name))
+
+    def test_rule(self):
+        from webapp.switchers import INDEPENDENT, loyalty_of
+        ev = lambda y, *p, src='list': {'year': y, 'parties': list(p), 'source': src, 'county': None}
+        self.assertEqual(loyalty_of([ev(2011, 'A'), ev(2015, 'A', 'B'), ev(2020, 'B', 'A')])['party'], 'A')
+        self.assertIsNone(loyalty_of([ev(2011, 'A'), ev(2015, 'A')]))                       # two elections
+        self.assertIsNone(loyalty_of([ev(2016, 'A'), ev(2019, 'A'), ev(2020, 'A')]))         # four years
+        self.assertIsNone(loyalty_of([ev(2009, INDEPENDENT), ev(2013, INDEPENDENT), ev(2017, INDEPENDENT)]))
+        # Their own local list in between neither breaks nor counts.
+        self.assertEqual(loyalty_of([ev(2013, 'A', src='local'), ev(2016, 'A'), ev(2021, INDEPENDENT, src='local'),
+                                     ev(2024, 'A')])['elections'], 3)
+        # Moved in 2003, then the same party from 2007 on: loyal "since".
+        m = loyalty_of([ev(2003, 'B'), ev(2007, 'A'), ev(2011, 'A'), ev(2020, 'A')])
+        self.assertEqual((m['kind'], m['from'], m['before']), ('since', 2007, 'B'))
 
 
 class PageMeta(unittest.TestCase):

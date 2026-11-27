@@ -839,3 +839,11 @@ a.sidebar-brand:hover h5 { color: #fff; opacity: .85; }
 .sw-step.won { font-weight: 600; }
 .sw-move { color: #e8590c; font-size: .95rem; }
 .sw-reg { cursor: pointer; font-size: .75rem; }
+/* Medalja vjernosti (politician page) */
+.loyalty-medal { display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem; font-weight: 600; vertical-align: middle;
+                 margin-left: .5rem; padding: .15rem .55rem; border-radius: 999px; color: #7a5b00;
+                 background: linear-gradient(135deg, #fff3bf, #ffe066); border: 1px solid #f0c419; }
+.loyalty-medal .bi { color: #c99700; }
+.loyalty-medal.since { color: #495057; background: linear-gradient(135deg, #f1f3f5, #dee2e6); border-color: #ced4da; }
+.loyalty-medal.since .bi { color: #868e96; }
+.loyalty-note:not(:empty) { font-size: .85rem; color: #6c757d; margin: -.5rem 0 .75rem 1rem; }

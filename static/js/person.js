@@ -133,12 +133,52 @@ function rerenderCompareModule(type) {
             <h5 style="border-left:4px solid ${color}; padding-left:0.75rem;" class="fw-bold mb-3">
                 ${type === 'person' ? '<i class="bi bi-person-circle me-2"></i>' : '<i class="bi bi-people-fill me-2"></i>'}${item.name}
                 ${type === 'person' ? `<button class="btn btn-sm btn-link text-muted p-0 ms-2 align-baseline" title="Kopiraj poveznicu na ovog političara" onclick="copyPersonLink(${item.id}, ${escapeHtml(JSON.stringify(item.name))}, this)"><i class="bi bi-link-45deg"></i></button>` : ''}
+                ${type === 'person' ? `<span class="loyalty-slot" data-loyalty="${item.id}"></span>` : ''}
             </h5>
+            ${type === 'person' ? `<div class="loyalty-note" data-loyalty-note="${item.id}"></div>` : ''}
             ${type === 'person' ? officesSummaryHtml(item.data.offices, item.data.roles) : ''}
             ${renderFn(filtered)}
         </div>`;
     }).join('');
+    if (type === 'person') items.forEach(fillLoyalty);
 }
+
+// ---- Medalja vjernosti: one party on every list a politician stood on ----
+// /api/person/<id>/loyalty (webapp/switchers.py loyalty_of); fetched after the
+// page is drawn, so a slow first read never holds up the results.
+async function fillLoyalty(item) {
+    if (item.loyalty === undefined) {
+        item.loyalty = null;
+        try {
+            item.loyalty = (await fetch(`/api/person/${item.id}/loyalty`).then(r => r.json())).medal;
+        } catch (e) {
+            return;
+        }
+    }
+    const m = item.loyalty;
+    const slot = document.querySelector(`[data-loyalty="${item.id}"]`);
+    const note = document.querySelector(`[data-loyalty-note="${item.id}"]`);
+    if (!m || !slot || !note) return;
+    const f = m.gender === 'F';
+    const party = p => p.registry_number
+        ? `<a href="#" class="loyalty-party" data-reg="${p.registry_number}" title="${escapeHtml(p.name)}">${escapeHtml(p.label)}</a>`
+        : `<span title="${escapeHtml(p.name)}">${escapeHtml(p.label)}</span>`;
+    const career = m.kind === 'career';
+    // "Vjeran" / "Vjerna"; a name that tells neither gets the medal's own name.
+    const title = m.gender === 'F' ? 'Vjerna stranci' : m.gender === 'M' ? 'Vjeran stranci' : 'Medalja vjernosti';
+    slot.innerHTML = `<span class="loyalty-medal${career ? '' : ' since'}" title="Medalja vjernosti stranci">`
+        + `<i class="bi bi-award-fill"></i> ${title}${career ? '' : ` od ${m.from}.`}</span>`;
+    note.innerHTML = career
+        ? `Na svih ${m.elections} izbora od ${m.from}. do ${m.to}. nastupi${f ? 'la' : 'o'} je uz ${party(m.party)} i nikad nije promijeni${f ? 'la' : 'o'} stranku.`
+        : `Od ${m.from}. do ${m.to}. na svih ${m.elections} izbora uz ${party(m.party)}${m.before ? `; prije toga ${party(m.before)}` : ''}.`;
+    note.title = 'Prema listama na izborima za Sabor i Europski parlament, popisima zastupnika i predlagateljima na lokalnim izborima (2009.–2025.); koalicija vrijedi za sve svoje stranke, a samostalna lokalna lista se ne računa. Vidi Analitika → Prelasci.';
+}
+document.addEventListener('click', e => {
+    const a = e.target.closest('.loyalty-party');
+    if (!a) return;
+    e.preventDefault();
+    if (activateModule('parties', { pushState: false, focusInput: false })) openParty(+a.dataset.reg, { push: true });
+});
 
 function mandateWord(n) {
     return (n % 10 === 1 && n % 100 !== 11) ? 'mandat' : 'mandata';

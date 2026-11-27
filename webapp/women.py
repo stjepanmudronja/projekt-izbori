@@ -34,7 +34,7 @@ MALE_A = {
     'TADIJA', 'BORNA', 'NEMANJA', 'KUZMA', 'SAVA', 'JOŽA', 'ALJOŠA', 'ALEKSA', 'DOBRIŠA', 'ĐUKA',
     'ANTIŠA', 'ATILA', 'KOLJA', 'ALIJA', 'JURA', 'MIRZA', 'STEVICA', 'ĐURICA', 'DRAGIŠA', 'RELJA',
     'MUSTAFA', 'JOVICA', 'PERA', 'TUNA', 'RUDIKA', 'JAKICA', 'LUCA', 'MATA', 'ŠIMA', 'BARIŠA',
-    'MIHA', 'MIŠA', 'KOSTA', 'JOSA', 'BOŽA', 'MILIŠA',
+    'MIHA', 'MIŠA', 'KOSTA', 'JOSA', 'BOŽA', 'MILIŠA', 'PEĐA', 'PEDJA', 'MIĆA', 'STEVA',
 }
 # Women's names not ending in -a.
 FEMALE_OTHER = {

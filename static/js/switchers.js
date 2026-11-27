@@ -3,7 +3,7 @@
 // Part of the site script, split from templates/index.html; the files load
 // in the order index.html lists them and share one global scope.
 
-const SW_KIND_SHORT = { sabor: 'Sabor', zd: 'Žup. dom', eu: 'EU' };
+const SW_KIND_SHORT = { sabor: 'Sabor', zd: 'Žup. dom', eu: 'EU', lokalni: 'Lokalni' };
 const SW_PAGE = 60;
 // who: elected at least once / every candidate; filter: a move ("from>to") or a party key.
 const _sw = { ready: false, data: null, who: 'elected', filter: null, shown: SW_PAGE };
@@ -152,6 +152,7 @@ function renderSwPeople() {
             const more = e.parties.length > 1 ? ` <span class="text-muted">+${e.parties.length - 1}</span>` : '';
             const tip = `${e.year}. ${_sw.data.kinds[e.kind]}: ${_sw.data.lists[e.list]}`
                 + (e.source === 'roster' ? ' (popis zastupnika; stranka može biti ona s kraja mandata)' : '')
+                + (e.source === 'local' ? ' (predlagatelji)' : '')
                 + (e.elected ? ' · izabran/a' : '');
             return (i ? `<i class="bi ${moved ? 'bi-arrow-right sw-move' : 'bi-dot text-muted'}"></i>` : '')
                 + `<span class="sw-step${e.elected ? ' won' : ''}" style="border-left-color:${swColor(e.parties[0])}" title="${escapeHtml(tip)}">`
@@ -171,6 +172,6 @@ function renderSwMethod() {
         + `jedinog izvora za 2003.–2011., kad imena kandidata na listama nisu objavljena; stranka u popisu može biti ona s kraja mandata. `
         + `Lista više stranaka (koalicija) vrijedi za sve njih: prelazak je tek kad nova lista nema nijednu stranku s prethodne, pa član manjeg partnera koji kasnije nastupi na listi svoje stranke nije prešao — a ne vidi se ni kad partner prijeđe u stranku koja je koaliciju predvodila. U tablicama se prelazak pripisuje stranci koja je listu predvodila. `
         + `Preimenovana stranka ista je stranka (Most nezavisnih lista i Most; SKH-SDP i SDP; Domovinski pokret Miroslava Škore i Domovinski pokret), a nezavisne liste su jedna skupina. `
-        + `Načelnici, gradonačelnici i župani nisu uključeni jer rezultati ne bilježe tko ih je predložio. `
+        + `Za načelnike, gradonačelnike i župane (2009.–2025.) stranka je predlagatelj kandidata, iz arhive rezultata Državnog izbornog povjerenstva (za 2009. iz izvješća o rezultatima); kandidat grupe birača i nezavisna lista ubrajaju se u nezavisne. Dvoje lokalnih izbora u različitim županijama ne uspoređuju se: tamo je isto ime vjerojatnije dvije osobe. Za vijeća i skupštine kandidati na listama nisu poznati, pa nisu uključeni. `
         + `Osobe se povezuju po imenu, pa dvije osobe istog imena mogu izgledati kao jedna koja je prešla; zato su zadano prikazani samo oni koji su barem jednom izabrani.`;
 }

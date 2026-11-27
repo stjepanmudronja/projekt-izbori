@@ -306,6 +306,15 @@ class Interactions(BrowserTestCase):
         p.wait("_inc.placesYear === '2013'", timeout=30000)
         self.assertNoErrors(p)
 
+    def test_loyalty_medal(self):
+        p = self.open('/politicar')
+        p.wait("typeof loadDetail === 'function'", timeout=60000)
+        p.js("fetch('/api/search?q=pe%C4%91a%20grbin&type=person').then(r => r.json()).then(l => loadDetail('person', l[0].id))")
+        p.wait("!!document.querySelector('.loyalty-medal')", timeout=60000)
+        self.assertIn('Vjeran stranci', p.js("document.querySelector('.loyalty-medal').textContent"))
+        self.assertIn('SDP', p.js("document.querySelector('.loyalty-note').textContent"))
+        self.assertNoErrors(p)
+
     def test_switchers_page(self):
         p = self.open('/prelasci')
         p.wait("document.getElementById('swArea').style.display === '' && document.querySelectorAll('#swPeople tr').length > 10", timeout=60000)
