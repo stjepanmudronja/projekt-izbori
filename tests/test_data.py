@@ -607,7 +607,7 @@ class LocalNominators(unittest.TestCase):
 
 
 class Loyalty(unittest.TestCase):
-    """Medalja vjernosti: one party on every list, three elections, eight years."""
+    """Medalja vjernosti: the same party for the last ten years, still standing."""
 
     def medal(self, name):
         with app.app_context():
@@ -629,16 +629,20 @@ class Loyalty(unittest.TestCase):
     def test_rule(self):
         from webapp.switchers import INDEPENDENT, loyalty_of
         ev = lambda y, *p, src='list': {'year': y, 'parties': list(p), 'source': src, 'county': None}
-        self.assertEqual(loyalty_of([ev(2011, 'A'), ev(2015, 'A', 'B'), ev(2020, 'B', 'A')])['party'], 'A')
-        self.assertIsNone(loyalty_of([ev(2011, 'A'), ev(2015, 'A')]))                       # two elections
-        self.assertIsNone(loyalty_of([ev(2016, 'A'), ev(2019, 'A'), ev(2020, 'A')]))         # four years
-        self.assertIsNone(loyalty_of([ev(2009, INDEPENDENT), ev(2013, INDEPENDENT), ev(2017, INDEPENDENT)]))
+        rule = lambda *evs: loyalty_of(list(evs), year=2026)
+        self.assertEqual(rule(ev(2011, 'A'), ev(2015, 'A', 'B'), ev(2024, 'B', 'A'))['party'], 'A')
+        self.assertIsNone(rule(ev(2011, 'A'), ev(2024, 'A')))                                # two elections
+        self.assertIsNone(rule(ev(2018, 'A'), ev(2021, 'A'), ev(2024, 'A')))                 # eight years to today
+        self.assertIsNone(rule(ev(1995, 'A'), ev(2003, 'A'), ev(2011, 'A')))                 # loyal, but no longer standing
+        self.assertIsNone(rule(ev(2009, INDEPENDENT), ev(2013, INDEPENDENT), ev(2017, INDEPENDENT)))
         # Their own local list in between neither breaks nor counts.
-        self.assertEqual(loyalty_of([ev(2013, 'A', src='local'), ev(2016, 'A'), ev(2021, INDEPENDENT, src='local'),
-                                     ev(2024, 'A')])['elections'], 3)
+        self.assertEqual(rule(ev(2013, 'A', src='local'), ev(2016, 'A'), ev(2021, INDEPENDENT, src='local'),
+                              ev(2024, 'A'))['elections'], 3)
         # Moved in 2003, then the same party from 2007 on: loyal "since".
-        m = loyalty_of([ev(2003, 'B'), ev(2007, 'A'), ev(2011, 'A'), ev(2020, 'A')])
+        m = rule(ev(2003, 'B'), ev(2007, 'A'), ev(2011, 'A'), ev(2024, 'A'))
         self.assertEqual((m['kind'], m['from'], m['before']), ('since', 2007, 'B'))
+        # Moved in 2019: not ten years yet.
+        self.assertIsNone(rule(ev(2011, 'B'), ev(2015, 'B'), ev(2019, 'A'), ev(2021, 'A'), ev(2025, 'A')))
 
 
 class PageMeta(unittest.TestCase):

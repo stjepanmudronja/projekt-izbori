@@ -30,6 +30,7 @@ People are matched by name across elections, as everywhere on the site, so
 two people of one name can look like one who moved; the page shows those
 elected at least once by default, where that is rare.
 """
+from datetime import date
 import functools
 import re
 from collections import defaultdict
@@ -331,10 +332,9 @@ def party_switchers():
 
 
 # ---- Vjernost stranci: the medal on a politician's page ----
-LOYAL_MIN_ELECTIONS = 3     # elections with a known party
-LOYAL_MIN_YEARS = 8         # from the first of them to the last: two full terms
-LOYAL_SINCE = 2010          # "since": loyal through every election from this year on
-LOYAL_RECENT = 2020         # ... and still standing
+LOYAL_MIN_ELECTIONS = 3     # elections with a known party in the loyal run
+LOYAL_YEARS = 10            # the run began at least this many years before today
+LOYAL_ACTIVE = 5            # ... and its last election is at most this many years old
 
 
 def _common(events):
@@ -347,35 +347,28 @@ def _common(events):
     return max(common, key=lambda k: (lead(k), -events[0]['parties'].index(k)))
 
 
-def loyalty_of(path):
+def loyalty_of(path, year=None):
     """{'kind': 'career' | 'since', 'party', 'from', 'to', 'elections', 'before'}
-    or None. Career: one party on every list they stood on (local races on
-    their own independent list aside), at least LOYAL_MIN_ELECTIONS elections
-    over LOYAL_MIN_YEARS years. Since: not the whole career, but the same
-    through every election from LOYAL_SINCE on, to LOYAL_RECENT or later."""
+    or None. The medal is for the same party for the last LOYAL_YEARS years up
+    to today (`year`, default this year): the unbroken run of elections at the
+    end of the path that shares one party (local races on their own
+    independent list aside) began LOYAL_YEARS or more years ago, has at least
+    LOYAL_MIN_ELECTIONS elections, and its last one is no older than
+    LOYAL_ACTIVE years — so someone who retired loyal gets none. Career: the
+    run is the whole path; since: they stood for another party before."""
+    year = year or date.today().year
     events = [ev for ev in path if not neutral(ev)]
-    if len(events) < LOYAL_MIN_ELECTIONS:
+    if len(events) < LOYAL_MIN_ELECTIONS or events[-1]['year'] < year - LOYAL_ACTIVE:
         return None
-
-    def medal(run, kind, before=None):
-        party = _common(run)
-        if not party or len(run) < LOYAL_MIN_ELECTIONS or run[-1]['year'] - run[0]['year'] < LOYAL_MIN_YEARS:
-            return None
-        return {'kind': kind, 'party': party, 'from': run[0]['year'], 'to': run[-1]['year'],
-                'elections': len(run), 'before': before}
-
-    whole = medal(events, 'career')
-    if whole:
-        return whole
-    if events[-1]['year'] < LOYAL_RECENT:
-        return None
-    # The longest unbroken run at the end that still shares a party.
     i = len(events) - 1
     while i > 0 and _common(events[i - 1:]):
         i -= 1
-    if events[i]['year'] > LOYAL_SINCE:
+    run = events[i:]
+    party = _common(run)
+    if not party or len(run) < LOYAL_MIN_ELECTIONS or run[0]['year'] > year - LOYAL_YEARS:
         return None
-    return medal(events[i:], 'since', before=events[i - 1]['parties'][0] if i else None)
+    return {'kind': 'since' if i else 'career', 'party': party, 'from': run[0]['year'], 'to': run[-1]['year'],
+            'elections': len(run), 'before': events[i - 1]['parties'][0] if i else None}
 
 
 @app.route('/api/person/<int:person_id>/loyalty')

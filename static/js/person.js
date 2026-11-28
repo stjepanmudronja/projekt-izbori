@@ -143,7 +143,7 @@ function rerenderCompareModule(type) {
     if (type === 'person') items.forEach(fillLoyalty);
 }
 
-// ---- Medalja vjernosti: one party on every list a politician stood on ----
+// ---- Medalja vjernosti: the same party for the last ten years, still standing ----
 // /api/person/<id>/loyalty (webapp/switchers.py loyalty_of); fetched after the
 // page is drawn, so a slow first read never holds up the results.
 async function fillLoyalty(item) {
